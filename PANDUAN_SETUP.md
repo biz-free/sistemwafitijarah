@@ -2,6 +2,9 @@
 
 **Syarikat Wafi Tijarah Trading · No. Pendaftaran: AS0462205-D**
 Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
+📞 014-6363831 · ✉️ wafitijarahtrading@gmail.com
+
+> 🆕 **Sudah sambung Supabase sebelum ini?** Jalankan `SQL_TAMBAHAN_2.sql` (bukan yang lama) di SQL Editor untuk aktifkan ciri Urus Pekerja & Link Pre-Order — tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula.
 
 ## 📱 Cara Install Apps ke Phone (APK / PWA)
 
@@ -63,6 +66,19 @@ Selain cetak biasa, ada 2 butang tambahan di halaman Lagi:
 - **📱 Hantar Resit via WhatsApp** — buka WhatsApp terus ke no. telefon kedai dengan mesej ringkasan resit siap ditaip.
 
 > ⚠️ **Had penting**: Aplikasi web percuma **tidak boleh melampirkan fail PDF secara automatik** ke dalam mesej WhatsApp (had platform WhatsApp, bukan had sistem ini). Bila tekan butang WhatsApp, PDF akan dimuat turun serta-merta DAN WhatsApp akan terbuka dengan mesej siap ditaip — pekerja perlu **lekatkan (attach) fail PDF tersebut secara manual** dalam WhatsApp (2 langkah je). Hantar automatik sepenuhnya tanpa campur tangan hanya boleh dicapai melalui WhatsApp Business API rasmi (perlu pendaftaran Meta Business, verifikasi syarikat & bayaran bulanan/per-mesej) — berbeza projek berasingan jika diperlukan kelak.
+
+Resit juga papar **no. telefon pekerja** yang buat penghantaran tersebut (jika direkod semasa daftar pekerja), supaya kedai boleh terus hubungi pekerja itu untuk repeat order tanpa perlu apps.
+
+### 🔑 Lupa Kata Laluan
+Kedua-dua pemilik & pekerja boleh tekan "Lupa kata laluan?" di skrin log masuk, masukkan e-mel, dan pautan reset akan dihantar terus oleh Supabase. Ciri ini **hanya berfungsi dalam mod cloud** (selepas Supabase disambung).
+
+### 👥 Urus Pekerja (Daftar Terus Dalam Apps)
+Pemilik boleh daftar akaun pekerja baru terus dari **Lagi → Urus Pekerja** (nama, e-mel, no. telefon, kata laluan sementara) tanpa perlu masuk dashboard Supabase setiap kali. Sistem guna sambungan sementara (session berasingan) supaya sesi log masuk pemilik sendiri tidak terjejas semasa proses ini.
+
+> ⚠️ Jika akaun pekerja baru tak boleh log masuk serta-merta ("Email not confirmed"), pergi ke Supabase → **Authentication → Providers → Email** dan matikan "Confirm email" — supaya akaun terus aktif sebaik didaftarkan tanpa perlu sahkan e-mel.
+
+### 🔗 Link Pre-Order untuk Kedai (Repeat Order)
+Satu link awam **`pesan.html`** (cth: `https://biz-free.github.io/sistemwafitijarah/pesan.html`) boleh dikongsi terus dengan mana-mana kedai — mereka boleh isi nama kedai, no. telefon, pilih barang & kuantiti, hantar, TANPA perlu log masuk. Pesanan masuk terus ke tab **Hantar → Pre-Order** dalam apps (nampak oleh pemilik & pekerja) untuk diproses jadi penghantaran sebenar. Link penuh disalin terus dari tab tersebut (butang "📋 Salin").
 
 ---
 

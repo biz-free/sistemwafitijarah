@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#0D2137" />
+  <meta name="description" content="Borang Pre-Order / Repeat Order - Wafi Tijarah Trading" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <title>Pesan Barang · Wafi Tijarah Trading</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #EEF2F5; color: #182530; min-height: 100vh; }
+    :root {
+      --navy: #0D2137; --teal: #0E7C7B; --teal2: #14A3A2;
+      --gold: #C8922A; --red: #C0392B; --green: #1D7A4A;
+      --bg: #EEF2F5; --card: #FFFFFF; --border: #D5E2EC; --text: #182530; --muted: #607D8B;
+    }
+    header { background:linear-gradient(135deg,#0D2137,#1A3A55);padding:20px 16px;text-align:center; }
+    header img { width:56px;height:56px;border-radius:50%;margin-bottom:8px; }
+    header h1 { color:#fff;font-size:16px;font-weight:800; }
+    header p { color:#E8B84B;font-size:12px;margin-top:2px; }
+    #main { max-width:520px;margin:0 auto;padding:16px 16px 60px; }
+    .card { background:#fff;border-radius:14px;border:1px solid var(--border);padding:16px;box-shadow:0 1px 4px rgba(0,0,0,0.05);margin-bottom:14px; }
+    .form-group { margin-bottom:12px; }
+    .form-label { font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.4px; }
+    .form-input { width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;outline:none;background:#FAFCFE;color:var(--text); }
+    textarea.form-input { resize:none;height:60px; }
+    .item-row { display:flex;gap:8px;align-items:center;margin-bottom:8px; }
+    .item-row select { flex:3; }
+    .item-row input { flex:1;min-width:55px; }
+    .btn-remove { background:var(--red);color:#fff;border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;flex-shrink:0;font-size:14px; }
+    .btn { padding:13px 20px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;width:100%; }
+    .btn-outline { background:transparent;border:1.5px dashed var(--teal);color:var(--teal); }
+    .btn-primary { background:linear-gradient(135deg,var(--teal),var(--teal2));color:#fff;margin-top:6px; }
+    .btn:active { transform:scale(0.98); }
+    #toast { position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:12px 24px;border-radius:12px;font-size:13px;font-weight:700;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,0.25);opacity:0;transition:opacity 0.3s;pointer-events:none;max-width:320px;text-align:center; }
+    #toast.show { opacity:1; }
+    #toast.err { background:var(--red); }
+    #success-box { text-align:center;padding:32px 16px; }
+    #success-box .icon { font-size:48px;margin-bottom:12px; }
+    #success-box h2 { color:var(--navy);margin-bottom:8px; }
+    #success-box p { color:var(--muted);font-size:13px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <img src="logo.png" alt="Wafi Tijarah Trading" />
+  <h1>Wafi Tijarah Trading</h1>
+  <p>Borang Pesanan / Repeat Order</p>
+</header>
+
+<div id="main">
+  <div class="card" id="form-card">
+    <div class="form-group">
+      <label class="form-label">Nama Kedai</label>
+      <input type="text" class="form-input" id="p-nama" placeholder="cth: Kedai Runcit Pak Ali" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">No. Telefon Kedai</label>
+      <input type="tel" class="form-input" id="p-tel" placeholder="01x-xxxxxxx" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Barang Nak Dipesan</label>
+      <div id="p-items"></div>
+      <button type="button" class="btn btn-outline" onclick="addItem()">+ Tambah Barang</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nota (cth: minta hantar hari Jumaat)</label>
+      <textarea class="form-input" id="p-nota" placeholder="Nota tambahan..."></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="hantarPesanan()">📦 Hantar Pesanan</button>
+  </div>
+
+  <div class="card" id="success-box" style="display:none">
+    <div class="icon">✅</div>
+    <h2>Pesanan Diterima!</h2>
+    <p>Terima kasih. Pihak kami akan hubungi anda tidak lama lagi untuk sahkan penghantaran.</p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://smepriytkoxkmpvjvvzq.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtZXByaXl0a294a21wdmp2dnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzODE1OTcsImV4cCI6MjA5ODk1NzU5N30.bLDjFNZ_gMm9ufCkA4TeFbw1rysuLnlQN-qW_WW0zr8';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = (type==='ok'?'✅ ':'⚠️ ') + msg;
+  t.className = 'show' + (type==='err'?' err':'');
+  clearTimeout(t._t);
+  t._t = setTimeout(()=>t.className='', 3500);
+}
+
+let PRODUK = [];
+let items = [{ stokId:'', qty:1 }];
+
+async function initProduk() {
+  const { data, error } = await sb.rpc('senarai_produk_awam');
+  if (error) toast('Gagal muat senarai produk — sila cuba lagi kemudian','err');
+  PRODUK = data || [];
+  renderItems();
+}
+
+function renderItems() {
+  document.getElementById('p-items').innerHTML = items.map((it,i)=>`
+    <div class="item-row">
+      <select class="form-input" onchange="updItem(${i},'stokId',this.value)">
+        <option value="">-- Pilih produk --</option>
+        ${PRODUK.map(p=>`<option value="${p.id}" ${it.stokId===p.id?'selected':''}>${esc(p.nama)} (${esc(p.unit)})</option>`).join('')}
+      </select>
+      <input type="number" class="form-input" min="1" value="${it.qty}" onchange="updItem(${i},'qty',this.value)" />
+      ${items.length>1?`<button class="btn-remove" onclick="remItem(${i})">✕</button>`:''}
+    </div>`).join('');
+}
+function updItem(i,f,v){ items[i][f]=v; renderItems(); }
+function addItem(){ items.push({stokId:'',qty:1}); renderItems(); }
+function remItem(i){ items.splice(i,1); renderItems(); }
+
+async function hantarPesanan() {
+  const nama = document.getElementById('p-nama').value.trim();
+  const tel = document.getElementById('p-tel').value.trim();
+  const nota = document.getElementById('p-nota').value.trim();
+  if (!nama || !tel) return toast('Sila isi nama kedai dan no. telefon','err');
+  const validItems = items.filter(it=>it.stokId && +it.qty>0);
+  if (!validItems.length) return toast('Sila pilih sekurang-kurangnya satu barang','err');
+
+  const payload = {
+    id: 'PO' + Date.now().toString().slice(-8),
+    kedai_nama: nama,
+    kedai_telefon: tel,
+    items: validItems.map(it=>{ const p=PRODUK.find(p=>p.id===it.stokId); return { stokId:it.stokId, nama:p?.nama||'?', unit:p?.unit||'', qty:+it.qty }; }),
+    nota, status: 'baru',
+  };
+  const { error } = await sb.from('pre_order').insert(payload);
+  if (error) return toast('Gagal hantar pesanan: '+error.message,'err');
+
+  document.getElementById('form-card').style.display='none';
+  document.getElementById('success-box').style.display='block';
+}
+
+initProduk();
+</script>
+</body>
+</html>

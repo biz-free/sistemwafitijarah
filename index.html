@@ -9,6 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Wafi Tijarah" />
   <meta name="description" content="Sistem Pengurusan Penghantaran - Syarikat Wafi Tijarah Trading" />
   <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Wafi Tijarah Trading</title>
 
@@ -174,7 +175,7 @@
     #toast.err { background:var(--red); }
 
     /* ── MODAL ── */
-    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:none;align-items:flex-end;justify-content:center; }
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:flex-end;justify-content:center; }
     .modal-overlay.show { display:flex; }
     .modal-box { background:#fff;border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:600px;max-height:85vh;overflow-y:auto; }
     .modal-title { font-size:16px;font-weight:800;color:var(--navy);margin-bottom:16px;display:flex;justify-content:space-between;align-items:center; }
@@ -250,6 +251,9 @@
       <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" />
     </div>
     <button class="btn-login" onclick="doLogin()">Log Masuk →</button>
+    <div style="text-align:center;margin-top:10px">
+      <a href="#" onclick="bukaModalLupaKataLaluan();return false;" style="font-size:12px;color:var(--muted);text-decoration:underline">Lupa kata laluan?</a>
+    </div>
     <div class="login-err" id="login-err"></div>
     <div class="setup-notice show" id="setup-notice">
       ⚙️ <strong>Mod Tempatan Aktif</strong> — Data disimpan dalam peranti sahaja & kata laluan awal boleh dilihat sesiapa dalam kod sumber. <a href="#" onclick="showSetupGuide();return false;" style="color:var(--teal)">Klik sini</a> untuk sambung Supabase dan lindungi data sebenar.
@@ -345,6 +349,7 @@
     <!-- Tab -->
     <div style="display:flex;gap:0;background:var(--border);border-radius:10px;padding:3px;margin-bottom:14px">
       <button id="htab-baru" onclick="setHantarTab('baru')" style="flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;background:var(--navy);color:#fff">Rekod Baru</button>
+      <button id="htab-preorder" onclick="setHantarTab('preorder')" style="flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;background:transparent;color:var(--muted);position:relative">Pre-Order<span class="nav-badge" id="badge-preorder" style="display:none;top:-4px">!</span></button>
       <button id="htab-sejarah" onclick="setHantarTab('sejarah')" style="flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;background:transparent;color:var(--muted)">Sejarah</button>
     </div>
 
@@ -385,6 +390,18 @@
 
         <button class="btn btn-primary" onclick="submitHantar()">🚚 Sahkan & Rekod Penghantaran</button>
       </div>
+    </div>
+
+    <div id="hantar-preorder" style="display:none">
+      <div class="card" style="border-left:4px solid var(--gold);background:#FFFBF0">
+        <div class="card-title" style="color:var(--gold)">🔗 Link Pre-Order Kedai</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Kongsi link ini dengan kedai supaya mereka boleh repeat order sendiri bila-bila masa (tiada log masuk diperlukan).</div>
+        <div style="display:flex;gap:8px">
+          <input type="text" class="form-input" id="link-preorder" readonly style="font-size:12px" />
+          <button class="btn btn-secondary btn-sm" onclick="salinLinkPreorder()" style="flex-shrink:0">📋 Salin</button>
+        </div>
+      </div>
+      <div id="preorder-list"></div>
     </div>
 
     <div id="hantar-sejarah" style="display:none">
@@ -435,6 +452,14 @@
       <div class="form-group"><label class="form-label">Duit Makan (RM sehari seorang pekerja)</label><input type="number" class="form-input" id="set-makan" step="0.50" min="0" onchange="saveSettings()" /></div>
     </div>
 
+    <!-- Urus Pekerja (pemilik sahaja) -->
+    <div class="card" id="urus-pekerja-card">
+      <div class="card-title">👥 Urus Pekerja</div>
+      <button class="btn btn-primary" style="margin-bottom:12px" onclick="showModal('modal-daftar-pekerja')">+ Daftar Pekerja Baru</button>
+      <div id="senarai-pekerja"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">💡 Jika pekerja baru tak boleh log masuk serta-merta, pastikan "Confirm email" dimatikan di Supabase → Authentication → Providers → Email.</div>
+    </div>
+
     <!-- Setup Guide -->
     <div class="card" id="setup-guide-card" style="border-left:4px solid var(--teal)">
       <div class="card-title" style="color:var(--teal)">🔧 Panduan Setup Supabase</div>
@@ -459,7 +484,8 @@
       <div style="font-weight:800;color:var(--navy)">Wafi Tijarah Trading</div>
       <div style="font-size:11px;color:var(--muted);margin-top:2px">No. Pendaftaran: AS0462205-D</div>
       <div style="font-size:12px;color:var(--muted);margin-top:4px">Sistem Pengurusan Penghantaran v2.0</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:8px">Produk Halal · Berkualiti · Amanah</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">📞 014-6363831 · ✉️ wafitijarahtrading@gmail.com</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Produk Halal · Berkualiti · Amanah</div>
     </div>
   </div>
 </div>
@@ -576,6 +602,35 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-lupa-katalaluan">
+  <div class="modal-box">
+    <div class="modal-title">🔑 Lupa Kata Laluan<button class="modal-close" onclick="closeModal('modal-lupa-katalaluan')">✕ Tutup</button></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Masukkan e-mel akaun anda — pautan tetapkan semula kata laluan akan dihantar ke e-mel tersebut.</div>
+    <div class="form-group"><label class="form-label">E-mel</label><input type="email" class="form-input" id="lupa-email" placeholder="contoh@email.com" /></div>
+    <button class="btn btn-primary" onclick="hantarResetPassword()">📧 Hantar Pautan Reset</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-set-katalaluan-baru">
+  <div class="modal-box">
+    <div class="modal-title">🔑 Tetapkan Kata Laluan Baru</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Anda klik pautan reset dari e-mel. Masukkan kata laluan baharu di bawah.</div>
+    <div class="form-group"><label class="form-label">Kata Laluan Baharu</label><input type="password" class="form-input" id="set-pass-baru" placeholder="Sekurang-kurangnya 6 aksara" /></div>
+    <button class="btn btn-primary" onclick="tetapkanKataLaluanBaru()">💾 Kemaskini Kata Laluan</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-daftar-pekerja">
+  <div class="modal-box">
+    <div class="modal-title">👤 Daftar Pekerja Baru<button class="modal-close" onclick="closeModal('modal-daftar-pekerja')">✕ Tutup</button></div>
+    <div class="form-group"><label class="form-label">Nama Pekerja</label><input type="text" class="form-input" id="pk-nama" placeholder="cth: Ahmad bin Ali" /></div>
+    <div class="form-group"><label class="form-label">E-mel</label><input type="email" class="form-input" id="pk-email" placeholder="contoh@email.com" /></div>
+    <div class="form-group"><label class="form-label">No. Telefon</label><input type="tel" class="form-input" id="pk-telefon" placeholder="01x-xxxxxxx" /></div>
+    <div class="form-group"><label class="form-label">Kata Laluan Sementara</label><input type="text" class="form-input" id="pk-pass" placeholder="Sekurang-kurangnya 6 aksara" /></div>
+    <button class="btn btn-primary" onclick="daftarPekerjaBaru()">👤 Daftar Pekerja</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -589,6 +644,14 @@ let useCloud = false;
 if (SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY') {
   sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   useCloud = true;
+  // Pautan "lupa kata laluan" dari e-mel akan bawa balik ke sini dengan token pemulihan
+  sb.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      document.getElementById('splash').classList.add('hide');
+      document.getElementById('login-screen').className='active';
+      showModal('modal-set-katalaluan-baru');
+    }
+  });
 }
 
 // ════════════════════════════════════════════════════
@@ -689,7 +752,7 @@ async function doLogin() {
     const { data: profile, error: pErr } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
     if (pErr || !profile) { errEl.textContent='Akaun tiada profil. Hubungi pentadbir.'; errEl.className='login-err show'; await sb.auth.signOut(); return; }
     currentRole = profile.role;
-    DATA.currentUser = { email, role: profile.role, nama: profile.nama };
+    DATA.currentUser = { id: data.user.id, email, role: profile.role, nama: profile.nama, telefon: profile.telefon };
     await showApp();
     return;
   }
@@ -701,6 +764,33 @@ async function doLogin() {
   DATA.currentUser = u;
   localStorage.setItem('wafi_session', JSON.stringify(u));
   await showApp();
+}
+
+// ── Lupa kata laluan ──
+function bukaModalLupaKataLaluan() {
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  document.getElementById('lupa-email').value = document.getElementById('login-email').value.trim();
+  showModal('modal-lupa-katalaluan');
+}
+
+async function hantarResetPassword() {
+  const email = document.getElementById('lupa-email').value.trim().toLowerCase();
+  if (!email) return toast('Sila masukkan e-mel','err');
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.href.split('#')[0] });
+  if (error) return toast('Gagal hantar e-mel reset: '+error.message,'err');
+  closeModal('modal-lupa-katalaluan');
+  toast('Pautan reset dihantar — sila semak e-mel anda (termasuk folder spam)');
+}
+
+async function tetapkanKataLaluanBaru() {
+  const pass = document.getElementById('set-pass-baru').value;
+  if (!pass || pass.length < 6) return toast('Kata laluan mesti sekurang-kurangnya 6 aksara','err');
+  const { error } = await sb.auth.updateUser({ password: pass });
+  if (error) return toast('Gagal kemaskini kata laluan: '+error.message,'err');
+  closeModal('modal-set-katalaluan-baru');
+  toast('Kata laluan berjaya dikemaskini — sila log masuk semula');
+  await sb.auth.signOut();
+  document.getElementById('login-screen').className='active';
 }
 
 async function doLogout() {
@@ -723,8 +813,10 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['setup-guide-card','laporan-card','tetapan-kos-card'];
+  const pemilikOnly = ['laporan-card','tetapan-kos-card','urus-pekerja-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
+  // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
+  document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
 
   loadSettings();
   await loadData();
@@ -744,8 +836,12 @@ async function setPage(p) {
   if (p==='dashboard') renderDashboard();
   if (p==='stok') renderStok();
   if (p==='kedai') renderKedai();
-  if (p==='hantar') { renderHantarSelects(); renderSejarah(); }
-  if (p==='lebih') { renderResitSel(); renderLaporan(); }
+  if (p==='hantar') {
+    renderHantarSelects(); renderSejarah();
+    document.getElementById('link-preorder').value = location.href.replace(/index\.html.*$/,'').replace(/\/$/,'') + '/pesan.html';
+    if (useCloud) checkPreorderBadge();
+  }
+  if (p==='lebih') { renderResitSel(); renderLaporan(); if (currentRole==='pemilik') renderSenaraiPekerja(); }
 }
 
 // ════════════════════════════════════════════════════
@@ -1173,13 +1269,13 @@ function setBayar(v) {
   document.getElementById('opt-hutang').className='bayar-opt'+(v==='hutang'?' active-hutang':'');
 }
 function setHantarTab(t) {
-  document.getElementById('hantar-baru').style.display=t==='baru'?'':'none';
-  document.getElementById('hantar-sejarah').style.display=t==='sejarah'?'':'none';
-  document.getElementById('htab-baru').style.background=t==='baru'?'var(--navy)':'transparent';
-  document.getElementById('htab-baru').style.color=t==='baru'?'#fff':'var(--muted)';
-  document.getElementById('htab-sejarah').style.background=t==='sejarah'?'var(--navy)':'transparent';
-  document.getElementById('htab-sejarah').style.color=t==='sejarah'?'#fff':'var(--muted)';
+  ['baru','preorder','sejarah'].forEach(tab=>{
+    document.getElementById('hantar-'+tab).style.display = t===tab?'':'none';
+    document.getElementById('htab-'+tab).style.background = t===tab?'var(--navy)':'transparent';
+    document.getElementById('htab-'+tab).style.color = t===tab?'#fff':'var(--muted)';
+  });
   if(t==='sejarah') renderSejarah();
+  if(t==='preorder') renderPreorderList();
 }
 
 async function submitHantar() {
@@ -1243,6 +1339,53 @@ function renderSejarah(kedaiId='') {
 }
 
 // ════════════════════════════════════════════════════
+//  PRE-ORDER (dari link awam pesan.html)
+// ════════════════════════════════════════════════════
+function salinLinkPreorder() {
+  const input = document.getElementById('link-preorder');
+  input.select();
+  navigator.clipboard?.writeText(input.value);
+  toast('Link disalin — kongsi dengan kedai via WhatsApp');
+}
+
+async function checkPreorderBadge() {
+  const { data } = await sb.from('pre_order').select('id').eq('status','baru');
+  document.getElementById('badge-preorder').style.display = data?.length ? '' : 'none';
+}
+
+async function renderPreorderList() {
+  const el = document.getElementById('preorder-list');
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const { data, error } = await sb.from('pre_order').select('*').order('created_at',{ascending:false});
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat pre-order: ${esc(error.message)}</div></div>`; return; }
+  el.innerHTML = (data||[]).map(po=>{
+    const itemsStr = (po.items||[]).map(it=>`${it.nama} ×${it.qty}`).join(' · ');
+    const badgeCls = po.status==='baru'?'badge-gold':po.status==='diproses'?'badge-teal':'badge-green';
+    const badgeTxt = po.status==='baru'?'🆕 Baru':po.status==='diproses'?'⏳ Diproses':'✓ Selesai';
+    return `<div class="trx-card">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <div><div style="font-weight:800;font-size:13px">${esc(po.kedai_nama)}</div><div style="font-size:10px;color:var(--muted)">📞 ${esc(po.kedai_telefon)} · ${fmtDT(po.created_at)}</div></div>
+        <span class="badge ${badgeCls}">${badgeTxt}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
+      ${po.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(po.nota)}</div>`:''}
+      <div style="display:flex;gap:6px;margin-top:8px">
+        ${po.status==='baru'?`<button class="btn btn-secondary btn-sm" onclick="tandaPreorder('${po.id}','diproses')">⏳ Tandakan Diproses</button>`:''}
+        ${po.status!=='selesai'?`<button class="btn btn-primary btn-sm" style="margin-top:0;background:var(--green)" onclick="tandaPreorder('${po.id}','selesai')">✓ Selesai</button>`:''}
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-icon">📥</div><div class="empty-text">Tiada pre-order masuk lagi</div></div>';
+}
+
+async function tandaPreorder(id, status) {
+  const { error } = await sb.from('pre_order').update({ status }).eq('id', id);
+  if (error) return toast('Gagal kemaskini status: '+error.message,'err');
+  renderPreorderList();
+  checkPreorderBadge();
+  toast('Status pre-order dikemaskini');
+}
+
+// ════════════════════════════════════════════════════
 //  RESIT
 // ════════════════════════════════════════════════════
 function renderResitSel() {
@@ -1254,18 +1397,26 @@ function renderResitSel() {
   }).join('');
 }
 
-function renderResit(id) {
+async function renderResit(id) {
   const el=document.getElementById('resit-preview');
   if(!id){el.innerHTML='';return;}
   const t=DATA.transaksi.find(t=>t.id===id); if(!t){el.innerHTML='';return;}
   const k=DATA.kedai.find(k=>k.id===t.kedai_id)||{nama:'?',alamat:'—'};
+
+  // Cari maklumat pekerja yang buat penghantaran ini — supaya kedai boleh repeat order terus dengannya
+  let pekerja = null;
+  if (useCloud && t.created_by) {
+    const { data } = await sb.from('profiles').select('nama,telefon').eq('id', t.created_by).single();
+    pekerja = data;
+  }
+
   el.innerHTML=`<div class="resit-box" id="resit-print">
     <div class="resit-header">
       <img src="logo.png" alt="Wafi Tijarah Trading" style="width:36px;height:36px;border-radius:50%;margin-bottom:6px" />
       <div style="font-weight:900;font-size:15px;letter-spacing:1px">SYARIKAT WAFI TIJARAH TRADING</div>
       <div style="font-size:10px;color:var(--muted);margin-top:4px">Pembekal Produk Halal Berkualiti · Kedah, Perlis, P.Pinang & Perak</div>
       <div style="font-size:9px;color:var(--muted)">No. Pendaftaran: AS0462205-D</div>
-      <div style="font-size:10px;color:var(--muted)">wafitijarah@email.com</div>
+      <div style="font-size:10px;color:var(--muted)">wafitijarahtrading@gmail.com · 014-6363831</div>
     </div>
     <div class="resit-row" style="font-weight:700"><span>NO. RESIT</span><span>${esc(t.resit||t.id)}</span></div>
     <div class="resit-row"><span>TARIKH</span><span>${fmtDT(t.tarikh_masa)}</span></div>
@@ -1280,6 +1431,7 @@ function renderResit(id) {
     <div class="resit-total" style="display:flex;justify-content:space-between"><span>JUMLAH:</span><span>RM ${t.jumlah.toFixed(2)}</span></div>
     <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">STATUS</span><span style="font-weight:700;color:${t.status==='selesai'?'var(--green)':'var(--red)'}">⬤ ${t.status==='selesai'?'TELAH DIBAYAR':'BELUM DIBAYAR / HUTANG'}</span></div>
     ${t.nota?`<div style="margin-top:8px;font-size:10px;color:var(--muted)">Nota: ${esc(t.nota)}</div>`:''}
+    ${pekerja?.telefon?`<div style="margin-top:10px;padding:8px;background:#F0FFF4;border:1px dashed var(--green);border-radius:6px;font-size:10px;text-align:center">🔁 Nak repeat order? Hubungi terus <strong>${esc(pekerja.nama||'penghantar')}</strong>: ${esc(pekerja.telefon)}</div>`:''}
     <div class="resit-footer">Terima kasih atas kepercayaan anda!<br/>Produk Halal · Berkualiti · Amanah<br/><strong>— WAFI TIJARAH TRADING —</strong></div>
   </div>`;
 }
@@ -1387,6 +1539,50 @@ function saveSettings() {
   localStorage.setItem('wafi_settings', JSON.stringify(SETTINGS));
   renderLaporan();
   toast('Tetapan kos dikemaskini');
+}
+
+// ════════════════════════════════════════════════════
+//  URUS PEKERJA
+// ════════════════════════════════════════════════════
+async function renderSenaraiPekerja() {
+  const el = document.getElementById('senarai-pekerja');
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const { data, error } = await sb.from('profiles').select('*').order('nama');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat senarai: ${esc(error.message)}</div></div>`; return; }
+  const pekerja = (data||[]).filter(p=>p.role==='pekerja');
+  el.innerHTML = pekerja.map(p=>`
+    <div class="list-item">
+      <div><div class="list-item-title">${esc(p.nama||'-')}</div><div class="list-item-sub">${esc(p.email||'')}${p.telefon?' · '+esc(p.telefon):''}</div></div>
+      <span class="badge badge-teal">Pekerja</span>
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada pekerja didaftarkan lagi</div></div>';
+}
+
+async function daftarPekerjaBaru() {
+  const nama = document.getElementById('pk-nama').value.trim();
+  const email = document.getElementById('pk-email').value.trim().toLowerCase();
+  const telefon = document.getElementById('pk-telefon').value.trim();
+  const pass = document.getElementById('pk-pass').value;
+  if (!nama || !email || !pass) return toast('Sila isi semua maklumat','err');
+  if (pass.length < 6) return toast('Kata laluan mesti sekurang-kurangnya 6 aksara','err');
+
+  // Guna client SEMENTARA (sesi berasingan, tak simpan session) supaya proses signUp
+  // akaun pekerja baru tidak menggantikan sesi log masuk pemilik yang sedia ada.
+  const tempClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const { data, error } = await tempClient.auth.signUp({ email, password: pass });
+  if (error || !data.user) return toast('Gagal daftar akaun: '+(error?.message||'?'),'err');
+
+  const { error: pErr } = await sb.from('profiles').insert({ id: data.user.id, email, role: 'pekerja', nama, telefon });
+  if (pErr) return toast('Akaun dicipta tapi gagal simpan profil: '+pErr.message,'err');
+
+  closeModal('modal-daftar-pekerja');
+  document.getElementById('pk-nama').value='';
+  document.getElementById('pk-email').value='';
+  document.getElementById('pk-telefon').value='';
+  document.getElementById('pk-pass').value='';
+  renderSenaraiPekerja();
+  toast(`Pekerja ${nama} berjaya didaftarkan`);
 }
 
 // ════════════════════════════════════════════════════

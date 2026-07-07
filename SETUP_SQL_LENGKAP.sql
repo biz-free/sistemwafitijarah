@@ -50,7 +50,19 @@ CREATE TABLE profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email text,
   role text NOT NULL DEFAULT 'pekerja',
-  nama text
+  nama text,
+  telefon text
+);
+
+-- Pesanan masuk dari kedai melalui link awam pesan.html (repeat order)
+CREATE TABLE pre_order (
+  id text PRIMARY KEY,
+  kedai_nama text NOT NULL,
+  kedai_telefon text,
+  items jsonb DEFAULT '[]',
+  nota text,
+  status text DEFAULT 'baru', -- baru / diproses / selesai
+  created_at timestamptz DEFAULT now()
 );
 
 -- ═══ Row Level Security ═══
@@ -58,8 +70,15 @@ ALTER TABLE stok ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kedai ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transaksi ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pre_order ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "profil sendiri" ON profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "pemilik boleh baca semua profil" ON profiles FOR SELECT USING (
+  EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'pemilik')
+);
+CREATE POLICY "pemilik boleh daftar profil pekerja" ON profiles FOR INSERT WITH CHECK (
+  EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'pemilik')
+);
 
 CREATE POLICY "baca stok" ON stok FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "baca kedai" ON kedai FOR SELECT USING (auth.role() = 'authenticated');
@@ -77,6 +96,11 @@ CREATE POLICY "pemilik tambah kedai" ON kedai FOR INSERT WITH CHECK (
 CREATE POLICY "pemilik kemaskini kedai" ON kedai FOR UPDATE USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'pemilik')
 );
+
+-- Pre-order: sesiapa (tanpa log masuk) boleh hantar; hanya staff boleh baca/kemaskini
+CREATE POLICY "sesiapa boleh hantar pre-order" ON pre_order FOR INSERT WITH CHECK (true);
+CREATE POLICY "staff boleh baca pre-order" ON pre_order FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "staff boleh kemaskini pre-order" ON pre_order FOR UPDATE USING (auth.role() = 'authenticated');
 
 -- ═══ Fungsi RPC — kemaskini stok/hutang secara atomik ═══
 CREATE OR REPLACE FUNCTION submit_penghantaran(
@@ -142,6 +166,14 @@ BEGIN
   END LOOP;
 END;
 $$;
+
+-- ═══ Fungsi awam — senarai produk (tanpa harga beli/modal) untuk borang pre-order ═══
+CREATE OR REPLACE FUNCTION senarai_produk_awam()
+RETURNS TABLE(id text, nama text, unit text, harga_jual float, kategori text)
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  SELECT id, nama, unit, harga_jual, kategori FROM stok ORDER BY nama;
+$$;
+GRANT EXECUTE ON FUNCTION senarai_produk_awam() TO anon, authenticated;
 
 -- ═══ Profil pemilik (akaun anda: biz.amirul@gmail.com) ═══
 INSERT INTO profiles (id, email, role, nama) VALUES

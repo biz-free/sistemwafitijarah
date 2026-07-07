@@ -3,11 +3,14 @@
 //  Membolehkan apps berfungsi offline
 // ═══════════════════════════════════════════════
 
-const CACHE_NAME = 'wafi-tijarah-v2';
+const CACHE_NAME = 'wafi-tijarah-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './logo.png',
+  './icon-192.png',
+  './icon-512.png',
 ];
 
 // Install — cache semua aset
@@ -21,7 +24,7 @@ self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
-// Activate — buang cache lama
+// Activate — buang cache lama (versi sebelum ini)
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -31,30 +34,41 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// Fetch — serve dari cache dulu (offline-first)
+// Fetch:
+//  - HTML/JS (kod apps) → network dulu, cache sebagai fallback offline sahaja.
+//    Ini pastikan kemaskini apps terus terpakai bila online, bukan tersekat cache lama.
+//  - Aset statik (gambar/ikon) → cache dulu (jarang berubah, offline-friendly).
 self.addEventListener('fetch', e => {
-  // Skip Supabase API calls - kena network
-  if (e.request.url.includes('supabase.co')) {
+  if (e.request.url.includes('supabase.co')) return; // kena network, jangan cache
+  if (e.request.url.includes('unpkg.com') || e.request.url.includes('cdn.jsdelivr.net')) return; // CDN, biar browser urus
+
+  const isDocOrScript = e.request.destination === 'document' || e.request.url.endsWith('.html');
+
+  if (isDocOrScript) {
+    e.respondWith(
+      fetch(e.request)
+        .then(response => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(e.request).then(cached => cached || caches.match('./index.html')))
+    );
     return;
   }
 
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
-
       return fetch(e.request).then(response => {
-        // Cache resources baru
         if (response && response.status === 200 && response.type === 'basic') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
         }
         return response;
-      }).catch(() => {
-        // Offline fallback
-        if (e.request.destination === 'document') {
-          return caches.match('./index.html');
-        }
-      });
+      }).catch(() => {});
     })
   );
 });
