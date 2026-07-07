@@ -1,0 +1,42 @@
+{
+  "name": "Syarikat Wafi Tijarah Trading",
+  "short_name": "Wafi Tijarah",
+  "description": "Sistem Pengurusan Penghantaran Barangan - Negeri Kedah",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0D2137",
+  "theme_color": "#0D2137",
+  "orientation": "portrait-primary",
+  "lang": "ms",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Rekod Penghantaran",
+      "short_name": "Hantar",
+      "description": "Rekod penghantaran baru",
+      "url": "./index.html#hantar",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Lihat Stok",
+      "short_name": "Stok",
+      "description": "Semak stok terkini",
+      "url": "./index.html#stok",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
