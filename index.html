@@ -221,6 +221,7 @@
     .code-block { background:#1A2B38;color:#E8B84B;border-radius:8px;padding:10px 14px;font-family:'Courier New',monospace;font-size:12px;margin-top:6px;word-break:break-all; }
 
     @media print {
+      @page { size: B5; margin: 10mm; }
       #app-header, #bottom-nav, #toast, .btn-primary, .btn-logout, .btn-secondary { display:none!important; }
       #main-content { padding:0; }
       .resit-box { border:1px solid #000; }
@@ -365,6 +366,15 @@
     </div>
 
     <div id="hantar-baru">
+      <div class="card" style="border-left:4px solid var(--purple)">
+        <div class="card-title" style="color:var(--purple)">🎒 Stok Bawaan Saya</div>
+        <div id="stok-bawaan-list"></div>
+        <div class="btn-row">
+          <button class="btn btn-secondary btn-sm" onclick="showModal('modal-ambil-stok')">📥 Ambil Stok</button>
+          <button class="btn btn-secondary btn-sm" onclick="showModal('modal-pulang-stok')">📤 Pulangkan Stok</button>
+        </div>
+      </div>
+
       <div class="card" style="border-left:4px solid var(--teal)">
         <div class="form-group">
           <label class="form-label">Kedai Destinasi</label>
@@ -387,11 +397,6 @@
             <div class="bayar-opt active-terus" id="opt-terus" onclick="setBayar('terus')">💵 Bayar Terus</div>
             <div class="bayar-opt" id="opt-hutang" onclick="setBayar('hutang')">📋 Catat Hutang</div>
           </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Jarak Perjalanan (km, untuk kos minyak)</label>
-          <input type="number" class="form-input" id="h-jarak" placeholder="0" min="0" step="0.5" />
         </div>
 
         <div class="form-group">
@@ -425,8 +430,54 @@
 
   <!-- ── LEBIH ── -->
   <div id="page-lebih" class="page">
-    <div class="section-title">⚙️ Lagi</div>
+    <div class="section-title">👤 Profile</div>
     <div class="section-sub">Syarikat Wafi Tijarah Trading</div>
+
+    <!-- Profil Saya -->
+    <div class="card">
+      <div class="card-title">👤 Profil Saya</div>
+      <div class="form-group"><label class="form-label">Nama</label><input type="text" class="form-input" id="profil-nama" /></div>
+      <div class="form-group"><label class="form-label">No. Telefon</label><input type="tel" class="form-input" id="profil-telefon" placeholder="01x-xxxxxxx" /></div>
+      <button class="btn btn-primary" onclick="kemaskiniProfilSaya()">💾 Kemaskini Profil</button>
+      <div class="divider"></div>
+      <div class="form-group"><label class="form-label">Kata Laluan Baharu (kosongkan jika tak mahu tukar)</label><input type="password" class="form-input" id="profil-pass-baru" placeholder="••••••••" /></div>
+      <button class="btn btn-secondary" style="width:100%" onclick="tukarPasswordSaya()">🔑 Tukar Kata Laluan</button>
+    </div>
+
+    <!-- Kiraan Upah Saya (pekerja) -->
+    <div class="card" id="upah-saya-card">
+      <div class="card-title">💰 Kiraan Upah Saya</div>
+      <div class="form-group"><input type="month" class="form-input" id="upah-saya-bulan" onchange="renderUpahSaya()" /></div>
+      <div id="upah-saya-output"></div>
+    </div>
+
+    <!-- Status Pekerja: Mohon Cuti/MC/Off -->
+    <div class="card">
+      <div class="card-title">🗓️ Status Pekerja</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Mohon cuti, MC (sakit), atau tandakan tak jalan (off) pada tarikh tertentu.</div>
+      <div class="form-group"><label class="form-label">Jenis</label>
+        <select class="form-input" id="cuti-jenis">
+          <option value="cuti">🏖️ Cuti</option>
+          <option value="mc">🤒 MC (Sakit)</option>
+          <option value="off">💤 Tak Jalan (Off)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tarikh Mula</label><input type="date" class="form-input" id="cuti-mula" /></div>
+        <div class="form-group"><label class="form-label">Tarikh Tamat</label><input type="date" class="form-input" id="cuti-tamat" /></div>
+      </div>
+      <div class="form-group"><label class="form-label">Nota (Optional)</label><textarea class="form-input" id="cuti-nota" placeholder="cth: demam, perlu jumpa doktor"></textarea></div>
+      <button class="btn btn-primary" onclick="mohonCuti()">📨 Hantar Permohonan</button>
+      <div class="divider"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">PERMOHONAN SAYA</div>
+      <div id="senarai-cuti-saya"></div>
+    </div>
+
+    <!-- Kelulusan Permohonan Cuti (pemilik sahaja) -->
+    <div class="card" id="kelulusan-cuti-card">
+      <div class="card-title">✅ Kelulusan Permohonan Cuti</div>
+      <div id="senarai-cuti-semua"></div>
+    </div>
 
     <!-- Resit -->
     <div class="card">
@@ -542,7 +593,7 @@
     <span class="nav-icon">🚚</span><span class="nav-label">Hantar</span>
   </button>
   <button class="nav-item" onclick="setPage('lebih')" id="nav-lebih">
-    <span class="nav-icon">⚙️</span><span class="nav-label">Lagi</span>
+    <span class="nav-icon">👤</span><span class="nav-label">Profile</span>
   </button>
 </div>
 
@@ -592,6 +643,28 @@
       <div class="form-group"><label class="form-label">Tarikh Luput Baru (jika ada)</label><input type="date" class="form-input" id="rs-luput" /></div>
     </div>
     <button class="btn btn-primary" style="background:var(--gold)" onclick="doRestock()">⚡ Tambah Stok</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-ambil-stok">
+  <div class="modal-box">
+    <div class="modal-title">📥 Ambil Stok dari Gudang<button class="modal-close" onclick="closeModal('modal-ambil-stok')">✕ Tutup</button></div>
+    <div class="form-group"><label class="form-label">Produk</label>
+      <select class="form-input" id="ambil-produk"></select>
+    </div>
+    <div class="form-group"><label class="form-label">Kuantiti</label><input type="number" class="form-input" id="ambil-qty" placeholder="0" min="1" /></div>
+    <button class="btn btn-primary" onclick="ambilStok()">📥 Ambil Stok</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-pulang-stok">
+  <div class="modal-box">
+    <div class="modal-title">📤 Pulangkan Stok ke Gudang<button class="modal-close" onclick="closeModal('modal-pulang-stok')">✕ Tutup</button></div>
+    <div class="form-group"><label class="form-label">Produk</label>
+      <select class="form-input" id="pulang-produk"></select>
+    </div>
+    <div class="form-group"><label class="form-label">Kuantiti</label><input type="number" class="form-input" id="pulang-qty" placeholder="0" min="1" /></div>
+    <button class="btn btn-primary" style="background:var(--gold)" onclick="pulangStok()">📤 Pulangkan Stok</button>
   </div>
 </div>
 
@@ -729,7 +802,7 @@ const STATE_DAERAH = {
 };
 
 let DATA = {
-  stok: [], kedai: [], transaksi: [], currentUser: null
+  stok: [], kedai: [], transaksi: [], currentUser: null, stokPekerja: {}
 };
 
 async function loadData() {
@@ -871,7 +944,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['laporan-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card'];
+  const pemilikOnly = ['laporan-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','kelulusan-cuti-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -901,11 +974,17 @@ async function setPage(p) {
   }
   if (p==='lebih') {
     renderResitSel(); renderLaporan();
+    document.getElementById('profil-nama').value = DATA.currentUser?.nama || '';
+    document.getElementById('profil-telefon').value = DATA.currentUser?.telefon || '';
+    if (!document.getElementById('upah-saya-bulan').value) document.getElementById('upah-saya-bulan').value = new Date().toISOString().slice(0,7);
+    renderUpahSaya();
+    renderSenaraiCutiSaya();
     if (currentRole==='pemilik') {
       renderSenaraiPekerja();
       if (!document.getElementById('kh-tarikh').value) document.getElementById('kh-tarikh').value = new Date().toISOString().slice(0,10);
       renderLaporanKehadiran();
       loadTetapanDiskaun();
+      renderSenaraiCutiSemua();
     }
   }
 }
@@ -1144,7 +1223,8 @@ async function tukarStokLuput() {
 //  KEDAI
 // ════════════════════════════════════════════════════
 function renderKedai(q='') {
-  document.getElementById('btn-daftar-kedai').style.display=currentRole==='pemilik'?'':'none';
+  // Pekerja juga boleh daftar kedai baru (mereka yang cari prospek di lapangan) — edit kekal pemilik sahaja
+  document.getElementById('btn-daftar-kedai').style.display='';
   const qq=q.toLowerCase();
   const list = q ? DATA.kedai.filter(k=>k.nama.toLowerCase().includes(qq)||k.daerah.toLowerCase().includes(qq)||(k.negeri||'').toLowerCase().includes(qq)) : DATA.kedai;
   const hutangTotal=DATA.kedai.reduce((a,k)=>a+k.hutang,0);
@@ -1331,10 +1411,16 @@ async function rekodBayaran() {
 let hItems=[{stokId:'',qty:1}];
 let hBayar='terus';
 
-function renderHantarSelects() {
+async function renderHantarSelects() {
   const sel=document.getElementById('h-kedai');
   sel.innerHTML='<option value="">-- Pilih kedai --</option>'+DATA.kedai.filter(k=>k.status==='aktif').map(k=>`<option value="${k.id}">${k.nama} · ${k.daerah}</option>`).join('');
+  if (useCloud) await loadStokBawaan();
   renderHItems();
+}
+
+function bakiUntukHantar(s) {
+  // Dalam mod cloud, pekerja hantar dari stok BAWAAN sendiri (bukan terus dari gudang).
+  return useCloud ? (DATA.stokPekerja[s.id]||0) : s.stok;
 }
 
 function renderHItems() {
@@ -1344,7 +1430,7 @@ function renderHItems() {
     return `<div class="item-row">
       <select class="form-input" onchange="updHItem(${i},'stokId',this.value)">
         <option value="">-- Pilih produk --</option>
-        ${DATA.stok.map(s=>`<option value="${s.id}" ${it.stokId===s.id?'selected':''}>${s.nama} (${s.stok} ${s.unit})</option>`).join('')}
+        ${DATA.stok.map(s=>`<option value="${s.id}" ${it.stokId===s.id?'selected':''}>${s.nama} (${bakiUntukHantar(s)} ${s.unit})</option>`).join('')}
       </select>
       <input type="number" class="form-input" min="1" value="${it.qty}" onchange="updHItem(${i},'qty',this.value)" />
       <span class="item-price">${sub}</span>
@@ -1352,6 +1438,64 @@ function renderHItems() {
     </div>`;
   }).join('');
   calcTotal();
+}
+
+// ── Stok Bawaan Pekerja (ambil dari gudang / pulangkan balik) ──
+async function loadStokBawaan() {
+  if (!useCloud) return;
+  const { data, error } = await sb.from('stok_pekerja').select('stok_id,kuantiti').eq('pekerja_id', DATA.currentUser.id);
+  if (error) {
+    const el = document.getElementById('stok-bawaan-list');
+    if (el) el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat stok bawaan: ${esc(error.message)}</div></div>`;
+    return;
+  }
+  DATA.stokPekerja = {};
+  (data||[]).forEach(r => DATA.stokPekerja[r.stok_id] = r.kuantiti);
+  renderStokBawaanList();
+}
+
+function renderStokBawaanList() {
+  const el = document.getElementById('stok-bawaan-list');
+  if (!el) return;
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const entries = Object.entries(DATA.stokPekerja||{}).filter(([id,qty])=>qty>0);
+  el.innerHTML = entries.map(([id,qty])=>{
+    const s = DATA.stok.find(s=>s.id===id);
+    return `<div class="list-item"><div class="list-item-title">${esc(s?.nama||id)}</div><div class="list-item-val">${qty} ${esc(s?.unit||'')}</div></div>`;
+  }).join('') || '<div class="empty"><div class="empty-text">Tiada stok dibawa lagi — tekan "Ambil Stok"</div></div>';
+
+  const ambilSel = document.getElementById('ambil-produk');
+  if (ambilSel) ambilSel.innerHTML = DATA.stok.map(s=>`<option value="${s.id}">${esc(s.nama)} (gudang: ${s.stok})</option>`).join('');
+  const pulangSel = document.getElementById('pulang-produk');
+  if (pulangSel) pulangSel.innerHTML = entries.map(([id,qty])=>{ const s=DATA.stok.find(s=>s.id===id); return `<option value="${id}">${esc(s?.nama||id)} (bawaan: ${qty})</option>`; }).join('') || '<option value="">-- Tiada stok dibawa --</option>';
+}
+
+async function ambilStok() {
+  const id = document.getElementById('ambil-produk').value;
+  const qty = +document.getElementById('ambil-qty').value;
+  if (!id||qty<1) return toast('Pilih produk dan kuantiti','err');
+  const { error } = await sb.rpc('ambil_stok_pekerja', { p_stok_id:id, p_qty:qty });
+  if (error) return toast('Gagal ambil stok: '+error.message,'err');
+  await loadData();
+  await loadStokBawaan();
+  renderHItems();
+  closeModal('modal-ambil-stok');
+  document.getElementById('ambil-qty').value='';
+  toast('Stok berjaya diambil dari gudang');
+}
+
+async function pulangStok() {
+  const id = document.getElementById('pulang-produk').value;
+  const qty = +document.getElementById('pulang-qty').value;
+  if (!id||qty<1) return toast('Pilih produk dan kuantiti','err');
+  const { error } = await sb.rpc('pulang_stok_pekerja', { p_stok_id:id, p_qty:qty });
+  if (error) return toast('Gagal pulangkan stok: '+error.message,'err');
+  await loadData();
+  await loadStokBawaan();
+  renderHItems();
+  closeModal('modal-pulang-stok');
+  document.getElementById('pulang-qty').value='';
+  toast('Stok berjaya dipulangkan ke gudang');
 }
 
 function updHItem(i,f,v) { hItems[i][f]=v; renderHItems(); }
@@ -1382,19 +1526,29 @@ async function submitHantar() {
   if(hItems.some(it=>!it.stokId||+it.qty<1)) return toast('Sila isi semua item','err');
   for(const it of hItems){
     const s=DATA.stok.find(s=>s.id===it.stokId);
-    if(!s||s.stok<+it.qty) return toast(`Stok ${s?.nama||'?'} tidak mencukupi (baki: ${s?.stok||0})`,'err');
+    if(!s||bakiUntukHantar(s)<+it.qty) return toast(`Stok ${s?.nama||'?'} tidak mencukupi (baki bawaan: ${s?bakiUntukHantar(s):0})`,'err');
   }
   const jumlah=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty):0); },0);
+
+  // Jarak dikira automatik dari lokasi GPS pekerja semasa ke lokasi berdaftar kedai
+  const kedaiTujuan = DATA.kedai.find(k=>k.id===kedaiId);
+  let jarakKm = 0;
+  if (kedaiTujuan?.lat && kedaiTujuan?.lng) {
+    const posKini = await getGpsPosition();
+    if (posKini) jarakKm = haversineKm(posKini, { lat:kedaiTujuan.lat, lng:kedaiTujuan.lng });
+    else toast('Gagal dapatkan GPS — jarak direkod sebagai 0km','err');
+  }
+
   const trx={
     id:genId('T'), tarikh_masa:new Date().toISOString(), kedai_id:kedaiId,
     items:hItems.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return{stokId:it.stokId,qty:+it.qty,harga:s.harga_jual}; }),
     jumlah, status:hBayar==='terus'?'selesai':'hutang',
     nota:document.getElementById('h-nota').value, resit:genResit(),
-    jarak_km:+document.getElementById('h-jarak').value||0,
+    jarak_km: jarakKm,
     created_by: DATA.currentUser?.email || DATA.currentUser?.nama || null,
   };
   if (useCloud) {
-    // Guna RPC atomik supaya potong stok + rekod transaksi + hutang kedai berlaku serentak
+    // Guna RPC atomik supaya potong stok bawaan + rekod transaksi + hutang kedai berlaku serentak
     // dan tak "lost update" bila dua pekerja hantar barang serentak dari peranti berbeza.
     const { error } = await sb.rpc('submit_penghantaran', {
       p_id:trx.id, p_kedai_id:trx.kedai_id, p_items:trx.items,
@@ -1402,6 +1556,7 @@ async function submitHantar() {
     });
     if (error) return toast('Gagal rekod penghantaran: '+error.message,'err');
     await loadData();
+    await loadStokBawaan();
   } else {
     DATA.transaksi.push(trx);
     DATA.stok=DATA.stok.map(s=>{ const it=hItems.find(i=>i.stokId===s.id); return it?{...s,stok:s.stok-(+it.qty)}:s; });
@@ -1416,7 +1571,6 @@ async function submitHantar() {
   hItems=[{stokId:'',qty:1}]; hBayar='terus'; setBayar('terus');
   document.getElementById('h-kedai').value='';
   document.getElementById('h-nota').value='';
-  document.getElementById('h-jarak').value='';
   renderHItems();
 }
 
@@ -1454,23 +1608,32 @@ async function checkPreorderBadge() {
 async function renderPreorderList() {
   const el = document.getElementById('preorder-list');
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
-  const { data, error } = await sb.from('pre_order').select('*').order('created_at',{ascending:false});
+  const [{ data, error }, { data: pekerjaList }] = await Promise.all([
+    sb.from('pre_order').select('*').order('created_at',{ascending:false}),
+    currentRole==='pemilik' ? sb.from('profiles').select('id,nama') : Promise.resolve({data:null}),
+  ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat pre-order: ${esc(error.message)}</div></div>`; return; }
+  const namaPekerja = id => pekerjaList?.find(p=>p.id===id)?.nama || id;
+
   el.innerHTML = (data||[]).map(po=>{
     const itemsStr = (po.items||[]).map(it=>`${it.nama} ×${it.qty}`).join(' · ');
-    const badgeCls = po.status==='baru'?'badge-gold':po.status==='diproses'?'badge-teal':'badge-green';
-    const badgeTxt = po.status==='baru'?'🆕 Baru':po.status==='diproses'?'⏳ Diproses':'✓ Selesai';
     return `<div class="trx-card">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px">
         <div><div style="font-weight:800;font-size:13px">${esc(po.kedai_nama)}</div><div style="font-size:10px;color:var(--muted)">📞 ${esc(po.kedai_telefon)} · ${fmtDT(po.created_at)}</div></div>
-        <span class="badge ${badgeCls}">${badgeTxt}</span>
+        <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="tandaPreorder('${po.id}',this.value)">
+          <option value="baru" ${po.status==='baru'?'selected':''}>🆕 Baru</option>
+          <option value="diproses" ${po.status==='diproses'?'selected':''}>⏳ Diproses</option>
+          <option value="selesai" ${po.status==='selesai'?'selected':''}>✓ Selesai</option>
+        </select>
       </div>
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
       ${po.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(po.nota)}</div>`:''}
       ${po.jumlah_asal?`<div style="font-size:12px;font-weight:700;margin-top:6px">${po.bayar_metod==='transfer'?`🏦 Online Transfer — ${fmt(po.jumlah_selepas_diskaun)} <span style="font-weight:400;color:var(--green);font-size:11px">(${po.diskaun_peratus}% diskaun daripada ${fmt(po.jumlah_asal)})</span>`:`🚚 COD — ${fmt(po.jumlah_asal)}`}</div>`:''}
-      <div style="display:flex;gap:6px;margin-top:8px">
-        ${po.status==='baru'?`<button class="btn btn-secondary btn-sm" onclick="tandaPreorder('${po.id}','diproses')">⏳ Tandakan Diproses</button>`:''}
-        ${po.status!=='selesai'?`<button class="btn btn-primary btn-sm" style="margin-top:0;background:var(--green)" onclick="tandaPreorder('${po.id}','selesai')">✓ Selesai</button>`:''}
+      ${po.bayar_metod==='transfer'&&po.bayar_tarikh?`<div style="font-size:11px;color:var(--muted);margin-top:2px">📅 Transfer: ${esc(po.bayar_tarikh)} ${esc(po.bayar_masa||'')}</div>`:''}
+      <div style="font-size:11px;margin-top:6px">${po.assigned_pekerja_id?`👤 Ditugaskan: <strong>${esc(currentRole==='pemilik'?namaPekerja(po.assigned_pekerja_id):(po.assigned_pekerja_id===DATA.currentUser.id?'Saya':'Pekerja lain'))}</strong>`:'🙋 Belum ditugaskan'}</div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        ${!po.assigned_pekerja_id&&currentRole==='pekerja'?`<button class="btn btn-primary btn-sm" style="margin-top:0" onclick="claimPreorder('${po.id}')">🙋 Ambil Tugasan</button>`:''}
+        ${po.bukti_bayaran_url?`<button class="btn btn-secondary btn-sm" onclick="lihatBuktiBayaran('${esc(po.bukti_bayaran_url)}')">📎 Lihat Bukti Bayaran</button>`:''}
       </div>
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-icon">📥</div><div class="empty-text">Tiada pre-order masuk lagi</div></div>';
@@ -1482,6 +1645,20 @@ async function tandaPreorder(id, status) {
   renderPreorderList();
   checkPreorderBadge();
   toast('Status pre-order dikemaskini');
+}
+
+async function claimPreorder(id) {
+  const { data, error } = await sb.from('pre_order').update({ assigned_pekerja_id: DATA.currentUser.id }).eq('id', id).is('assigned_pekerja_id', null).select();
+  if (error) return toast('Gagal ambil tugasan: '+error.message,'err');
+  if (!data || !data.length) { toast('Pre-order ini dah diambil pekerja lain','err'); renderPreorderList(); return; }
+  renderPreorderList();
+  toast('Tugasan berjaya diambil');
+}
+
+async function lihatBuktiBayaran(path) {
+  const { data, error } = await sb.storage.from('bukti-bayaran').createSignedUrl(path, 3600);
+  if (error) return toast('Gagal buka bukti bayaran: '+error.message,'err');
+  window.open(data.signedUrl, '_blank');
 }
 
 // ════════════════════════════════════════════════════
@@ -1556,13 +1733,22 @@ async function muatTurunResitPDF() {
   if(!box) { toast('Sila pilih transaksi dahulu','err'); return null; }
   const id=document.getElementById('resit-sel').value;
   const t=DATA.transaksi.find(t=>t.id===id);
+  const k=DATA.kedai.find(k=>k.id===t?.kedai_id);
   toast('Menjana PDF...');
   const canvas = await html2canvas(box, { scale:2, backgroundColor:'#ffffff' });
   const img = canvas.toDataURL('image/png');
   const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({ unit:'px', format:[canvas.width, canvas.height] });
-  pdf.addImage(img, 'PNG', 0, 0, canvas.width, canvas.height);
-  pdf.save(`Resit-${t?.resit||id}.pdf`);
+  const pdf = new jsPDF({ unit:'mm', format:'b5' }); // saiz kertas B5 sahaja
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const margin = 10;
+  let imgW = pageW - margin*2;
+  let imgH = imgW * (canvas.height/canvas.width);
+  const maxH = pageH - margin*2;
+  if (imgH > maxH) { imgH = maxH; imgW = imgH * (canvas.width/canvas.height); }
+  pdf.addImage(img, 'PNG', (pageW-imgW)/2, margin, imgW, imgH);
+  const namaFail = `${t?.resit||id}-${k?.nama||'Kedai'}-RM${(t?.jumlah||0).toFixed(2)}`.replace(/[\/\\?%*:|"<>]/g,'-');
+  pdf.save(`${namaFail}.pdf`);
   return t;
 }
 
@@ -1590,7 +1776,7 @@ async function hantarResitWhatsapp() {
 // ════════════════════════════════════════════════════
 //  LAPORAN
 // ════════════════════════════════════════════════════
-function renderLaporan() {
+async function renderLaporan() {
   if (currentRole!=='pemilik') return;
   const bulan=document.getElementById('lap-bulan').value;
   const fil=DATA.transaksi.filter(t=>t.tarikh_masa&&t.tarikh_masa.startsWith(bulan));
@@ -1606,6 +1792,22 @@ function renderLaporan() {
   const kosMakan = hariKerja*SETTINGS.makan;
   const kosOperasi = kosUpah+kosMinyak+kosMakan;
   const untungBersih = untung-kosOperasi;
+
+  // Pecahan upah ikut pekerja — setiap pekerja beza jumlahnya ikut penghantaran sendiri
+  const pekerjaIds = [...new Set(fil.map(t=>t.created_by).filter(Boolean))];
+  let profilMap = {};
+  if (useCloud && pekerjaIds.length) {
+    const { data } = await sb.from('profiles').select('id,nama');
+    (data||[]).forEach(p=>profilMap[p.id]=p.nama);
+  }
+  const pecahanPekerja = pekerjaIds.map(pid=>{
+    const filPekerja = fil.filter(t=>t.created_by===pid);
+    const stokPekerja = filPekerja.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
+    const kmPekerja = filPekerja.reduce((a,t)=>a+(+t.jarak_km||0),0);
+    const hariPekerja = new Set(filPekerja.map(t=>(t.tarikh_masa||'').slice(0,10))).size;
+    const jumlahPekerja = stokPekerja*SETTINGS.upah + kmPekerja*SETTINGS.minyak + hariPekerja*SETTINGS.makan;
+    return { nama: profilMap[pid]||pid, bilangan: filPekerja.length, jumlah: jumlahPekerja };
+  }).sort((a,b)=>b.jumlah-a.jumlah);
 
   document.getElementById('laporan-output').innerHTML=`
     <div class="stat-grid" style="margin-bottom:10px">
@@ -1623,6 +1825,7 @@ function renderLaporan() {
       <span class="total-label">UNTUNG BERSIH</span>
       <span class="total-val" style="color:${untungBersih>=0?'var(--green)':'var(--red)'}">${fmt(untungBersih)}</span>
     </div>
+    ${pecahanPekerja.length?`<div class="divider"></div><div class="card-title" style="font-size:13px">👥 Pecahan Upah Ikut Pekerja</div>${pecahanPekerja.map(p=>`<div class="list-item"><div><div class="list-item-title">${esc(p.nama)}</div><div class="list-item-sub">${p.bilangan} penghantaran</div></div><div class="list-item-val">${fmt(p.jumlah)}</div></div>`).join('')}`:''}
     ${fil.length===0?`<div class="empty"><div class="empty-text">Tiada transaksi pada bulan ini</div></div>`:''}`;
 }
 
@@ -1695,6 +1898,110 @@ async function saveTetapanDiskaun() {
   if (error) return toast('Gagal simpan tetapan: '+error.message,'err');
   qrBankUrlSedia = qrUrl; qrBankFilePilihan = null;
   toast('Tetapan pre-order & diskaun dikemaskini');
+}
+
+// ════════════════════════════════════════════════════
+//  PROFIL SAYA
+// ════════════════════════════════════════════════════
+async function kemaskiniProfilSaya() {
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  const nama = document.getElementById('profil-nama').value.trim();
+  const telefon = document.getElementById('profil-telefon').value.trim();
+  if (!nama) return toast('Nama tidak boleh kosong','err');
+  const { error } = await sb.rpc('kemaskini_profil_sendiri', { p_nama:nama, p_telefon:telefon });
+  if (error) return toast('Gagal kemaskini profil: '+error.message,'err');
+  DATA.currentUser.nama = nama; DATA.currentUser.telefon = telefon;
+  toast('Profil berjaya dikemaskini');
+}
+
+async function tukarPasswordSaya() {
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  const pass = document.getElementById('profil-pass-baru').value;
+  if (!pass) return toast('Masukkan kata laluan baharu dahulu','err');
+  if (pass.length < 6) return toast('Kata laluan mesti sekurang-kurangnya 6 aksara','err');
+  const { error } = await sb.auth.updateUser({ password: pass });
+  if (error) return toast('Gagal tukar kata laluan: '+error.message,'err');
+  document.getElementById('profil-pass-baru').value = '';
+  toast('Kata laluan berjaya ditukar');
+}
+
+// ── Kiraan upah peribadi (khusus akaun yang log masuk sekarang) ──
+function renderUpahSaya() {
+  if (!useCloud) { document.getElementById('upah-saya-output').innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const bulan = document.getElementById('upah-saya-bulan').value;
+  const fil = DATA.transaksi.filter(t => t.tarikh_masa?.startsWith(bulan) && (t.created_by===DATA.currentUser?.id || t.created_by===DATA.currentUser?.email));
+  const jumlahStok = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
+  const jumlahKm = fil.reduce((a,t)=>a+(+t.jarak_km||0),0);
+  const hariKerja = new Set(fil.map(t=>(t.tarikh_masa||'').slice(0,10))).size;
+  const kosUpah = jumlahStok*SETTINGS.upah;
+  const kosMinyak = jumlahKm*SETTINGS.minyak;
+  const kosMakan = hariKerja*SETTINGS.makan;
+  const jumlahUpah = kosUpah+kosMinyak+kosMakan;
+  document.getElementById('upah-saya-output').innerHTML = `
+    <div class="list-item"><div class="list-item-title">Bilangan Penghantaran</div><div class="list-item-val">${fil.length}</div></div>
+    <div class="list-item"><div class="list-item-title">Upah (${jumlahStok} stok × ${fmt(SETTINGS.upah)})</div><div class="list-item-val">${fmt(kosUpah)}</div></div>
+    <div class="list-item"><div class="list-item-title">Minyak (${jumlahKm.toFixed(1)} km × ${fmt(SETTINGS.minyak)})</div><div class="list-item-val">${fmt(kosMinyak)}</div></div>
+    <div class="list-item"><div class="list-item-title">Duit Makan (${hariKerja} hari)</div><div class="list-item-val">${fmt(kosMakan)}</div></div>
+    <div class="total-box" style="margin-top:10px"><span class="total-label">JUMLAH UPAH ANDA</span><span class="total-val">${fmt(jumlahUpah)}</span></div>`;
+}
+
+// ════════════════════════════════════════════════════
+//  STATUS PEKERJA — Mohon Cuti / MC / Off
+// ════════════════════════════════════════════════════
+async function mohonCuti() {
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  const jenis = document.getElementById('cuti-jenis').value;
+  const mula = document.getElementById('cuti-mula').value;
+  const tamat = document.getElementById('cuti-tamat').value;
+  const nota = document.getElementById('cuti-nota').value.trim();
+  if (!mula || !tamat) return toast('Sila isi tarikh mula dan tamat','err');
+  if (tamat < mula) return toast('Tarikh tamat mesti selepas/sama tarikh mula','err');
+  const { error } = await sb.from('permohonan_cuti').insert({ id: genId('CT'), pekerja_id: DATA.currentUser.id, jenis, tarikh_mula:mula, tarikh_tamat:tamat, nota, status:'menunggu' });
+  if (error) return toast('Gagal hantar permohonan: '+error.message,'err');
+  document.getElementById('cuti-mula').value=''; document.getElementById('cuti-tamat').value=''; document.getElementById('cuti-nota').value='';
+  renderSenaraiCutiSaya();
+  toast('Permohonan dihantar, menunggu kelulusan pemilik');
+}
+
+const CUTI_JENIS_LABEL = { cuti:'🏖️ Cuti', mc:'🤒 MC', off:'💤 Off' };
+
+async function renderSenaraiCutiSaya() {
+  const el = document.getElementById('senarai-cuti-saya');
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const { data, error } = await sb.from('permohonan_cuti').select('*').eq('pekerja_id', DATA.currentUser.id).order('created_at',{ascending:false});
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const statusBadge = { menunggu:'badge-gold', diluluskan:'badge-green', ditolak:'badge-red' };
+  const statusTxt = { menunggu:'Menunggu', diluluskan:'Diluluskan', ditolak:'Ditolak' };
+  el.innerHTML = (data||[]).map(c=>`
+    <div class="list-item">
+      <div><div class="list-item-title">${CUTI_JENIS_LABEL[c.jenis]||c.jenis}</div><div class="list-item-sub">${fmtD(c.tarikh_mula)} – ${fmtD(c.tarikh_tamat)}${c.nota?' · '+esc(c.nota):''}</div></div>
+      <span class="badge ${statusBadge[c.status]}">${statusTxt[c.status]}</span>
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada permohonan lagi</div></div>';
+}
+
+async function renderSenaraiCutiSemua() {
+  const el = document.getElementById('senarai-cuti-semua');
+  const { data, error } = await sb.from('permohonan_cuti').select('*').order('created_at',{ascending:false});
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const { data: profil } = await sb.from('profiles').select('id,nama');
+  const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
+  el.innerHTML = (data||[]).map(c=>`
+    <div class="list-item">
+      <div>
+        <div class="list-item-title">${esc(namaPekerja(c.pekerja_id))} — ${CUTI_JENIS_LABEL[c.jenis]||c.jenis}</div>
+        <div class="list-item-sub">${fmtD(c.tarikh_mula)} – ${fmtD(c.tarikh_tamat)}${c.nota?' · '+esc(c.nota):''}</div>
+        ${c.status==='menunggu'
+          ?`<div style="display:flex;gap:6px;margin-top:6px"><button class="btn btn-primary btn-sm" style="margin-top:0;background:var(--green)" onclick="luluskanCuti('${c.id}','diluluskan')">✓ Lulus</button><button class="btn btn-danger btn-sm" onclick="luluskanCuti('${c.id}','ditolak')">✕ Tolak</button></div>`
+          :`<span class="badge ${c.status==='diluluskan'?'badge-green':'badge-red'}">${c.status==='diluluskan'?'Diluluskan':'Ditolak'}</span>`}
+      </div>
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada permohonan lagi</div></div>';
+}
+
+async function luluskanCuti(id, status) {
+  const { error } = await sb.from('permohonan_cuti').update({ status }).eq('id', id);
+  if (error) return toast('Gagal kemaskini: '+error.message,'err');
+  renderSenaraiCutiSemua();
+  toast('Status permohonan dikemaskini');
 }
 
 // ════════════════════════════════════════════════════

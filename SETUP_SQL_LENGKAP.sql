@@ -1,6 +1,8 @@
 -- ═══════════════════════════════════════════════════════════
---  WAFI TIJARAH TRADING — SQL SETUP LENGKAP
---  Jalankan SEKALI sahaja dalam Supabase SQL Editor (project: smepriytkoxkmpvjvvzq)
+--  WAFI TIJARAH TRADING — SQL SETUP LENGKAP (versi terkini, semua ciri)
+--  Jalankan SEKALI sahaja dalam Supabase SQL Editor pada project BAHARU.
+--  (Jika project sedia ada dah guna versi lama, jangan run fail ini —
+--   guna SQL_TAMBAHAN_2/3/4/5.sql secara berturutan sebaliknya.)
 -- ═══════════════════════════════════════════════════════════
 
 -- ═══ Jadual data ═══
@@ -13,6 +15,7 @@ CREATE TABLE stok (
   stok int DEFAULT 0,
   kategori text DEFAULT 'Minuman',
   tarikh_luput date,
+  gambar_url text,
   created_at timestamptz DEFAULT now()
 );
 
@@ -56,14 +59,23 @@ CREATE TABLE profiles (
   webauthn_credential_id text
 );
 
--- Pesanan masuk dari kedai melalui link awam pesan.html (repeat order)
+-- Pesanan masuk dari kedai melalui link/QR awam pesan.html (repeat order)
 CREATE TABLE pre_order (
   id text PRIMARY KEY,
+  kedai_id text REFERENCES kedai(id),
   kedai_nama text NOT NULL,
   kedai_telefon text,
   items jsonb DEFAULT '[]',
   nota text,
   status text DEFAULT 'baru', -- baru / diproses / selesai
+  assigned_pekerja_id uuid REFERENCES auth.users(id),
+  bayar_metod text DEFAULT 'cod', -- cod / transfer
+  jumlah_asal float DEFAULT 0,
+  diskaun_peratus float DEFAULT 0,
+  jumlah_selepas_diskaun float DEFAULT 0,
+  bayar_tarikh date,
+  bayar_masa text,
+  bukti_bayaran_url text,
   created_at timestamptz DEFAULT now()
 );
 
@@ -89,6 +101,38 @@ CREATE TABLE gps_track (
   tarikh_masa timestamptz DEFAULT now()
 );
 
+-- Stok bawaan pekerja (diambil dari gudang sebelum bergerak ke kedai)
+CREATE TABLE stok_pekerja (
+  id bigserial PRIMARY KEY,
+  pekerja_id uuid REFERENCES auth.users(id),
+  stok_id text REFERENCES stok(id),
+  kuantiti int DEFAULT 0,
+  UNIQUE(pekerja_id, stok_id)
+);
+
+-- Permohonan Cuti / MC / Off
+CREATE TABLE permohonan_cuti (
+  id text PRIMARY KEY,
+  pekerja_id uuid REFERENCES auth.users(id),
+  jenis text NOT NULL, -- cuti / mc / off
+  tarikh_mula date NOT NULL,
+  tarikh_tamat date NOT NULL,
+  nota text,
+  status text DEFAULT 'menunggu', -- menunggu / diluluskan / ditolak
+  created_at timestamptz DEFAULT now()
+);
+
+-- Tetapan Pre-Order & Diskaun Online Transfer (1 baris, boleh baca umum)
+CREATE TABLE tetapan (
+  id int PRIMARY KEY DEFAULT 1,
+  minima_transfer float DEFAULT 500,
+  diskaun_peratus float DEFAULT 5,
+  qr_bank_url text,
+  butiran_bank text,
+  CONSTRAINT satu_baris_sahaja CHECK (id = 1)
+);
+INSERT INTO tetapan (id) VALUES (1);
+
 -- ═══ Row Level Security ═══
 ALTER TABLE stok ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kedai ENABLE ROW LEVEL SECURITY;
@@ -97,6 +141,9 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pre_order ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kehadiran ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gps_track ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stok_pekerja ENABLE ROW LEVEL SECURITY;
+ALTER TABLE permohonan_cuti ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tetapan ENABLE ROW LEVEL SECURITY;
 
 -- Fungsi SECURITY DEFINER supaya semakan peranan pemilik TIDAK query terus
 -- profiles dari dalam dasar profiles sendiri (elak "infinite recursion").
@@ -104,12 +151,6 @@ CREATE OR REPLACE FUNCTION is_pemilik() RETURNS boolean
 LANGUAGE sql SECURITY DEFINER SET search_path = public STABLE AS $$
   SELECT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'pemilik');
 $$;
-
-CREATE POLICY "pekerja urus kehadiran sendiri" ON kehadiran FOR ALL USING (pekerja_id = auth.uid()) WITH CHECK (pekerja_id = auth.uid());
-CREATE POLICY "pemilik baca semua kehadiran" ON kehadiran FOR SELECT USING (is_pemilik());
-CREATE POLICY "pekerja tambah gps sendiri" ON gps_track FOR INSERT WITH CHECK (pekerja_id = auth.uid());
-CREATE POLICY "pekerja baca gps sendiri" ON gps_track FOR SELECT USING (pekerja_id = auth.uid());
-CREATE POLICY "pemilik baca semua gps" ON gps_track FOR SELECT USING (is_pemilik());
 
 CREATE POLICY "profil sendiri" ON profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "pemilik boleh baca semua profil" ON profiles FOR SELECT USING (is_pemilik());
@@ -125,19 +166,36 @@ CREATE POLICY "pemilik tambah stok" ON stok FOR INSERT WITH CHECK (
 CREATE POLICY "pemilik kemaskini stok" ON stok FOR UPDATE USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'pemilik')
 );
-CREATE POLICY "pemilik tambah kedai" ON kedai FOR INSERT WITH CHECK (
-  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'pemilik')
-);
+-- Kedai: pemilik ATAU pekerja boleh daftar kedai baru (pekerja cari prospek di lapangan)
+CREATE POLICY "staff tambah kedai" ON kedai FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "pemilik kemaskini kedai" ON kedai FOR UPDATE USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'pemilik')
 );
 
--- Pre-order: sesiapa (tanpa log masuk) boleh hantar; hanya staff boleh baca/kemaskini
+-- Pre-order: sesiapa (tanpa log masuk) boleh hantar; pekerja nampak yang belum
+-- ditugaskan atau ditugaskan kepada diri sendiri sahaja; pemilik nampak semua.
 CREATE POLICY "sesiapa boleh hantar pre-order" ON pre_order FOR INSERT WITH CHECK (true);
-CREATE POLICY "staff boleh baca pre-order" ON pre_order FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "staff boleh baca pre-order" ON pre_order FOR SELECT USING (
+  is_pemilik() OR assigned_pekerja_id IS NULL OR assigned_pekerja_id = auth.uid()
+);
 CREATE POLICY "staff boleh kemaskini pre-order" ON pre_order FOR UPDATE USING (auth.role() = 'authenticated');
 
--- ═══ Fungsi RPC — kemaskini stok/hutang secara atomik ═══
+CREATE POLICY "pekerja urus kehadiran sendiri" ON kehadiran FOR ALL USING (pekerja_id = auth.uid()) WITH CHECK (pekerja_id = auth.uid());
+CREATE POLICY "pemilik baca semua kehadiran" ON kehadiran FOR SELECT USING (is_pemilik());
+CREATE POLICY "pekerja tambah gps sendiri" ON gps_track FOR INSERT WITH CHECK (pekerja_id = auth.uid());
+CREATE POLICY "pekerja baca gps sendiri" ON gps_track FOR SELECT USING (pekerja_id = auth.uid());
+CREATE POLICY "pemilik baca semua gps" ON gps_track FOR SELECT USING (is_pemilik());
+
+CREATE POLICY "pekerja baca stok bawaan sendiri" ON stok_pekerja FOR SELECT USING (pekerja_id = auth.uid() OR is_pemilik());
+
+CREATE POLICY "pekerja urus permohonan sendiri" ON permohonan_cuti FOR ALL USING (pekerja_id = auth.uid()) WITH CHECK (pekerja_id = auth.uid());
+CREATE POLICY "pemilik baca semua permohonan" ON permohonan_cuti FOR SELECT USING (is_pemilik());
+CREATE POLICY "pemilik kelulusan permohonan" ON permohonan_cuti FOR UPDATE USING (is_pemilik());
+
+CREATE POLICY "semua boleh baca tetapan" ON tetapan FOR SELECT USING (true);
+CREATE POLICY "pemilik boleh kemaskini tetapan" ON tetapan FOR UPDATE USING (is_pemilik());
+
+-- ═══ Fungsi RPC — kemaskini stok bawaan/hutang secara atomik ═══
 CREATE OR REPLACE FUNCTION submit_penghantaran(
   p_id text, p_kedai_id text, p_items jsonb, p_jumlah float,
   p_status text, p_nota text, p_resit text, p_jarak_km float DEFAULT 0
@@ -149,18 +207,15 @@ BEGIN
     RAISE EXCEPTION 'Tidak dibenarkan';
   END IF;
 
+  -- Potong dari stok BAWAAN pekerja (bukan gudang terus) — gudang dah ditolak
+  -- semasa pekerja "ambil stok" sebelum bergerak ke kedai.
   FOR item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
-    UPDATE stok SET stok = stok - (item->>'qty')::int WHERE id = item->>'stokId';
+    UPDATE stok_pekerja SET kuantiti = kuantiti - (item->>'qty')::int
+      WHERE pekerja_id = auth.uid() AND stok_id = item->>'stokId' AND kuantiti >= (item->>'qty')::int;
     IF NOT FOUND THEN
-      RAISE EXCEPTION 'Produk % tidak wujud', item->>'stokId';
+      RAISE EXCEPTION 'Stok bawaan anda tidak mencukupi untuk %', item->>'stokId';
     END IF;
   END LOOP;
-
-  IF EXISTS (
-    SELECT 1 FROM stok s JOIN jsonb_array_elements(p_items) i ON s.id = i->>'stokId' WHERE s.stok < 0
-  ) THEN
-    RAISE EXCEPTION 'Stok tidak mencukupi untuk salah satu produk';
-  END IF;
 
   INSERT INTO transaksi (id, kedai_id, items, jumlah, status, nota, resit, jarak_km, created_by)
   VALUES (p_id, p_kedai_id, p_items, p_jumlah, p_status, p_nota, p_resit, p_jarak_km, auth.uid()::text);
@@ -202,13 +257,55 @@ BEGIN
 END;
 $$;
 
+-- Pekerja ambil stok dari gudang (self-service, tiada kelulusan)
+CREATE OR REPLACE FUNCTION ambil_stok_pekerja(p_stok_id text, p_qty int) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF p_qty <= 0 THEN RAISE EXCEPTION 'Kuantiti mesti lebih 0'; END IF;
+  UPDATE stok SET stok = stok - p_qty WHERE id = p_stok_id AND stok >= p_qty;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Stok gudang tidak mencukupi'; END IF;
+  INSERT INTO stok_pekerja (pekerja_id, stok_id, kuantiti) VALUES (auth.uid(), p_stok_id, p_qty)
+    ON CONFLICT (pekerja_id, stok_id) DO UPDATE SET kuantiti = stok_pekerja.kuantiti + p_qty;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION ambil_stok_pekerja(text, int) TO authenticated;
+
+-- Pekerja pulangkan stok bawaan balik ke gudang
+CREATE OR REPLACE FUNCTION pulang_stok_pekerja(p_stok_id text, p_qty int) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF p_qty <= 0 THEN RAISE EXCEPTION 'Kuantiti mesti lebih 0'; END IF;
+  UPDATE stok_pekerja SET kuantiti = kuantiti - p_qty WHERE pekerja_id = auth.uid() AND stok_id = p_stok_id AND kuantiti >= p_qty;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Stok bawaan anda tidak mencukupi'; END IF;
+  UPDATE stok SET stok = stok + p_qty WHERE id = p_stok_id;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION pulang_stok_pekerja(text, int) TO authenticated;
+
+-- Kemaskini profil sendiri (nama/telefon sahaja — tak dedah medan role)
+CREATE OR REPLACE FUNCTION kemaskini_profil_sendiri(p_nama text, p_telefon text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  UPDATE profiles SET nama = p_nama, telefon = p_telefon WHERE id = auth.uid();
+END;
+$$;
+GRANT EXECUTE ON FUNCTION kemaskini_profil_sendiri(text, text) TO authenticated;
+
 -- ═══ Fungsi awam — senarai produk (tanpa harga beli/modal) untuk borang pre-order ═══
 CREATE OR REPLACE FUNCTION senarai_produk_awam()
-RETURNS TABLE(id text, nama text, unit text, harga_jual float, kategori text)
+RETURNS TABLE(id text, nama text, unit text, harga_jual float, kategori text, gambar_url text)
 LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
-  SELECT id, nama, unit, harga_jual, kategori FROM stok ORDER BY nama;
+  SELECT id, nama, unit, harga_jual, kategori, gambar_url FROM stok ORDER BY nama;
 $$;
 GRANT EXECUTE ON FUNCTION senarai_produk_awam() TO anon, authenticated;
+
+-- ═══ Fungsi awam — maklumat asas kedai (untuk prefill borang bila dibuka via QR resit) ═══
+CREATE OR REPLACE FUNCTION maklumat_kedai_awam(p_id text)
+RETURNS TABLE(nama text, telefon text)
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  SELECT nama, telefon FROM kedai WHERE id = p_id;
+$$;
+GRANT EXECUTE ON FUNCTION maklumat_kedai_awam(text) TO anon, authenticated;
 
 -- ═══ Profil pemilik (akaun anda: biz.amirul@gmail.com) ═══
 INSERT INTO profiles (id, email, role, nama) VALUES
@@ -228,3 +325,17 @@ INSERT INTO stok (id, nama, unit, harga_beli, harga_jual, stok, kategori) VALUES
   ('S010','K. Arabica Tanpa Gula','beg',12.00,17.00,40,'Minuman'),
   ('S011','Goat Milk Classic','unit',25.00,33.00,20,'Minuman'),
   ('S012','T. Green Tea Latte (Beg)','beg',22.00,28.50,35,'Minuman');
+
+-- ═══════════════════════════════════════════════════════════
+--  STORAGE BUCKETS — cipta dahulu melalui Dashboard (SQL tak boleh cipta bucket):
+--    1. Storage → New bucket → nama: produk-gambar → Public bucket: ON
+--    2. Storage → New bucket → nama: bukti-bayaran → Public bucket: OFF (data sensitif)
+--  Lepas KEDUA-DUA bucket wujud, jalankan dasar akses di bawah:
+-- ═══════════════════════════════════════════════════════════
+CREATE POLICY "awam boleh lihat gambar produk" ON storage.objects FOR SELECT USING (bucket_id = 'produk-gambar');
+CREATE POLICY "pemilik boleh upload gambar produk" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'produk-gambar' AND is_pemilik());
+CREATE POLICY "pemilik boleh kemaskini gambar produk" ON storage.objects FOR UPDATE USING (bucket_id = 'produk-gambar' AND is_pemilik());
+CREATE POLICY "pemilik boleh padam gambar produk" ON storage.objects FOR DELETE USING (bucket_id = 'produk-gambar' AND is_pemilik());
+
+CREATE POLICY "sesiapa boleh upload bukti bayaran" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'bukti-bayaran');
+CREATE POLICY "staff boleh lihat bukti bayaran" ON storage.objects FOR SELECT USING (bucket_id = 'bukti-bayaran' AND auth.role() = 'authenticated');

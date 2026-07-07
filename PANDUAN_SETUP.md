@@ -10,7 +10,8 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 1. `SQL_TAMBAHAN_2.sql` — Urus Pekerja & Link Pre-Order
 > 2. `SQL_HOTFIX_RECURSION.sql` — **wajib** selepas #1 (baiki bug di atas)
 > 3. `SQL_TAMBAHAN_3.sql` — Reset Kata Laluan, Thumb In/Out & Jejak GPS (perlu deploy Edge Function juga — lihat bahagian "Reset Kata Laluan Pekerja" di bawah)
-> 4. `SQL_TAMBAHAN_4.sql` — Gambar produk, QR Pre-Order pada resit & diskaun Online Transfer (perlu cipta Storage bucket dahulu — lihat bahagian "Gambar Produk & QR" di bawah)
+> 4. `SQL_TAMBAHAN_4.sql` — Gambar produk, QR Pre-Order pada resit & diskaun Online Transfer (perlu cipta Storage bucket `produk-gambar` dahulu)
+> 5. `SQL_TAMBAHAN_5.sql` — Stok ikut pekerja, tugasan pre-order, cuti/status pekerja, profil sendiri, bukti bayaran transfer (perlu cipta Storage bucket `bukti-bayaran` dahulu — **Public bucket: OFF**, data sensitif)
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -132,6 +133,43 @@ Setiap resit turut jana **kod QR unik** yang terus bawa kedai tersebut ke `pesan
 3. **Public bucket**: hidupkan (ON) — supaya gambar boleh dipaparkan di borang pre-order awam
 4. Klik "Create bucket"
 5. Lepas itu, jalankan `SQL_TAMBAHAN_4.sql` di SQL Editor (sertakan dasar akses storan)
+
+### 📊 Status Boleh Edit & Rekod Tepat
+Status pre-order (Baru/Diproses/Selesai) kini guna **dropdown** yang boleh ditukar bila-bila masa ke mana-mana arah — elak masalah tertekan status secara tidak sengaja tanpa boleh undo.
+
+### 🎒 Stok Ikut Pekerja
+Setiap pekerja perlu **"Ambil Stok"** dari gudang (Hantar → Stok Bawaan Saya) sebelum boleh rekod penghantaran — ini menolak kuantiti dari gudang & tambah ke stok bawaan pekerja tersebut. Rekod Penghantaran kini potong dari **stok bawaan pekerja**, bukan terus dari gudang. Boleh **"Pulangkan Stok"** balik ke gudang jika ada baki tak terjual. Halaman Stok utama terus papar baki **gudang sahaja**.
+
+> ⚠️ Ini perubahan penting: pekerja sedia ada WAJIB "Ambil Stok" dahulu selepas kemaskini ini, jika tidak rekod penghantaran akan gagal ("stok bawaan tidak mencukupi").
+
+### 📍 Jarak Automatik (Auto-GPS)
+Input jarak manual dibuang — jarak kini dikira **automatik** dari lokasi GPS pekerja semasa (waktu rekod penghantaran) ke koordinat berdaftar kedai tersebut.
+
+### 🙋 Tugasan Pre-Order (Claim Sistem)
+Pre-order baru dari kedai (borang awam/QR) kelihatan kepada **semua pekerja** sehingga seorang pekerja tekan **"🙋 Ambil Tugasan"** — lepas itu, hanya pekerja tersebut (dan pemilik) boleh lihat/urus pre-order itu. First-come-first-served, tiada dua pekerja boleh claim serentak.
+
+### 🗓️ Status Pekerja — Mohon Cuti/MC/Off
+Di **Profile**, pekerja boleh mohon Cuti/MC/Tak Jalan (Off) dengan tarikh & nota. Pemilik lulus/tolak di kad "Kelulusan Permohonan Cuti".
+
+### 👤 Profile (dahulu "Lagi")
+Tab "Lagi" ditukar nama kepada **Profile** — kini termasuk kemaskini nama/no. telefon sendiri, tukar kata laluan, kiraan upah peribadi (untuk pekerja), dan permohonan cuti.
+
+### 💰 Pecahan Upah Ikut Pekerja
+Laporan Bulanan (pemilik) kini tunjuk pecahan upah **ikut setiap pekerja** berasingan (bukan jumlah gabungan sahaja) — memandangkan setiap pekerja hantar kuantiti berbeza, upah masing-masing pun berbeza.
+
+### 🎉 Banner Promosi Bergerak (Pre-Order)
+`pesan.html` kini ada banner emas bergerak dari kiri ke kanan (sticky, kekal kelihatan semasa scroll pilih produk) mempromosikan diskaun Online Transfer secara dinamik ikut tetapan semasa.
+
+### 📎 Bukti Bayaran Transfer
+Bila kedai pilih "Online Transfer" di borang pre-order, mereka kena isi tarikh & masa transaksi serta muat naik screenshot bukti pindahan — disimpan di bucket **sulit** (`bukti-bayaran`, bukan public) supaya hanya staff log masuk boleh lihat (butang "📎 Lihat Bukti Bayaran" di tab Pre-Order).
+
+**Storage Bucket kedua (sebelum jalankan `SQL_TAMBAHAN_5.sql`):**
+1. Storage → "New bucket" → Nama: `bukti-bayaran`
+2. **Public bucket**: **JANGAN hidupkan (OFF)** — ini data kewangan sensitif
+3. Klik "Create bucket", kemudian jalankan `SQL_TAMBAHAN_5.sql`
+
+### 🧾 Resit Saiz B5
+Cetak & PDF resit kini tetap pada saiz kertas **B5** sahaja. Nama fail PDF turut diformat: `{no resit}-{nama kedai}-RM{jumlah}.pdf`.
 
 ---
 

@@ -67,6 +67,11 @@
     .bayar-toggle { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px; }
     .bayar-opt { padding:10px;border:2px solid var(--border);border-radius:10px;cursor:pointer;font-weight:700;font-size:12px;text-align:center;background:#fff; }
     .bayar-opt.aktif { border-color:var(--green);color:var(--green);background:#1D7A4A14; }
+
+    /* ── BANNER PROMOSI BERGERAK (sticky, kekal semasa scroll produk) ── */
+    .promo-banner { position:sticky;top:0;z-index:50;height:36px;overflow:hidden;background:linear-gradient(90deg,#FFD873,var(--gold));border-radius:10px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+    .promo-track { position:absolute;left:-100%;top:0;white-space:nowrap;color:var(--navy);font-weight:800;font-size:13px;line-height:36px;animation:promo-move 11s linear infinite; }
+    @keyframes promo-move { from{left:-100%;} to{left:100%;} }
   </style>
 </head>
 <body>
@@ -79,6 +84,10 @@
 
 <div id="main">
   <div id="form-card">
+    <div class="promo-banner">
+      <div class="promo-track" id="promo-track">🎉 Beli lebih RM500, layak diskaun 5%! Bayar Online Transfer untuk elak hutang!</div>
+    </div>
+
     <div class="card">
       <div class="section-title">🛍️ Pilih Barang</div>
       <div id="produk-grid" class="produk-grid"></div>
@@ -92,9 +101,23 @@
           <div class="bayar-opt" id="opt-cod" onclick="setBayarMetod('cod')">🚚 Bayar Bila Terima (COD)</div>
           <div class="bayar-opt" id="opt-transfer" onclick="setBayarMetod('transfer')">🏦 Online Transfer (Diskaun)</div>
         </div>
-        <div id="bank-info" style="display:none;margin-top:10px;text-align:center">
-          <img id="bank-qr-img" src="" alt="QR Bank" />
-          <div id="bank-butiran" style="font-size:12px;white-space:pre-line"></div>
+        <div id="bank-info" style="display:none;margin-top:10px">
+          <div style="text-align:center">
+            <img id="bank-qr-img" src="" alt="QR Bank" />
+            <div id="bank-butiran" style="font-size:12px;white-space:pre-line"></div>
+          </div>
+          <div class="form-group" style="margin-top:12px">
+            <label class="form-label">Tarikh Transaksi Transfer</label>
+            <input type="date" class="form-input" id="p-bayar-tarikh" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Masa Transaksi Transfer</label>
+            <input type="time" class="form-input" id="p-bayar-masa" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Muat Naik Bukti Pindahan (screenshot resit bank)</label>
+            <input type="file" accept="image/*" class="form-input" id="p-bukti-bayaran" />
+          </div>
         </div>
       </div>
     </div>
@@ -164,6 +187,7 @@ async function initHalaman() {
   PRODUK = produk || [];
   if (!e2 && tetapan) TETAPAN = tetapan;
   document.getElementById('dk-peratus').textContent = TETAPAN.diskaun_peratus;
+  document.getElementById('promo-track').textContent = `🎉 Beli lebih ${fmt(TETAPAN.minima_transfer)}, layak diskaun ${TETAPAN.diskaun_peratus}%! Bayar Online Transfer untuk elak hutang!`;
   renderProdukGrid();
 
   if (kedaiIdDariQR) {
@@ -249,6 +273,19 @@ async function hantarPesanan() {
   const diskaunPeratus = layakDiskaun ? TETAPAN.diskaun_peratus : 0;
   const jumlahSelepas = jumlahAsal * (1 - diskaunPeratus/100);
 
+  let bayarTarikh = null, bayarMasa = null, buktiUrl = null;
+  if (bayarMetod === 'transfer') {
+    bayarTarikh = document.getElementById('p-bayar-tarikh').value;
+    bayarMasa = document.getElementById('p-bayar-masa').value;
+    const fail = document.getElementById('p-bukti-bayaran').files[0];
+    if (!bayarTarikh || !bayarMasa || !fail) return toast('Sila isi tarikh, masa & muat naik bukti pindahan','err');
+    const ext = fail.name.split('.').pop();
+    const path = `${'PO'+Date.now().toString().slice(-8)}-${Date.now()}.${ext}`;
+    const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(path, fail);
+    if (upErr) return toast('Gagal muat naik bukti bayaran: '+upErr.message,'err');
+    buktiUrl = path;
+  }
+
   const payload = {
     id: 'PO' + Date.now().toString().slice(-8),
     kedai_id: kedaiIdDariQR || null,
@@ -260,6 +297,9 @@ async function hantarPesanan() {
     jumlah_asal: jumlahAsal,
     diskaun_peratus: diskaunPeratus,
     jumlah_selepas_diskaun: jumlahSelepas,
+    bayar_tarikh: bayarTarikh,
+    bayar_masa: bayarMasa,
+    bukti_bayaran_url: buktiUrl,
   };
   const { error } = await sb.from('pre_order').insert(payload);
   if (error) return toast('Gagal hantar pesanan: '+error.message,'err');
