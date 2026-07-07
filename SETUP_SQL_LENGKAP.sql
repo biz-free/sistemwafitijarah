@@ -51,7 +51,9 @@ CREATE TABLE profiles (
   email text,
   role text NOT NULL DEFAULT 'pekerja',
   nama text,
-  telefon text
+  telefon text,
+  must_change_password boolean DEFAULT false,
+  webauthn_credential_id text
 );
 
 -- Pesanan masuk dari kedai melalui link awam pesan.html (repeat order)
@@ -65,20 +67,53 @@ CREATE TABLE pre_order (
   created_at timestamptz DEFAULT now()
 );
 
+-- Kehadiran (Thumb In/Out) & jejak GPS untuk claim minyak
+CREATE TABLE kehadiran (
+  id text PRIMARY KEY,
+  pekerja_id uuid REFERENCES auth.users(id),
+  thumb_in_masa timestamptz,
+  thumb_in_lat float,
+  thumb_in_lng float,
+  thumb_out_masa timestamptz,
+  thumb_out_lat float,
+  thumb_out_lng float,
+  status text DEFAULT 'aktif',
+  created_at timestamptz DEFAULT now()
+);
+CREATE TABLE gps_track (
+  id bigserial PRIMARY KEY,
+  kehadiran_id text REFERENCES kehadiran(id) ON DELETE CASCADE,
+  pekerja_id uuid REFERENCES auth.users(id),
+  lat float,
+  lng float,
+  tarikh_masa timestamptz DEFAULT now()
+);
+
 -- ═══ Row Level Security ═══
 ALTER TABLE stok ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kedai ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transaksi ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pre_order ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kehadiran ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gps_track ENABLE ROW LEVEL SECURITY;
+
+-- Fungsi SECURITY DEFINER supaya semakan peranan pemilik TIDAK query terus
+-- profiles dari dalam dasar profiles sendiri (elak "infinite recursion").
+CREATE OR REPLACE FUNCTION is_pemilik() RETURNS boolean
+LANGUAGE sql SECURITY DEFINER SET search_path = public STABLE AS $$
+  SELECT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'pemilik');
+$$;
+
+CREATE POLICY "pekerja urus kehadiran sendiri" ON kehadiran FOR ALL USING (pekerja_id = auth.uid()) WITH CHECK (pekerja_id = auth.uid());
+CREATE POLICY "pemilik baca semua kehadiran" ON kehadiran FOR SELECT USING (is_pemilik());
+CREATE POLICY "pekerja tambah gps sendiri" ON gps_track FOR INSERT WITH CHECK (pekerja_id = auth.uid());
+CREATE POLICY "pekerja baca gps sendiri" ON gps_track FOR SELECT USING (pekerja_id = auth.uid());
+CREATE POLICY "pemilik baca semua gps" ON gps_track FOR SELECT USING (is_pemilik());
 
 CREATE POLICY "profil sendiri" ON profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "pemilik boleh baca semua profil" ON profiles FOR SELECT USING (
-  EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'pemilik')
-);
-CREATE POLICY "pemilik boleh daftar profil pekerja" ON profiles FOR INSERT WITH CHECK (
-  EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'pemilik')
-);
+CREATE POLICY "pemilik boleh baca semua profil" ON profiles FOR SELECT USING (is_pemilik());
+CREATE POLICY "pemilik boleh daftar profil pekerja" ON profiles FOR INSERT WITH CHECK (is_pemilik());
 
 CREATE POLICY "baca stok" ON stok FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "baca kedai" ON kedai FOR SELECT USING (auth.role() = 'authenticated');

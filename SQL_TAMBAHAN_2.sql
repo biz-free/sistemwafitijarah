@@ -10,12 +10,17 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS telefon text;
 
 -- ═══ Benarkan pemilik daftar & lihat SEMUA profil pekerja ═══
 -- (sebelum ini setiap orang cuma boleh baca profil sendiri sahaja)
-CREATE POLICY "pemilik boleh baca semua profil" ON profiles FOR SELECT USING (
-  EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'pemilik')
-);
-CREATE POLICY "pemilik boleh daftar profil pekerja" ON profiles FOR INSERT WITH CHECK (
-  EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'pemilik')
-);
+-- NOTA: guna fungsi is_pemilik() (bukan EXISTS terus ke profiles) supaya
+-- elak "infinite recursion" — dasar tak boleh query terus jadual sendiri.
+-- Jika anda dah jalankan versi lama fail ini (ada EXISTS terus), sila jalankan
+-- SQL_HOTFIX_RECURSION.sql SEGERA untuk baiki.
+CREATE OR REPLACE FUNCTION is_pemilik() RETURNS boolean
+LANGUAGE sql SECURITY DEFINER SET search_path = public STABLE AS $$
+  SELECT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'pemilik');
+$$;
+
+CREATE POLICY "pemilik boleh baca semua profil" ON profiles FOR SELECT USING (is_pemilik());
+CREATE POLICY "pemilik boleh daftar profil pekerja" ON profiles FOR INSERT WITH CHECK (is_pemilik());
 
 -- ═══ Jadual Pre-Order — pesanan masuk dari kedai melalui link awam pesan.html ═══
 CREATE TABLE pre_order (

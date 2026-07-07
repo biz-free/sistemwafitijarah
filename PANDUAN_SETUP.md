@@ -4,7 +4,14 @@
 Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 📞 014-6363831 · ✉️ wafitijarahtrading@gmail.com
 
-> 🆕 **Sudah sambung Supabase sebelum ini?** Jalankan `SQL_TAMBAHAN_2.sql` (bukan yang lama) di SQL Editor untuk aktifkan ciri Urus Pekerja & Link Pre-Order — tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula.
+> 🚨 **PENTING — jalankan SEGERA jika anda dah jalankan `SQL_TAMBAHAN_2.sql` sebelum ini:** ada bug "infinite recursion" pada dasar `profiles` yang boleh sekat log masuk & urus stok/kedai. Jalankan `SQL_HOTFIX_RECURSION.sql` di SQL Editor SEKARANG untuk baiki (selamat, tak hilang data).
+>
+> 🆕 **Sudah sambung Supabase sebelum ini?** Jalankan SQL tambahan mengikut turutan (skip yang dah pernah jalankan):
+> 1. `SQL_TAMBAHAN_2.sql` — Urus Pekerja & Link Pre-Order
+> 2. `SQL_HOTFIX_RECURSION.sql` — **wajib** selepas #1 (baiki bug di atas)
+> 3. `SQL_TAMBAHAN_3.sql` — Reset Kata Laluan, Thumb In/Out & Jejak GPS (perlu deploy Edge Function juga — lihat bahagian "Reset Kata Laluan Pekerja" di bawah)
+>
+> Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
 ## 📱 Cara Install Apps ke Phone (APK / PWA)
 
@@ -71,6 +78,38 @@ Resit juga papar **no. telefon pekerja** yang buat penghantaran tersebut (jika d
 
 ### 🔑 Lupa Kata Laluan
 Kedua-dua pemilik & pekerja boleh tekan "Lupa kata laluan?" di skrin log masuk, masukkan e-mel, dan pautan reset akan dihantar terus oleh Supabase. Ciri ini **hanya berfungsi dalam mod cloud** (selepas Supabase disambung).
+
+### 🔑 Reset Kata Laluan Pekerja ke "admin123" (Pemilik sahaja)
+Di **Lagi → Urus Pekerja**, pemilik boleh tekan **"🔑 Reset admin123"** pada mana-mana pekerja yang lupa kata laluan. Pekerja tersebut akan diminta **tetapkan kata laluan baharu** (tak boleh admin123 semula) sebelum boleh masuk ke ruang utama pada log masuk seterusnya.
+
+> ⚠️ **Kenapa hanya pemilik boleh buat ini (bukan sesiapa dari skrin log masuk)?** Jika sesiapa boleh reset password akaun lain ke nilai tetap (admin123) hanya dengan tahu e-mel — itu jadi lubang keselamatan (curi akaun). Sebab itu tindakan ini perlu pengesahan pemilik yang sudah log masuk, dan dijalankan melalui **Edge Function** (kod pelayan berasingan yang pegang kunci admin Supabase secara selamat — kunci ini TIDAK PERNAH masuk ke dalam kod `index.html` yang orang ramai boleh lihat).
+
+**Deploy Edge Function (buat SEKALI sahaja):**
+1. Pastikan Node.js dipasang di komputer anda (untuk `npx`)
+2. Buka Command Prompt/Terminal, masuk ke folder `wafi-app` yang ada folder `supabase/functions/reset-pekerja-password/`
+3. Log masuk CLI Supabase (buka pelayar untuk sahkan):
+   ```
+   npx supabase login
+   ```
+4. Pautkan ke project anda:
+   ```
+   npx supabase link --project-ref smepriytkoxkmpvjvvzq
+   ```
+5. Deploy fungsi:
+   ```
+   npx supabase functions deploy reset-pekerja-password
+   ```
+6. Selesai — butang "Reset admin123" dalam apps akan berfungsi selepas ini.
+
+### 👍👎 Thumb In / Thumb Out (Kehadiran Pekerja)
+Di Dashboard, pekerja tekan **"👍 Thumb In"** untuk mula kerja dan **"👎 Thumb Out"** untuk tamat kerja. Setiap kali, telefon akan minta pengesahan **fingerprint/Face ID sedia ada di telefon tersebut** (WebAuthn) — kali pertama guna, pekerja akan diminta daftar fingerprint/Face ID dahulu (sekali sahaja per peranti).
+
+> ⚠️ **Had sebenar**: Website **tidak boleh** mengimbas cap ibu jari terus seperti mesin kehadiran pejabat — ia guna ciri fingerprint/Face ID yang SEDIA ADA pada telefon pekerja untuk sahkan identiti (standard moden, selamat). Pengesahan ini disahkan di peringkat **peranti/pelayar** sahaja dalam versi ini (bukan disahkan semula secara kriptografi di server) — memadai untuk rekod kehadiran dalaman, tapi jika perlukan tahap lebih tegas (contoh untuk tujuan audit rasmi), boleh ditambah baik lagi dengan Edge Function tambahan pada masa depan.
+
+### 📍 Jejak GPS & Anggaran Jarak (Claim Minyak)
+Bermula dari Thumb In sehingga Thumb Out, lokasi GPS pekerja direkod **setiap 30 minit**, ditambah titik lokasi semasa Thumb In & Thumb Out sendiri. Pemilik boleh lihat anggaran jarak (km) dan kos minyak setiap sesi kerja di **Lagi → Kehadiran & Jarak Pekerja** (pilih tarikh).
+
+> ⚠️ **Had sebenar GPS web app**: Penjejakan ini **hanya berfungsi selagi apps dibuka** (tab/PWA di latar depan). Ia BUKAN apps GPS khusus seperti Grab Driver — bila skrin telefon dikunci lama atau apps ditutup, penjejakan terhenti sehingga apps dibuka semula. Ini adalah had platform web (bukan boleh diperbaiki tanpa jadi apps mudah alih asli/native). Anggaran jarak dikira dari titik-ke-titik (garis lurus), bukan jarak jalan sebenar — sesuai sebagai rujukan kasar untuk claim, bukan ukuran GPS profesional.
 
 ### 👥 Urus Pekerja (Daftar Terus Dalam Apps)
 Pemilik boleh daftar akaun pekerja baru terus dari **Lagi → Urus Pekerja** (nama, e-mel, no. telefon, kata laluan sementara) tanpa perlu masuk dashboard Supabase setiap kali. Sistem guna sambungan sementara (session berasingan) supaya sesi log masuk pemilik sendiri tidak terjejas semasa proses ini.
@@ -327,6 +366,9 @@ Log masuk guna e-mel & kata laluan yang anda cipta sendiri di **Authentication �
 | Jana Resit / PDF / WhatsApp | ✅ | ✅ |
 | Laporan Kewangan & Untung Bersih | ✅ | ❌ |
 | Tetapan Kos Operasi | ✅ | ❌ |
+| Urus Pekerja & Reset Kata Laluan | ✅ | ❌ |
+| Thumb In/Out & Jejak GPS Sendiri | ✅ | ✅ |
+| Lihat Kehadiran & Jarak Semua Pekerja | ✅ | ❌ |
 
 Dalam mod cloud, sekatan ini dikuatkuasakan **dua lapis**: paparan UI (client) DAN dasar RLS/fungsi RPC di pangkalan data (server) — jadi walaupun pekerja cuba panggil fungsi terus dari console browser, sekatan peranan tetap terpakai.
 

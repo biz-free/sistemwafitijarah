@@ -285,6 +285,14 @@
     <div class="section-title">Dashboard</div>
     <div class="section-sub" id="dash-date">—</div>
 
+    <div class="card" id="kehadiran-card" style="border-left:4px solid var(--purple)">
+      <div class="card-title" style="color:var(--purple)">👍 Kehadiran</div>
+      <div id="kehadiran-status" style="font-size:13px;color:var(--muted);margin-bottom:10px">—</div>
+      <button class="btn btn-primary" id="btn-thumb-in" style="background:var(--purple)" onclick="thumbIn()">👍 Thumb In — Mula Kerja</button>
+      <button class="btn btn-danger" id="btn-thumb-out" style="display:none" onclick="thumbOut()">👎 Thumb Out — Tamat Kerja</button>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px">Lokasi GPS direkod bermula Thumb In sehingga Thumb Out (setiap 30 minit) untuk claim minyak. Sila kekalkan apps terbuka semasa bekerja.</div>
+    </div>
+
     <div class="stat-grid" id="stat-grid">
       <div class="stat-box"><div class="stat-icon">🏪</div><div class="stat-label">Kedai Aktif</div><div class="stat-val" id="s-kedai" style="color:var(--teal)">—</div></div>
       <div class="stat-box"><div class="stat-icon">💰</div><div class="stat-label">Hasil Diterima</div><div class="stat-val" id="s-hasil" style="color:var(--green)">—</div></div>
@@ -458,6 +466,13 @@
       <button class="btn btn-primary" style="margin-bottom:12px" onclick="showModal('modal-daftar-pekerja')">+ Daftar Pekerja Baru</button>
       <div id="senarai-pekerja"></div>
       <div style="font-size:11px;color:var(--muted);margin-top:8px">💡 Jika pekerja baru tak boleh log masuk serta-merta, pastikan "Confirm email" dimatikan di Supabase → Authentication → Providers → Email.</div>
+    </div>
+
+    <!-- Kehadiran & Jarak Pekerja (pemilik sahaja) -->
+    <div class="card" id="kehadiran-report-card">
+      <div class="card-title">📍 Kehadiran & Jarak Pekerja</div>
+      <div class="form-group"><input type="date" class="form-input" id="kh-tarikh" onchange="renderLaporanKehadiran()" /></div>
+      <div id="kehadiran-report-output"></div>
     </div>
 
     <!-- Setup Guide -->
@@ -753,6 +768,11 @@ async function doLogin() {
     if (pErr || !profile) { errEl.textContent='Akaun tiada profil. Hubungi pentadbir.'; errEl.className='login-err show'; await sb.auth.signOut(); return; }
     currentRole = profile.role;
     DATA.currentUser = { id: data.user.id, email, role: profile.role, nama: profile.nama, telefon: profile.telefon };
+    if (profile.must_change_password) {
+      pendingForcedPasswordChange = true;
+      showModal('modal-set-katalaluan-baru');
+      return;
+    }
     await showApp();
     return;
   }
@@ -782,12 +802,25 @@ async function hantarResetPassword() {
   toast('Pautan reset dihantar — sila semak e-mel anda (termasuk folder spam)');
 }
 
+let pendingForcedPasswordChange = false;
+
 async function tetapkanKataLaluanBaru() {
   const pass = document.getElementById('set-pass-baru').value;
   if (!pass || pass.length < 6) return toast('Kata laluan mesti sekurang-kurangnya 6 aksara','err');
+  if (pass === 'admin123') return toast('Sila pilih kata laluan lain daripada admin123','err');
   const { error } = await sb.auth.updateUser({ password: pass });
   if (error) return toast('Gagal kemaskini kata laluan: '+error.message,'err');
+  document.getElementById('set-pass-baru').value = '';
   closeModal('modal-set-katalaluan-baru');
+
+  if (pendingForcedPasswordChange) {
+    pendingForcedPasswordChange = false;
+    if (DATA.currentUser?.id) await sb.from('profiles').update({ must_change_password: false }).eq('id', DATA.currentUser.id);
+    toast('Kata laluan berjaya dikemaskini');
+    await showApp();
+    return;
+  }
+
   toast('Kata laluan berjaya dikemaskini — sila log masuk semula');
   await sb.auth.signOut();
   document.getElementById('login-screen').className='active';
@@ -813,7 +846,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['laporan-card','tetapan-kos-card','urus-pekerja-card'];
+  const pemilikOnly = ['laporan-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -841,7 +874,14 @@ async function setPage(p) {
     document.getElementById('link-preorder').value = location.href.replace(/index\.html.*$/,'').replace(/\/$/,'') + '/pesan.html';
     if (useCloud) checkPreorderBadge();
   }
-  if (p==='lebih') { renderResitSel(); renderLaporan(); if (currentRole==='pemilik') renderSenaraiPekerja(); }
+  if (p==='lebih') {
+    renderResitSel(); renderLaporan();
+    if (currentRole==='pemilik') {
+      renderSenaraiPekerja();
+      if (!document.getElementById('kh-tarikh').value) document.getElementById('kh-tarikh').value = new Date().toISOString().slice(0,10);
+      renderLaporanKehadiran();
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════
@@ -858,6 +898,7 @@ function initAll() {
 //  DASHBOARD
 // ════════════════════════════════════════════════════
 function renderDashboard() {
+  renderKehadiranStatus();
   const aktif = DATA.kedai.filter(k=>k.status==='aktif').length;
   const hutang = DATA.kedai.reduce((a,k)=>a+k.hutang,0);
   const hasil  = DATA.transaksi.filter(t=>t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
@@ -1552,9 +1593,21 @@ async function renderSenaraiPekerja() {
   const pekerja = (data||[]).filter(p=>p.role==='pekerja');
   el.innerHTML = pekerja.map(p=>`
     <div class="list-item">
-      <div><div class="list-item-title">${esc(p.nama||'-')}</div><div class="list-item-sub">${esc(p.email||'')}${p.telefon?' · '+esc(p.telefon):''}</div></div>
-      <span class="badge badge-teal">Pekerja</span>
+      <div>
+        <div class="list-item-title">${esc(p.nama||'-')}</div>
+        <div class="list-item-sub">${esc(p.email||'')}${p.telefon?' · '+esc(p.telefon):''}</div>
+        ${p.must_change_password?'<span class="badge badge-gold" style="margin-top:4px">Perlu tukar kata laluan</span>':''}
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="resetKeAdmin123('${p.id}','${esc(p.nama||p.email)}')">🔑 Reset admin123</button>
     </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada pekerja didaftarkan lagi</div></div>';
+}
+
+async function resetKeAdmin123(pekerjaId, nama) {
+  if (!confirm(`Tetapkan semula kata laluan ${nama} kepada "admin123"?\n\nPekerja akan diminta tukar kata laluan baharu semasa log masuk seterusnya.`)) return;
+  const { data, error } = await sb.functions.invoke('reset-pekerja-password', { body: { targetUserId: pekerjaId } });
+  if (error || data?.error) return toast('Gagal reset kata laluan: '+(data?.error||error.message),'err');
+  toast(`Kata laluan ${nama} ditetapkan semula ke admin123`);
+  renderSenaraiPekerja();
 }
 
 async function daftarPekerjaBaru() {
@@ -1583,6 +1636,216 @@ async function daftarPekerjaBaru() {
   document.getElementById('pk-pass').value='';
   renderSenaraiPekerja();
   toast(`Pekerja ${nama} berjaya didaftarkan`);
+}
+
+// ════════════════════════════════════════════════════
+//  KEHADIRAN (Thumb In/Out) + GPS MILEAGE
+//
+//  Nota: Pengesahan fingerprint/Face ID guna WebAuthn peranti (platform
+//  authenticator). Versi ini sahkan di PERANTI sahaja (browser API
+//  navigator.credentials) — belum ada pengesahan tandatangan kriptografi
+//  di server (perlukan Edge Function tambahan jika mahu tahap lebih
+//  tegas). Untuk kegunaan rekod kehadiran dalaman, ini memadai kerana
+//  gesaan fingerprint/Face ID sebenar peranti tetap perlu dipenuhi.
+// ════════════════════════════════════════════════════
+let kehadiranAktif = null; // { id, pekerja_id }
+let gpsIntervalId = null;
+
+function bufToBase64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function base64urlToBuf(str) {
+  str = str.replace(/-/g,'+').replace(/_/g,'/');
+  while (str.length % 4) str += '=';
+  const bin = atob(str);
+  const buf = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+  return buf.buffer;
+}
+function randomChallenge() {
+  return crypto.getRandomValues(new Uint8Array(32));
+}
+
+async function daftarWebAuthn() {
+  if (!window.PublicKeyCredential) { toast('Peranti/pelayar ini tidak menyokong fingerprint/Face ID (WebAuthn)','err'); return false; }
+  try {
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge: randomChallenge(),
+        rp: { name: 'Wafi Tijarah Trading', id: location.hostname },
+        user: { id: new TextEncoder().encode(DATA.currentUser.id), name: DATA.currentUser.email, displayName: DATA.currentUser.nama || DATA.currentUser.email },
+        pubKeyCredParams: [{ alg:-7, type:'public-key' }, { alg:-257, type:'public-key' }],
+        authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required' },
+        timeout: 60000,
+      },
+    });
+    const credId = bufToBase64url(cred.rawId);
+    const { error } = await sb.from('profiles').update({ webauthn_credential_id: credId }).eq('id', DATA.currentUser.id);
+    if (error) { toast('Gagal simpan pendaftaran fingerprint: '+error.message,'err'); return false; }
+    DATA.currentUser.webauthn_credential_id = credId;
+    toast('Fingerprint/Face ID berjaya didaftarkan pada peranti ini');
+    return true;
+  } catch (e) {
+    toast('Pendaftaran fingerprint dibatalkan/gagal: '+e.message,'err');
+    return false;
+  }
+}
+
+async function sahkanWebAuthn() {
+  let credId = DATA.currentUser.webauthn_credential_id;
+  if (!credId) {
+    const { data } = await sb.from('profiles').select('webauthn_credential_id').eq('id', DATA.currentUser.id).single();
+    credId = data?.webauthn_credential_id;
+    DATA.currentUser.webauthn_credential_id = credId;
+  }
+  if (!credId) {
+    const ok = await daftarWebAuthn();
+    return ok;
+  }
+  try {
+    await navigator.credentials.get({
+      publicKey: {
+        challenge: randomChallenge(),
+        allowCredentials: [{ id: base64urlToBuf(credId), type:'public-key' }],
+        userVerification: 'required',
+        timeout: 60000,
+      },
+    });
+    return true;
+  } catch (e) {
+    toast('Sahkan fingerprint/Face ID gagal: '+e.message,'err');
+    return false;
+  }
+}
+
+function getGpsPosition() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  });
+}
+
+async function thumbIn() {
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  const ok = await sahkanWebAuthn();
+  if (!ok) return;
+  const pos = await getGpsPosition();
+  const id = genId('KH');
+  const row = { id, pekerja_id: DATA.currentUser.id, thumb_in_masa: new Date().toISOString(), thumb_in_lat: pos?.lat, thumb_in_lng: pos?.lng, status: 'aktif' };
+  const { error } = await sb.from('kehadiran').insert(row);
+  if (error) return toast('Gagal rekod Thumb In: '+error.message,'err');
+  kehadiranAktif = { id, pekerja_id: DATA.currentUser.id };
+  localStorage.setItem('wafi_kehadiran_aktif', JSON.stringify(kehadiranAktif));
+  startGpsInterval();
+  toast('Thumb In berjaya — kerja bermula');
+  renderKehadiranStatus();
+}
+
+async function thumbOut() {
+  if (!kehadiranAktif) return;
+  const ok = await sahkanWebAuthn();
+  if (!ok) return;
+  const pos = await getGpsPosition();
+  const { error } = await sb.from('kehadiran').update({
+    thumb_out_masa: new Date().toISOString(), thumb_out_lat: pos?.lat, thumb_out_lng: pos?.lng, status: 'selesai',
+  }).eq('id', kehadiranAktif.id);
+  if (error) return toast('Gagal rekod Thumb Out: '+error.message,'err');
+  stopGpsInterval();
+  kehadiranAktif = null;
+  localStorage.removeItem('wafi_kehadiran_aktif');
+  toast('Thumb Out berjaya — kerja tamat');
+  renderKehadiranStatus();
+}
+
+function startGpsInterval() {
+  stopGpsInterval();
+  gpsIntervalId = setInterval(async () => {
+    if (!kehadiranAktif) return;
+    const pos = await getGpsPosition();
+    if (!pos) return;
+    await sb.from('gps_track').insert({ kehadiran_id: kehadiranAktif.id, pekerja_id: DATA.currentUser.id, lat: pos.lat, lng: pos.lng });
+  }, 30 * 60 * 1000);
+}
+function stopGpsInterval() {
+  if (gpsIntervalId) clearInterval(gpsIntervalId);
+  gpsIntervalId = null;
+}
+
+async function renderKehadiranStatus() {
+  const statusEl = document.getElementById('kehadiran-status');
+  const btnIn = document.getElementById('btn-thumb-in');
+  const btnOut = document.getElementById('btn-thumb-out');
+  if (!useCloud) { statusEl.textContent = 'Ciri ini perlu Supabase disambungkan'; btnIn.style.display='none'; btnOut.style.display='none'; return; }
+
+  if (!kehadiranAktif) {
+    const saved = JSON.parse(localStorage.getItem('wafi_kehadiran_aktif')||'null');
+    if (saved && saved.pekerja_id === DATA.currentUser.id) {
+      const { data } = await sb.from('kehadiran').select('*').eq('id', saved.id).eq('status','aktif').single();
+      if (data) { kehadiranAktif = saved; startGpsInterval(); }
+      else localStorage.removeItem('wafi_kehadiran_aktif');
+    }
+  }
+
+  if (kehadiranAktif) {
+    const { data } = await sb.from('kehadiran').select('thumb_in_masa').eq('id', kehadiranAktif.id).single();
+    const mula = data ? new Date(data.thumb_in_masa) : null;
+    const tempoh = mula ? Math.floor((Date.now()-mula)/60000) : 0;
+    statusEl.innerHTML = `🟢 Sedang bekerja sejak <strong>${mula?fmtDT(mula.toISOString()):'-'}</strong> (${Math.floor(tempoh/60)}j ${tempoh%60}m)`;
+    btnIn.style.display = 'none';
+    btnOut.style.display = '';
+  } else {
+    statusEl.textContent = 'Anda belum mula kerja hari ini';
+    btnIn.style.display = '';
+    btnOut.style.display = 'none';
+  }
+}
+
+// ── Laporan Kehadiran & Jarak (pemilik) ──
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = (b.lat-a.lat)*Math.PI/180, dLng = (b.lng-a.lng)*Math.PI/180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+
+async function renderLaporanKehadiran() {
+  const el = document.getElementById('kehadiran-report-output');
+  const tarikh = document.getElementById('kh-tarikh').value;
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+
+  const { data: sesi, error } = await sb.from('kehadiran').select('*')
+    .gte('thumb_in_masa', tarikh+'T00:00:00').lte('thumb_in_masa', tarikh+'T23:59:59')
+    .order('thumb_in_masa');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+
+  const { data: profil } = await sb.from('profiles').select('id,nama');
+  const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
+
+  const results = [];
+  for (const s of (sesi||[])) {
+    const { data: titik } = await sb.from('gps_track').select('lat,lng,tarikh_masa').eq('kehadiran_id', s.id).order('tarikh_masa');
+    const semua = [];
+    if (s.thumb_in_lat) semua.push({ lat:s.thumb_in_lat, lng:s.thumb_in_lng });
+    (titik||[]).forEach(t=>semua.push({ lat:t.lat, lng:t.lng }));
+    if (s.thumb_out_lat) semua.push({ lat:s.thumb_out_lat, lng:s.thumb_out_lng });
+    let jarak = 0;
+    for (let i=1;i<semua.length;i++) jarak += haversineKm(semua[i-1], semua[i]);
+    results.push({ ...s, jarak, bilTitik: semua.length });
+  }
+
+  el.innerHTML = results.map(s=>`
+    <div class="trx-card">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <div style="font-weight:800;font-size:13px">${esc(namaPekerja(s.pekerja_id))}</div>
+        <span class="badge ${s.status==='aktif'?'badge-gold':'badge-green'}">${s.status==='aktif'?'Sedang Bekerja':'Selesai'}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted)">Thumb In: ${fmtDT(s.thumb_in_masa)}${s.thumb_out_masa?' · Thumb Out: '+fmtDT(s.thumb_out_masa):''}</div>
+      <div style="font-size:13px;font-weight:700;color:var(--teal);margin-top:6px">📏 Anggaran jarak: ${s.jarak.toFixed(1)} km <span style="font-weight:400;color:var(--muted);font-size:11px">(kos minyak: ${fmt(s.jarak*SETTINGS.minyak)})</span></div>
+    </div>`).join('') || '<div class="empty"><div class="empty-icon">📍</div><div class="empty-text">Tiada rekod kehadiran pada tarikh ini</div></div>';
 }
 
 // ════════════════════════════════════════════════════
@@ -1625,7 +1888,13 @@ window.addEventListener('load',()=>{
         const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
         if (profile) {
           currentRole = profile.role;
-          DATA.currentUser = { email: session.user.email, role: profile.role, nama: profile.nama };
+          DATA.currentUser = { id: session.user.id, email: session.user.email, role: profile.role, nama: profile.nama, telefon: profile.telefon };
+          if (profile.must_change_password) {
+            pendingForcedPasswordChange = true;
+            document.getElementById('login-screen').className='active';
+            showModal('modal-set-katalaluan-baru');
+            return;
+          }
           await showApp();
           return;
         }
