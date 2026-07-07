@@ -30,6 +30,9 @@ CREATE POLICY "semua boleh baca tetapan" ON tetapan FOR SELECT USING (true);
 CREATE POLICY "pemilik boleh kemaskini tetapan" ON tetapan FOR UPDATE USING (is_pemilik());
 
 -- ═══ Fungsi awam dikemaskini — sertakan gambar_url ═══
+-- NOTA: kena DROP dulu sebab bentuk pulangan (return type) berubah dari versi asal
+-- (SQL_TAMBAHAN_2.sql) — Postgres tak boleh CREATE OR REPLACE bila OUT parameters berbeza.
+DROP FUNCTION IF EXISTS senarai_produk_awam();
 CREATE OR REPLACE FUNCTION senarai_produk_awam()
 RETURNS TABLE(id text, nama text, unit text, harga_jual float, kategori text, gambar_url text)
 LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
