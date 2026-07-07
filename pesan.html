@@ -10,7 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #EEF2F5; color: #182530; min-height: 100vh; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #EEF2F5; color: #182530; min-height: 100vh; padding-bottom: 90px; }
     :root {
       --navy: #0D2137; --teal: #0E7C7B; --teal2: #14A3A2;
       --gold: #C8922A; --red: #C0392B; --green: #1D7A4A;
@@ -20,16 +20,13 @@
     header img { width:56px;height:56px;border-radius:50%;margin-bottom:8px; }
     header h1 { color:#fff;font-size:16px;font-weight:800; }
     header p { color:#E8B84B;font-size:12px;margin-top:2px; }
-    #main { max-width:520px;margin:0 auto;padding:16px 16px 60px; }
+    #main { max-width:640px;margin:0 auto;padding:16px 16px 20px; }
     .card { background:#fff;border-radius:14px;border:1px solid var(--border);padding:16px;box-shadow:0 1px 4px rgba(0,0,0,0.05);margin-bottom:14px; }
+    .section-title { font-size:15px;font-weight:800;color:var(--navy);margin-bottom:10px; }
     .form-group { margin-bottom:12px; }
     .form-label { font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.4px; }
     .form-input { width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;outline:none;background:#FAFCFE;color:var(--text); }
     textarea.form-input { resize:none;height:60px; }
-    .item-row { display:flex;gap:8px;align-items:center;margin-bottom:8px; }
-    .item-row select { flex:3; }
-    .item-row input { flex:1;min-width:55px; }
-    .btn-remove { background:var(--red);color:#fff;border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;flex-shrink:0;font-size:14px; }
     .btn { padding:13px 20px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;width:100%; }
     .btn-outline { background:transparent;border:1.5px dashed var(--teal);color:var(--teal); }
     .btn-primary { background:linear-gradient(135deg,var(--teal),var(--teal2));color:#fff;margin-top:6px; }
@@ -41,6 +38,35 @@
     #success-box .icon { font-size:48px;margin-bottom:12px; }
     #success-box h2 { color:var(--navy);margin-bottom:8px; }
     #success-box p { color:var(--muted);font-size:13px; }
+
+    /* ── KATALOG PRODUK ── */
+    .produk-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+    .produk-card { background:#fff;border:1.5px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color 0.15s; }
+    .produk-card.dipilih { border-color:var(--teal);box-shadow:0 0 0 2px #0E7C7B22; }
+    .produk-img { width:100%;height:100px;object-fit:cover;background:#F0F4F7;display:flex;align-items:center;justify-content:center;font-size:32px; }
+    .produk-info { padding:8px 10px; }
+    .produk-nama { font-size:12px;font-weight:700;line-height:1.3;height:31px;overflow:hidden; }
+    .produk-harga { font-size:13px;font-weight:800;color:var(--teal);margin-top:4px; }
+    .produk-unit { font-size:10px;color:var(--muted); }
+    .qty-stepper { display:flex;align-items:center;gap:6px;margin-top:8px; }
+    .qty-btn { width:28px;height:28px;border-radius:7px;border:1.5px solid var(--border);background:#fff;font-size:16px;font-weight:800;cursor:pointer;color:var(--teal);display:flex;align-items:center;justify-content:center; }
+    .qty-btn:active { transform:scale(0.92); }
+    .qty-val { flex:1;text-align:center;font-weight:800;font-size:14px; }
+
+    /* ── CART BAR ── */
+    #cart-bar { position:fixed;bottom:0;left:0;right:0;background:var(--navy);color:#fff;padding:12px 16px;display:none;align-items:center;justify-content:space-between;z-index:500;box-shadow:0 -4px 16px rgba(0,0,0,0.2); }
+    #cart-bar.show { display:flex; }
+    #cart-bar .cart-info { font-size:13px; }
+    #cart-bar .cart-total { font-weight:800;font-size:16px;color:var(--gold); }
+    #cart-bar button { background:var(--teal);color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px; }
+
+    /* ── DISKAUN BANNER ── */
+    .diskaun-banner { background:linear-gradient(135deg,#FFF8E6,#FFF0CC);border:1.5px solid var(--gold);border-radius:12px;padding:14px;margin-bottom:14px; }
+    .diskaun-banner .tajuk { font-weight:800;color:var(--navy);font-size:14px;margin-bottom:4px; }
+    .diskaun-banner img { max-width:160px;display:block;margin:10px auto;border-radius:8px; }
+    .bayar-toggle { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px; }
+    .bayar-opt { padding:10px;border:2px solid var(--border);border-radius:10px;cursor:pointer;font-weight:700;font-size:12px;text-align:center;background:#fff; }
+    .bayar-opt.aktif { border-color:var(--green);color:var(--green);background:#1D7A4A14; }
   </style>
 </head>
 <body>
@@ -52,25 +78,46 @@
 </header>
 
 <div id="main">
-  <div class="card" id="form-card">
-    <div class="form-group">
-      <label class="form-label">Nama Kedai</label>
-      <input type="text" class="form-input" id="p-nama" placeholder="cth: Kedai Runcit Pak Ali" />
+  <div id="form-card">
+    <div class="card">
+      <div class="section-title">🛍️ Pilih Barang</div>
+      <div id="produk-grid" class="produk-grid"></div>
     </div>
-    <div class="form-group">
-      <label class="form-label">No. Telefon Kedai</label>
-      <input type="tel" class="form-input" id="p-tel" placeholder="01x-xxxxxxx" />
+
+    <div class="card" id="diskaun-card" style="display:none">
+      <div class="diskaun-banner">
+        <div class="tajuk">🎉 Anda layak diskaun <span id="dk-peratus">5</span>%!</div>
+        <div style="font-size:12px;color:var(--muted)">Bayar terus via Online Transfer untuk elak hutang & dapat diskaun serta-merta.</div>
+        <div class="bayar-toggle">
+          <div class="bayar-opt" id="opt-cod" onclick="setBayarMetod('cod')">🚚 Bayar Bila Terima (COD)</div>
+          <div class="bayar-opt" id="opt-transfer" onclick="setBayarMetod('transfer')">🏦 Online Transfer (Diskaun)</div>
+        </div>
+        <div id="bank-info" style="display:none;margin-top:10px;text-align:center">
+          <img id="bank-qr-img" src="" alt="QR Bank" />
+          <div id="bank-butiran" style="font-size:12px;white-space:pre-line"></div>
+        </div>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Barang Nak Dipesan</label>
-      <div id="p-items"></div>
-      <button type="button" class="btn btn-outline" onclick="addItem()">+ Tambah Barang</button>
+
+    <div class="card">
+      <div class="section-title">📋 Maklumat Kedai</div>
+      <div class="form-group">
+        <label class="form-label">Nama Kedai</label>
+        <input type="text" class="form-input" id="p-nama" placeholder="cth: Kedai Runcit Pak Ali" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">No. Telefon Kedai</label>
+        <input type="tel" class="form-input" id="p-tel" placeholder="01x-xxxxxxx" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nota (cth: minta hantar hari Jumaat)</label>
+        <textarea class="form-input" id="p-nota" placeholder="Nota tambahan..."></textarea>
+      </div>
+      <div class="form-group" style="display:flex;justify-content:space-between;font-size:14px;font-weight:800">
+        <span>JUMLAH:</span><span id="grand-total" style="color:var(--teal)">RM 0.00</span>
+      </div>
+      <button class="btn btn-primary" onclick="hantarPesanan()">📦 Hantar Pesanan</button>
     </div>
-    <div class="form-group">
-      <label class="form-label">Nota (cth: minta hantar hari Jumaat)</label>
-      <textarea class="form-input" id="p-nota" placeholder="Nota tambahan..."></textarea>
-    </div>
-    <button class="btn btn-primary" onclick="hantarPesanan()">📦 Hantar Pesanan</button>
   </div>
 
   <div class="card" id="success-box" style="display:none">
@@ -80,6 +127,11 @@
   </div>
 </div>
 
+<div id="cart-bar">
+  <div class="cart-info">🛒 <span id="cart-count">0</span> jenis barang</div>
+  <div class="cart-total" id="cart-total">RM 0.00</div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -87,6 +139,7 @@ const SUPABASE_URL = 'https://smepriytkoxkmpvjvvzq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtZXByaXl0a294a21wdmp2dnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzODE1OTcsImV4cCI6MjA5ODk1NzU5N30.bLDjFNZ_gMm9ufCkA4TeFbw1rysuLnlQN-qW_WW0zr8';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+const fmt = n => 'RM ' + Number(n||0).toFixed(2);
 const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function toast(msg, type='ok') {
   const t = document.getElementById('toast');
@@ -97,53 +150,126 @@ function toast(msg, type='ok') {
 }
 
 let PRODUK = [];
-let items = [{ stokId:'', qty:1 }];
+let TETAPAN = { minima_transfer: 500, diskaun_peratus: 5, qr_bank_url: null, butiran_bank: '' };
+let cart = {}; // { stokId: qty }
+let bayarMetod = 'cod';
+const kedaiIdDariQR = new URLSearchParams(location.search).get('kedai');
 
-async function initProduk() {
-  const { data, error } = await sb.rpc('senarai_produk_awam');
-  if (error) toast('Gagal muat senarai produk — sila cuba lagi kemudian','err');
-  PRODUK = data || [];
-  renderItems();
+async function initHalaman() {
+  const [{ data: produk, error: e1 }, { data: tetapan, error: e2 }] = await Promise.all([
+    sb.rpc('senarai_produk_awam'),
+    sb.from('tetapan').select('*').eq('id', 1).single(),
+  ]);
+  if (e1) toast('Gagal muat senarai produk — sila cuba lagi kemudian','err');
+  PRODUK = produk || [];
+  if (!e2 && tetapan) TETAPAN = tetapan;
+  document.getElementById('dk-peratus').textContent = TETAPAN.diskaun_peratus;
+  renderProdukGrid();
+
+  if (kedaiIdDariQR) {
+    const { data: kedai } = await sb.rpc('maklumat_kedai_awam', { p_id: kedaiIdDariQR });
+    const info = kedai?.[0];
+    if (info) {
+      document.getElementById('p-nama').value = info.nama || '';
+      document.getElementById('p-tel').value = info.telefon || '';
+      toast(`Selamat kembali, ${info.nama}!`);
+    }
+  }
 }
 
-function renderItems() {
-  document.getElementById('p-items').innerHTML = items.map((it,i)=>`
-    <div class="item-row">
-      <select class="form-input" onchange="updItem(${i},'stokId',this.value)">
-        <option value="">-- Pilih produk --</option>
-        ${PRODUK.map(p=>`<option value="${p.id}" ${it.stokId===p.id?'selected':''}>${esc(p.nama)} (${esc(p.unit)})</option>`).join('')}
-      </select>
-      <input type="number" class="form-input" min="1" value="${it.qty}" onchange="updItem(${i},'qty',this.value)" />
-      ${items.length>1?`<button class="btn-remove" onclick="remItem(${i})">✕</button>`:''}
-    </div>`).join('');
+function renderProdukGrid() {
+  document.getElementById('produk-grid').innerHTML = PRODUK.map(p=>{
+    const qty = cart[p.id] || 0;
+    return `<div class="produk-card ${qty>0?'dipilih':''}">
+      ${p.gambar_url
+        ? `<img class="produk-img" src="${esc(p.gambar_url)}" alt="${esc(p.nama)}" />`
+        : `<div class="produk-img">📦</div>`}
+      <div class="produk-info">
+        <div class="produk-nama">${esc(p.nama)}</div>
+        <div class="produk-harga">${fmt(p.harga_jual)} <span class="produk-unit">/${esc(p.unit)}</span></div>
+        <div class="qty-stepper">
+          <button class="qty-btn" onclick="ubahQty('${p.id}',-1)">−</button>
+          <div class="qty-val">${qty}</div>
+          <button class="qty-btn" onclick="ubahQty('${p.id}',1)">+</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('') || '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:20px">Tiada produk tersedia buat masa ini</div>';
+  kemaskiniTotal();
 }
-function updItem(i,f,v){ items[i][f]=v; renderItems(); }
-function addItem(){ items.push({stokId:'',qty:1}); renderItems(); }
-function remItem(i){ items.splice(i,1); renderItems(); }
+
+function ubahQty(id, delta) {
+  cart[id] = Math.max(0, (cart[id]||0) + delta);
+  if (cart[id] === 0) delete cart[id];
+  renderProdukGrid();
+}
+
+function subtotal() {
+  return Object.entries(cart).reduce((a,[id,qty])=>{ const p=PRODUK.find(p=>p.id===id); return a+(p?p.harga_jual*qty:0); },0);
+}
+
+function kemaskiniTotal() {
+  const tot = subtotal();
+  const count = Object.keys(cart).length;
+  document.getElementById('cart-count').textContent = count;
+  document.getElementById('cart-total').textContent = fmt(tot);
+  document.getElementById('cart-bar').className = count ? 'show' : '';
+  document.getElementById('grand-total').textContent = fmt(tot);
+
+  const layakDiskaun = tot >= TETAPAN.minima_transfer;
+  document.getElementById('diskaun-card').style.display = layakDiskaun ? 'block' : 'none';
+  if (!layakDiskaun) { bayarMetod = 'cod'; }
+}
+
+function setBayarMetod(m) {
+  bayarMetod = m;
+  document.getElementById('opt-cod').className = 'bayar-opt' + (m==='cod'?' aktif':'');
+  document.getElementById('opt-transfer').className = 'bayar-opt' + (m==='transfer'?' aktif':'');
+  const bankInfo = document.getElementById('bank-info');
+  if (m === 'transfer') {
+    bankInfo.style.display = 'block';
+    document.getElementById('bank-qr-img').src = TETAPAN.qr_bank_url || '';
+    document.getElementById('bank-qr-img').style.display = TETAPAN.qr_bank_url ? '' : 'none';
+    document.getElementById('bank-butiran').textContent = TETAPAN.butiran_bank || 'Sila hubungi kami untuk butiran akaun bank.';
+  } else {
+    bankInfo.style.display = 'none';
+  }
+}
 
 async function hantarPesanan() {
   const nama = document.getElementById('p-nama').value.trim();
   const tel = document.getElementById('p-tel').value.trim();
   const nota = document.getElementById('p-nota').value.trim();
   if (!nama || !tel) return toast('Sila isi nama kedai dan no. telefon','err');
-  const validItems = items.filter(it=>it.stokId && +it.qty>0);
-  if (!validItems.length) return toast('Sila pilih sekurang-kurangnya satu barang','err');
+  const entries = Object.entries(cart);
+  if (!entries.length) return toast('Sila pilih sekurang-kurangnya satu barang','err');
+
+  const jumlahAsal = subtotal();
+  const layakDiskaun = jumlahAsal >= TETAPAN.minima_transfer && bayarMetod === 'transfer';
+  const diskaunPeratus = layakDiskaun ? TETAPAN.diskaun_peratus : 0;
+  const jumlahSelepas = jumlahAsal * (1 - diskaunPeratus/100);
 
   const payload = {
     id: 'PO' + Date.now().toString().slice(-8),
+    kedai_id: kedaiIdDariQR || null,
     kedai_nama: nama,
     kedai_telefon: tel,
-    items: validItems.map(it=>{ const p=PRODUK.find(p=>p.id===it.stokId); return { stokId:it.stokId, nama:p?.nama||'?', unit:p?.unit||'', qty:+it.qty }; }),
+    items: entries.map(([id,qty])=>{ const p=PRODUK.find(p=>p.id===id); return { stokId:id, nama:p?.nama||'?', unit:p?.unit||'', qty }; }),
     nota, status: 'baru',
+    bayar_metod: bayarMetod,
+    jumlah_asal: jumlahAsal,
+    diskaun_peratus: diskaunPeratus,
+    jumlah_selepas_diskaun: jumlahSelepas,
   };
   const { error } = await sb.from('pre_order').insert(payload);
   if (error) return toast('Gagal hantar pesanan: '+error.message,'err');
 
   document.getElementById('form-card').style.display='none';
+  document.getElementById('cart-bar').className='';
   document.getElementById('success-box').style.display='block';
 }
 
-initProduk();
+initHalaman();
 </script>
 </body>
 </html>

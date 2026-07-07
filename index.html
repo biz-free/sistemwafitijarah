@@ -24,6 +24,9 @@
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
+  <!-- QR code (untuk link Pre-Order pada resit) -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #EEF2F5; color: #182530; min-height: 100vh; overflow-x: hidden; }
@@ -290,7 +293,7 @@
       <div id="kehadiran-status" style="font-size:13px;color:var(--muted);margin-bottom:10px">—</div>
       <button class="btn btn-primary" id="btn-thumb-in" style="background:var(--purple)" onclick="thumbIn()">👍 Thumb In — Mula Kerja</button>
       <button class="btn btn-danger" id="btn-thumb-out" style="display:none" onclick="thumbOut()">👎 Thumb Out — Tamat Kerja</button>
-      <div style="font-size:10px;color:var(--muted);margin-top:8px">Lokasi GPS direkod bermula Thumb In sehingga Thumb Out (setiap 30 minit) untuk claim minyak. Sila kekalkan apps terbuka semasa bekerja.</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px">📍 GPS aktif berterusan bermula Thumb In sehingga Thumb Out untuk claim minyak. Sila kekalkan apps terbuka semasa bekerja & benarkan akses lokasi.</div>
     </div>
 
     <div class="stat-grid" id="stat-grid">
@@ -460,6 +463,23 @@
       <div class="form-group"><label class="form-label">Duit Makan (RM sehari seorang pekerja)</label><input type="number" class="form-input" id="set-makan" step="0.50" min="0" onchange="saveSettings()" /></div>
     </div>
 
+    <!-- Tetapan Pre-Order & Diskaun Online Transfer (pemilik sahaja) -->
+    <div class="card" id="tetapan-diskaun-card">
+      <div class="card-title">💳 Tetapan Pre-Order & Diskaun</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Kedai yang bayar Online Transfer (elak hutang) untuk pesanan melebihi minima akan dapat diskaun automatik di borang pre-order.</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Minima Pesanan (RM)</label><input type="number" class="form-input" id="set-minima-transfer" step="10" min="0" /></div>
+        <div class="form-group"><label class="form-label">Diskaun (%)</label><input type="number" class="form-input" id="set-diskaun-peratus" step="0.5" min="0" max="100" /></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Gambar QR Bank</label>
+        <img id="qr-bank-preview" style="display:none;width:100%;max-width:200px;border-radius:9px;margin-bottom:8px" />
+        <input type="file" accept="image/*" class="form-input" id="f-qr-bank" onchange="previewQrBank()" />
+      </div>
+      <div class="form-group"><label class="form-label">Butiran Akaun Bank</label><textarea class="form-input" id="set-butiran-bank" placeholder="cth: Maybank 1234567890&#10;Wafi Tijarah Trading"></textarea></div>
+      <button class="btn btn-primary" onclick="saveTetapanDiskaun()">💾 Simpan Tetapan</button>
+    </div>
+
     <!-- Urus Pekerja (pemilik sahaja) -->
     <div class="card" id="urus-pekerja-card">
       <div class="card-title">👥 Urus Pekerja</div>
@@ -551,6 +571,11 @@
     <div class="form-row">
       <div class="form-group"><label class="form-label">Stok Semasa</label><input type="number" class="form-input" id="f-stok-qty" placeholder="0" min="0" /></div>
       <div class="form-group"><label class="form-label">Tarikh Luput (jika berkaitan)</label><input type="date" class="form-input" id="f-stok-luput" /></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Gambar Produk (untuk borang pre-order kedai)</label>
+      <img id="f-stok-gambar-preview" style="display:none;width:100%;max-height:140px;object-fit:cover;border-radius:9px;margin-bottom:8px" />
+      <input type="file" accept="image/*" class="form-input" id="f-stok-gambar" onchange="previewGambarStok()" />
     </div>
     <button class="btn btn-primary" onclick="saveStok()">💾 Simpan Produk</button>
   </div>
@@ -807,7 +832,7 @@ let pendingForcedPasswordChange = false;
 async function tetapkanKataLaluanBaru() {
   const pass = document.getElementById('set-pass-baru').value;
   if (!pass || pass.length < 6) return toast('Kata laluan mesti sekurang-kurangnya 6 aksara','err');
-  if (pass === 'admin123') return toast('Sila pilih kata laluan lain daripada admin123','err');
+  if (pass === 'abc123') return toast('Sila pilih kata laluan lain daripada abc123','err');
   const { error } = await sb.auth.updateUser({ password: pass });
   if (error) return toast('Gagal kemaskini kata laluan: '+error.message,'err');
   document.getElementById('set-pass-baru').value = '';
@@ -846,7 +871,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['laporan-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card'];
+  const pemilikOnly = ['laporan-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -880,6 +905,7 @@ async function setPage(p) {
       renderSenaraiPekerja();
       if (!document.getElementById('kh-tarikh').value) document.getElementById('kh-tarikh').value = new Date().toISOString().slice(0,10);
       renderLaporanKehadiran();
+      loadTetapanDiskaun();
     }
   }
 }
@@ -984,6 +1010,9 @@ function renderStok(q='') {
   rsSel.innerHTML = DATA.stok.map(s=>`<option value="${s.id}">${s.nama} (baki: ${s.stok})</option>`).join('');
 }
 
+let stokGambarUrlSedia = null;
+let stokGambarFilePilihan = null;
+
 function bukaModalStokBaru() {
   document.getElementById('stok-modal-title').textContent='Tambah Produk Baru';
   document.getElementById('edit-stok-id').value='';
@@ -994,6 +1023,9 @@ function bukaModalStokBaru() {
   document.getElementById('f-stok-jual').value='';
   document.getElementById('f-stok-qty').value='';
   document.getElementById('f-stok-luput').value='';
+  document.getElementById('f-stok-gambar').value='';
+  document.getElementById('f-stok-gambar-preview').style.display='none';
+  stokGambarUrlSedia = null; stokGambarFilePilihan = null;
   showModal('modal-tambah-stok');
 }
 
@@ -1008,7 +1040,21 @@ function editStok(id) {
   document.getElementById('f-stok-jual').value=s.harga_jual;
   document.getElementById('f-stok-qty').value=s.stok;
   document.getElementById('f-stok-luput').value=s.tarikh_luput||'';
+  document.getElementById('f-stok-gambar').value='';
+  stokGambarUrlSedia = s.gambar_url || null;
+  stokGambarFilePilihan = null;
+  const prev = document.getElementById('f-stok-gambar-preview');
+  if (s.gambar_url) { prev.src = s.gambar_url; prev.style.display='block'; } else { prev.style.display='none'; }
   showModal('modal-tambah-stok');
+}
+
+function previewGambarStok() {
+  const file = document.getElementById('f-stok-gambar').files[0];
+  if (!file) return;
+  stokGambarFilePilihan = file;
+  const prev = document.getElementById('f-stok-gambar-preview');
+  prev.src = URL.createObjectURL(file);
+  prev.style.display = 'block';
 }
 
 async function saveStok() {
@@ -1018,7 +1064,18 @@ async function saveStok() {
   const qty=+document.getElementById('f-stok-qty').value;
   if(!nama||!beli||!jual) return toast('Sila isi semua maklumat','err');
   const id=document.getElementById('edit-stok-id').value;
-  const obj={id:id||genId('S'),nama,unit:document.getElementById('f-stok-unit').value,harga_beli:beli,harga_jual:jual,stok:qty,kategori:document.getElementById('f-stok-kat').value,tarikh_luput:document.getElementById('f-stok-luput').value||null};
+  const stokId = id||genId('S');
+
+  let gambarUrl = stokGambarUrlSedia;
+  if (useCloud && stokGambarFilePilihan) {
+    const ext = stokGambarFilePilihan.name.split('.').pop();
+    const path = `${stokId}-${Date.now()}.${ext}`;
+    const { error: upErr } = await sb.storage.from('produk-gambar').upload(path, stokGambarFilePilihan, { upsert: true });
+    if (upErr) return toast('Gagal muat naik gambar: '+upErr.message,'err');
+    gambarUrl = sb.storage.from('produk-gambar').getPublicUrl(path).data.publicUrl;
+  }
+
+  const obj={id:stokId,nama,unit:document.getElementById('f-stok-unit').value,harga_beli:beli,harga_jual:jual,stok:qty,kategori:document.getElementById('f-stok-kat').value,tarikh_luput:document.getElementById('f-stok-luput').value||null,gambar_url:gambarUrl};
   if (useCloud) {
     const { error } = await sb.from('stok').upsert(obj);
     if (error) return toast('Gagal simpan produk: '+error.message,'err');
@@ -1410,6 +1467,7 @@ async function renderPreorderList() {
       </div>
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
       ${po.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(po.nota)}</div>`:''}
+      ${po.jumlah_asal?`<div style="font-size:12px;font-weight:700;margin-top:6px">${po.bayar_metod==='transfer'?`🏦 Online Transfer — ${fmt(po.jumlah_selepas_diskaun)} <span style="font-weight:400;color:var(--green);font-size:11px">(${po.diskaun_peratus}% diskaun daripada ${fmt(po.jumlah_asal)})</span>`:`🚚 COD — ${fmt(po.jumlah_asal)}`}</div>`:''}
       <div style="display:flex;gap:6px;margin-top:8px">
         ${po.status==='baru'?`<button class="btn btn-secondary btn-sm" onclick="tandaPreorder('${po.id}','diproses')">⏳ Tandakan Diproses</button>`:''}
         ${po.status!=='selesai'?`<button class="btn btn-primary btn-sm" style="margin-top:0;background:var(--green)" onclick="tandaPreorder('${po.id}','selesai')">✓ Selesai</button>`:''}
@@ -1473,8 +1531,18 @@ async function renderResit(id) {
     <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">STATUS</span><span style="font-weight:700;color:${t.status==='selesai'?'var(--green)':'var(--red)'}">⬤ ${t.status==='selesai'?'TELAH DIBAYAR':'BELUM DIBAYAR / HUTANG'}</span></div>
     ${t.nota?`<div style="margin-top:8px;font-size:10px;color:var(--muted)">Nota: ${esc(t.nota)}</div>`:''}
     ${pekerja?.telefon?`<div style="margin-top:10px;padding:8px;background:#F0FFF4;border:1px dashed var(--green);border-radius:6px;font-size:10px;text-align:center">🔁 Nak repeat order? Hubungi terus <strong>${esc(pekerja.nama||'penghantar')}</strong>: ${esc(pekerja.telefon)}</div>`:''}
+    <div style="text-align:center;margin-top:12px">
+      <div id="resit-qr" style="width:100px;height:100px;margin:0 auto"></div>
+      <div style="font-size:9px;color:var(--muted);margin-top:2px">📱 Imbas untuk repeat order terus</div>
+    </div>
     <div class="resit-footer">Terima kasih atas kepercayaan anda!<br/>Produk Halal · Berkualiti · Amanah<br/><strong>— WAFI TIJARAH TRADING —</strong></div>
   </div>`;
+
+  const pesanUrl = `${location.origin}${location.pathname.replace(/index\.html$/,'')}pesan.html?kedai=${encodeURIComponent(t.kedai_id)}`;
+  const qrEl = document.getElementById('resit-qr');
+  if (qrEl && window.QRCode) {
+    new QRCode(qrEl, { text: pesanUrl, width: 100, height: 100, correctLevel: QRCode.CorrectLevel.M });
+  }
 }
 
 function cetakResit() {
@@ -1583,6 +1651,53 @@ function saveSettings() {
 }
 
 // ════════════════════════════════════════════════════
+//  TETAPAN PRE-ORDER & DISKAUN ONLINE TRANSFER
+// ════════════════════════════════════════════════════
+let qrBankFilePilihan = null;
+let qrBankUrlSedia = null;
+
+async function loadTetapanDiskaun() {
+  if (!useCloud) return;
+  const { data, error } = await sb.from('tetapan').select('*').eq('id', 1).single();
+  if (error || !data) return;
+  document.getElementById('set-minima-transfer').value = data.minima_transfer;
+  document.getElementById('set-diskaun-peratus').value = data.diskaun_peratus;
+  document.getElementById('set-butiran-bank').value = data.butiran_bank || '';
+  qrBankUrlSedia = data.qr_bank_url || null;
+  const prev = document.getElementById('qr-bank-preview');
+  if (data.qr_bank_url) { prev.src = data.qr_bank_url; prev.style.display='block'; } else { prev.style.display='none'; }
+}
+
+function previewQrBank() {
+  const file = document.getElementById('f-qr-bank').files[0];
+  if (!file) return;
+  qrBankFilePilihan = file;
+  const prev = document.getElementById('qr-bank-preview');
+  prev.src = URL.createObjectURL(file);
+  prev.style.display = 'block';
+}
+
+async function saveTetapanDiskaun() {
+  let qrUrl = qrBankUrlSedia;
+  if (qrBankFilePilihan) {
+    const ext = qrBankFilePilihan.name.split('.').pop();
+    const path = `qr-bank-${Date.now()}.${ext}`;
+    const { error: upErr } = await sb.storage.from('produk-gambar').upload(path, qrBankFilePilihan, { upsert: true });
+    if (upErr) return toast('Gagal muat naik QR: '+upErr.message,'err');
+    qrUrl = sb.storage.from('produk-gambar').getPublicUrl(path).data.publicUrl;
+  }
+  const { error } = await sb.from('tetapan').update({
+    minima_transfer: +document.getElementById('set-minima-transfer').value || 0,
+    diskaun_peratus: +document.getElementById('set-diskaun-peratus').value || 0,
+    butiran_bank: document.getElementById('set-butiran-bank').value,
+    qr_bank_url: qrUrl,
+  }).eq('id', 1);
+  if (error) return toast('Gagal simpan tetapan: '+error.message,'err');
+  qrBankUrlSedia = qrUrl; qrBankFilePilihan = null;
+  toast('Tetapan pre-order & diskaun dikemaskini');
+}
+
+// ════════════════════════════════════════════════════
 //  URUS PEKERJA
 // ════════════════════════════════════════════════════
 async function renderSenaraiPekerja() {
@@ -1598,15 +1713,15 @@ async function renderSenaraiPekerja() {
         <div class="list-item-sub">${esc(p.email||'')}${p.telefon?' · '+esc(p.telefon):''}</div>
         ${p.must_change_password?'<span class="badge badge-gold" style="margin-top:4px">Perlu tukar kata laluan</span>':''}
       </div>
-      <button class="btn btn-secondary btn-sm" onclick="resetKeAdmin123('${p.id}','${esc(p.nama||p.email)}')">🔑 Reset admin123</button>
+      <button class="btn btn-secondary btn-sm" onclick="resetKeAdmin123('${p.id}','${esc(p.nama||p.email)}')">🔑 Reset abc123</button>
     </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada pekerja didaftarkan lagi</div></div>';
 }
 
 async function resetKeAdmin123(pekerjaId, nama) {
-  if (!confirm(`Tetapkan semula kata laluan ${nama} kepada "admin123"?\n\nPekerja akan diminta tukar kata laluan baharu semasa log masuk seterusnya.`)) return;
+  if (!confirm(`Tetapkan semula kata laluan ${nama} kepada "abc123"?\n\nPekerja akan diminta tukar kata laluan baharu semasa log masuk seterusnya.`)) return;
   const { data, error } = await sb.functions.invoke('reset-pekerja-password', { body: { targetUserId: pekerjaId } });
   if (error || data?.error) return toast('Gagal reset kata laluan: '+(data?.error||error.message),'err');
-  toast(`Kata laluan ${nama} ditetapkan semula ke admin123`);
+  toast(`Kata laluan ${nama} ditetapkan semula ke abc123`);
   renderSenaraiPekerja();
 }
 
@@ -1649,7 +1764,6 @@ async function daftarPekerjaBaru() {
 //  gesaan fingerprint/Face ID sebenar peranti tetap perlu dipenuhi.
 // ════════════════════════════════════════════════════
 let kehadiranAktif = null; // { id, pekerja_id }
-let gpsIntervalId = null;
 
 function bufToBase64url(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -1724,7 +1838,7 @@ function getGpsPosition() {
     navigator.geolocation.getCurrentPosition(
       pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => resolve(null),
-      { enableHighAccuracy: true, timeout: 15000 }
+      { enableHighAccuracy: true, timeout: 25000, maximumAge: 10000 }
     );
   });
 }
@@ -1734,14 +1848,15 @@ async function thumbIn() {
   const ok = await sahkanWebAuthn();
   if (!ok) return;
   const pos = await getGpsPosition();
+  if (!pos) toast('Amaran: gagal dapatkan lokasi GPS — sila benarkan akses lokasi. Jarak mungkin tidak tepat.','err');
   const id = genId('KH');
   const row = { id, pekerja_id: DATA.currentUser.id, thumb_in_masa: new Date().toISOString(), thumb_in_lat: pos?.lat, thumb_in_lng: pos?.lng, status: 'aktif' };
   const { error } = await sb.from('kehadiran').insert(row);
   if (error) return toast('Gagal rekod Thumb In: '+error.message,'err');
   kehadiranAktif = { id, pekerja_id: DATA.currentUser.id };
   localStorage.setItem('wafi_kehadiran_aktif', JSON.stringify(kehadiranAktif));
-  startGpsInterval();
-  toast('Thumb In berjaya — kerja bermula');
+  startGpsWatch();
+  toast('Thumb In berjaya — kerja bermula, GPS aktif');
   renderKehadiranStatus();
 }
 
@@ -1754,25 +1869,42 @@ async function thumbOut() {
     thumb_out_masa: new Date().toISOString(), thumb_out_lat: pos?.lat, thumb_out_lng: pos?.lng, status: 'selesai',
   }).eq('id', kehadiranAktif.id);
   if (error) return toast('Gagal rekod Thumb Out: '+error.message,'err');
-  stopGpsInterval();
+  stopGpsWatch();
   kehadiranAktif = null;
   localStorage.removeItem('wafi_kehadiran_aktif');
   toast('Thumb Out berjaya — kerja tamat');
   renderKehadiranStatus();
 }
 
-function startGpsInterval() {
-  stopGpsInterval();
-  gpsIntervalId = setInterval(async () => {
-    if (!kehadiranAktif) return;
-    const pos = await getGpsPosition();
-    if (!pos) return;
-    await sb.from('gps_track').insert({ kehadiran_id: kehadiranAktif.id, pekerja_id: DATA.currentUser.id, lat: pos.lat, lng: pos.lng });
-  }, 30 * 60 * 1000);
+// GPS "on" berterusan (watchPosition) sepanjang Thumb In hingga Thumb Out.
+// Rekod ke DB ditapis maksimum sekali seminit supaya tak banjir jadual gps_track,
+// tapi GPS peranti sendiri kekal aktif/dipantau sepanjang masa (bukan setiap 30 minit).
+let gpsWatchId = null;
+let lastGpsInsertAt = 0;
+const GPS_MIN_GAP_MS = 60 * 1000;
+
+function startGpsWatch() {
+  stopGpsWatch();
+  if (!navigator.geolocation) return;
+  lastGpsInsertAt = 0;
+  gpsWatchId = navigator.geolocation.watchPosition(
+    async (pos) => {
+      if (!kehadiranAktif) return;
+      const now = Date.now();
+      if (now - lastGpsInsertAt < GPS_MIN_GAP_MS) return;
+      lastGpsInsertAt = now;
+      await sb.from('gps_track').insert({
+        kehadiran_id: kehadiranAktif.id, pekerja_id: DATA.currentUser.id,
+        lat: pos.coords.latitude, lng: pos.coords.longitude,
+      });
+    },
+    () => {},
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
+  );
 }
-function stopGpsInterval() {
-  if (gpsIntervalId) clearInterval(gpsIntervalId);
-  gpsIntervalId = null;
+function stopGpsWatch() {
+  if (gpsWatchId !== null) navigator.geolocation.clearWatch(gpsWatchId);
+  gpsWatchId = null;
 }
 
 async function renderKehadiranStatus() {
@@ -1785,7 +1917,7 @@ async function renderKehadiranStatus() {
     const saved = JSON.parse(localStorage.getItem('wafi_kehadiran_aktif')||'null');
     if (saved && saved.pekerja_id === DATA.currentUser.id) {
       const { data } = await sb.from('kehadiran').select('*').eq('id', saved.id).eq('status','aktif').single();
-      if (data) { kehadiranAktif = saved; startGpsInterval(); }
+      if (data) { kehadiranAktif = saved; startGpsWatch(); }
       else localStorage.removeItem('wafi_kehadiran_aktif');
     }
   }

@@ -1,6 +1,6 @@
 // Edge Function: reset-pekerja-password
 // Hanya PEMILIK yang log masuk boleh panggil fungsi ini untuk tetapkan semula
-// kata laluan seorang pekerja kepada "admin123". Guna service_role key
+// kata laluan seorang pekerja kepada "abc123". Guna service_role key
 // (tersedia automatik sebagai env var dalam Edge Function — TIDAK PERNAH
 // terdedah kepada client) supaya operasi admin ini selamat.
 
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
 
     // Client admin (service_role) — HANYA dalam Edge Function, tak pernah ke client
     const adminClient = createClient(supabaseUrl, serviceKey);
-    const { error: updErr } = await adminClient.auth.admin.updateUserById(targetUserId, { password: "admin123" });
+    const { error: updErr } = await adminClient.auth.admin.updateUserById(targetUserId, { password: "abc123" });
     if (updErr) {
       return new Response(JSON.stringify({ error: updErr.message }), { status: 500, headers: corsHeaders });
     }

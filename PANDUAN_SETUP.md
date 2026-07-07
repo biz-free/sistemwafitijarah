@@ -10,6 +10,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 1. `SQL_TAMBAHAN_2.sql` — Urus Pekerja & Link Pre-Order
 > 2. `SQL_HOTFIX_RECURSION.sql` — **wajib** selepas #1 (baiki bug di atas)
 > 3. `SQL_TAMBAHAN_3.sql` — Reset Kata Laluan, Thumb In/Out & Jejak GPS (perlu deploy Edge Function juga — lihat bahagian "Reset Kata Laluan Pekerja" di bawah)
+> 4. `SQL_TAMBAHAN_4.sql` — Gambar produk, QR Pre-Order pada resit & diskaun Online Transfer (perlu cipta Storage bucket dahulu — lihat bahagian "Gambar Produk & QR" di bawah)
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -79,10 +80,10 @@ Resit juga papar **no. telefon pekerja** yang buat penghantaran tersebut (jika d
 ### 🔑 Lupa Kata Laluan
 Kedua-dua pemilik & pekerja boleh tekan "Lupa kata laluan?" di skrin log masuk, masukkan e-mel, dan pautan reset akan dihantar terus oleh Supabase. Ciri ini **hanya berfungsi dalam mod cloud** (selepas Supabase disambung).
 
-### 🔑 Reset Kata Laluan Pekerja ke "admin123" (Pemilik sahaja)
-Di **Lagi → Urus Pekerja**, pemilik boleh tekan **"🔑 Reset admin123"** pada mana-mana pekerja yang lupa kata laluan. Pekerja tersebut akan diminta **tetapkan kata laluan baharu** (tak boleh admin123 semula) sebelum boleh masuk ke ruang utama pada log masuk seterusnya.
+### 🔑 Reset Kata Laluan Pekerja ke "abc123" (Pemilik sahaja)
+Di **Lagi → Urus Pekerja**, pemilik boleh tekan **"🔑 Reset abc123"** pada mana-mana pekerja yang lupa kata laluan. Pekerja tersebut akan diminta **tetapkan kata laluan baharu** (tak boleh abc123 semula) sebelum boleh masuk ke ruang utama pada log masuk seterusnya.
 
-> ⚠️ **Kenapa hanya pemilik boleh buat ini (bukan sesiapa dari skrin log masuk)?** Jika sesiapa boleh reset password akaun lain ke nilai tetap (admin123) hanya dengan tahu e-mel — itu jadi lubang keselamatan (curi akaun). Sebab itu tindakan ini perlu pengesahan pemilik yang sudah log masuk, dan dijalankan melalui **Edge Function** (kod pelayan berasingan yang pegang kunci admin Supabase secara selamat — kunci ini TIDAK PERNAH masuk ke dalam kod `index.html` yang orang ramai boleh lihat).
+> ⚠️ **Kenapa hanya pemilik boleh buat ini (bukan sesiapa dari skrin log masuk)?** Jika sesiapa boleh reset password akaun lain ke nilai tetap (abc123) hanya dengan tahu e-mel — itu jadi lubang keselamatan (curi akaun). Sebab itu tindakan ini perlu pengesahan pemilik yang sudah log masuk, dan dijalankan melalui **Edge Function** (kod pelayan berasingan yang pegang kunci admin Supabase secara selamat — kunci ini TIDAK PERNAH masuk ke dalam kod `index.html` yang orang ramai boleh lihat).
 
 **Deploy Edge Function (buat SEKALI sahaja):**
 1. Pastikan Node.js dipasang di komputer anda (untuk `npx`)
@@ -99,7 +100,7 @@ Di **Lagi → Urus Pekerja**, pemilik boleh tekan **"🔑 Reset admin123"** pada
    ```
    npx supabase functions deploy reset-pekerja-password
    ```
-6. Selesai — butang "Reset admin123" dalam apps akan berfungsi selepas ini.
+6. Selesai — butang "Reset abc123" dalam apps akan berfungsi selepas ini.
 
 ### 👍👎 Thumb In / Thumb Out (Kehadiran Pekerja)
 Di Dashboard, pekerja tekan **"👍 Thumb In"** untuk mula kerja dan **"👎 Thumb Out"** untuk tamat kerja. Setiap kali, telefon akan minta pengesahan **fingerprint/Face ID sedia ada di telefon tersebut** (WebAuthn) — kali pertama guna, pekerja akan diminta daftar fingerprint/Face ID dahulu (sekali sahaja per peranti).
@@ -107,7 +108,7 @@ Di Dashboard, pekerja tekan **"👍 Thumb In"** untuk mula kerja dan **"👎 Thu
 > ⚠️ **Had sebenar**: Website **tidak boleh** mengimbas cap ibu jari terus seperti mesin kehadiran pejabat — ia guna ciri fingerprint/Face ID yang SEDIA ADA pada telefon pekerja untuk sahkan identiti (standard moden, selamat). Pengesahan ini disahkan di peringkat **peranti/pelayar** sahaja dalam versi ini (bukan disahkan semula secara kriptografi di server) — memadai untuk rekod kehadiran dalaman, tapi jika perlukan tahap lebih tegas (contoh untuk tujuan audit rasmi), boleh ditambah baik lagi dengan Edge Function tambahan pada masa depan.
 
 ### 📍 Jejak GPS & Anggaran Jarak (Claim Minyak)
-Bermula dari Thumb In sehingga Thumb Out, lokasi GPS pekerja direkod **setiap 30 minit**, ditambah titik lokasi semasa Thumb In & Thumb Out sendiri. Pemilik boleh lihat anggaran jarak (km) dan kos minyak setiap sesi kerja di **Lagi → Kehadiran & Jarak Pekerja** (pilih tarikh).
+Bermula dari Thumb In sehingga Thumb Out, GPS peranti pekerja **aktif berterusan** (`watchPosition`) — setiap kali peranti kesan pergerakan lokasi, titik baru direkod (ditapis maksimum sekali seminit supaya jadual data tak terlalu besar), ditambah titik lokasi semasa Thumb In & Thumb Out sendiri. Pemilik boleh lihat anggaran jarak (km) dan kos minyak setiap sesi kerja di **Lagi → Kehadiran & Jarak Pekerja** (pilih tarikh).
 
 > ⚠️ **Had sebenar GPS web app**: Penjejakan ini **hanya berfungsi selagi apps dibuka** (tab/PWA di latar depan). Ia BUKAN apps GPS khusus seperti Grab Driver — bila skrin telefon dikunci lama atau apps ditutup, penjejakan terhenti sehingga apps dibuka semula. Ini adalah had platform web (bukan boleh diperbaiki tanpa jadi apps mudah alih asli/native). Anggaran jarak dikira dari titik-ke-titik (garis lurus), bukan jarak jalan sebenar — sesuai sebagai rujukan kasar untuk claim, bukan ukuran GPS profesional.
 
@@ -116,8 +117,21 @@ Pemilik boleh daftar akaun pekerja baru terus dari **Lagi → Urus Pekerja** (na
 
 > ⚠️ Jika akaun pekerja baru tak boleh log masuk serta-merta ("Email not confirmed"), pergi ke Supabase → **Authentication → Providers → Email** dan matikan "Confirm email" — supaya akaun terus aktif sebaik didaftarkan tanpa perlu sahkan e-mel.
 
-### 🔗 Link Pre-Order untuk Kedai (Repeat Order)
-Satu link awam **`pesan.html`** (cth: `https://biz-free.github.io/sistemwafitijarah/pesan.html`) boleh dikongsi terus dengan mana-mana kedai — mereka boleh isi nama kedai, no. telefon, pilih barang & kuantiti, hantar, TANPA perlu log masuk. Pesanan masuk terus ke tab **Hantar → Pre-Order** dalam apps (nampak oleh pemilik & pekerja) untuk diproses jadi penghantaran sebenar. Link penuh disalin terus dari tab tersebut (butang "📋 Salin").
+### 🔗 Link & QR Pre-Order untuk Kedai (Repeat Order)
+Satu link awam **`pesan.html`** (cth: `https://biz-free.github.io/sistemwafitijarah/pesan.html`) boleh dikongsi terus dengan mana-mana kedai — borang ini kini **interaktif & bergambar**: kedai layari katalog produk (gambar, harga, unit) dan guna butang +/− untuk tambah ke troli, TANPA perlu log masuk. Pesanan masuk terus ke tab **Hantar → Pre-Order** dalam apps (nampak oleh pemilik & pekerja) untuk diproses jadi penghantaran sebenar.
+
+Setiap resit turut jana **kod QR unik** yang terus bawa kedai tersebut ke `pesan.html?kedai=<id kedai>` — bila diimbas, nama & no. telefon kedai automatik terisi (kedai tak perlu taip semula), memudahkan repeat order terus dari resit lama.
+
+### 🖼️ Gambar Produk & Diskaun Online Transfer
+- **Gambar produk**: Bila tambah/edit produk di **Stok**, pemilik boleh muat naik gambar (dipaparkan di borang pre-order supaya kedai nampak produk sebelum order).
+- **Diskaun Online Transfer**: Di **Lagi → Tetapan Pre-Order & Diskaun**, pemilik tetapkan minima pesanan (lalai RM500) & peratus diskaun (lalai 5%), serta muat naik gambar QR bank & butiran akaun. Bila kedai buat pre-order melebihi minima DAN pilih "Online Transfer" sebagai kaedah bayar, diskaun terpakai automatik — ini menggalakkan kedai bayar terus (elak hutang) berbanding COD.
+
+**Storage Bucket (perlu dicipta SEKALI sahaja, sebelum jalankan `SQL_TAMBAHAN_4.sql`):**
+1. Supabase Dashboard → **Storage** → "New bucket"
+2. Nama: `produk-gambar`
+3. **Public bucket**: hidupkan (ON) — supaya gambar boleh dipaparkan di borang pre-order awam
+4. Klik "Create bucket"
+5. Lepas itu, jalankan `SQL_TAMBAHAN_4.sql` di SQL Editor (sertakan dasar akses storan)
 
 ---
 
