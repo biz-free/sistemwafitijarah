@@ -297,6 +297,16 @@
       <div style="font-size:10px;color:var(--muted);margin-top:8px">📍 GPS aktif berterusan bermula Thumb In sehingga Thumb Out untuk claim minyak. Sila kekalkan apps terbuka semasa bekerja & benarkan akses lokasi.</div>
     </div>
 
+    <!-- Link Pre-Order Kedai -->
+    <div class="card" style="border-left:4px solid var(--gold);background:#FFFBF0">
+      <div class="card-title" style="color:var(--gold)">🔗 Link Pre-Order Kedai</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Kongsi link ini dengan kedai supaya mereka boleh repeat order sendiri bila-bila masa (tiada log masuk diperlukan).</div>
+      <div style="display:flex;gap:8px">
+        <input type="text" class="form-input" id="link-preorder" readonly style="font-size:12px" />
+        <button class="btn btn-secondary btn-sm" onclick="salinLinkPreorder()" style="flex-shrink:0">📋 Salin</button>
+      </div>
+    </div>
+
     <!-- Tugasan Baru (pre-order belum ditugaskan) -->
     <div class="card" id="tugasan-baru-card">
       <div class="card-title">🆕 Tugasan Baru</div>
@@ -456,14 +466,6 @@
     </div>
 
     <div id="hantar-preorder" style="display:none">
-      <div class="card" style="border-left:4px solid var(--gold);background:#FFFBF0">
-        <div class="card-title" style="color:var(--gold)">🔗 Link Pre-Order Kedai</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Kongsi link ini dengan kedai supaya mereka boleh repeat order sendiri bila-bila masa (tiada log masuk diperlukan).</div>
-        <div style="display:flex;gap:8px">
-          <input type="text" class="form-input" id="link-preorder" readonly style="font-size:12px" />
-          <button class="btn btn-secondary btn-sm" onclick="salinLinkPreorder()" style="flex-shrink:0">📋 Salin</button>
-        </div>
-      </div>
       <div id="preorder-list"></div>
     </div>
 
@@ -1119,12 +1121,14 @@ async function setPage(p) {
   document.getElementById('page-'+p).classList.add('active');
   document.getElementById('nav-'+p)?.classList.add('active');
   if (useCloud) await loadData(); // tarik data terkini supaya semua pekerja nampak perubahan terbaru
-  if (p==='dashboard') renderDashboard();
+  if (p==='dashboard') {
+    renderDashboard();
+    document.getElementById('link-preorder').value = location.href.replace(/index\.html.*$/,'').replace(/\/$/,'') + '/pesan.html';
+  }
   if (p==='stok') renderStok();
   if (p==='kedai') renderKedai();
   if (p==='hantar') {
     renderHantarSelects(); renderSejarah();
-    document.getElementById('link-preorder').value = location.href.replace(/index\.html.*$/,'').replace(/\/$/,'') + '/pesan.html';
     if (useCloud) checkPreorderBadge();
   }
   if (p==='tempahan') {
@@ -1952,8 +1956,6 @@ function setHJenis(v) {
   document.getElementById('opt-jenis-peribadi').className='bayar-opt'+(v==='peribadi'?' active-jenis':'');
   document.getElementById('h-kedai-wrap').style.display = v==='kedai'?'':'none';
   document.getElementById('h-pembeli-wrap').style.display = v==='peribadi'?'':'none';
-  document.getElementById('opt-hutang').style.display = v==='peribadi'?'none':'';
-  if (v==='peribadi') setBayar('terus');
 }
 function setHantarTab(t) {
   ['baru','preorder','sejarah'].forEach(tab=>{
@@ -2005,7 +2007,7 @@ async function submitHantar() {
     else toast('Gagal dapatkan GPS — jarak direkod sebagai 0km','err');
   }
 
-  const statusBayar = peribadi ? 'selesai' : (hBayar==='terus'?'selesai':'hutang');
+  const statusBayar = hBayar==='terus'?'selesai':'hutang';
   const trx={
     id:genId('T'), tarikh_masa:new Date().toISOString(), kedai_id:kedaiId, nama_pembeli:namaPembeli||null,
     items:hItems.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return{stokId:it.stokId,qty:+it.qty,harga:s.harga_jual}; }),
