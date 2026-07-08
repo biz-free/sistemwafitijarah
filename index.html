@@ -1648,9 +1648,8 @@ async function tandaPreorder(id, status) {
 }
 
 async function claimPreorder(id) {
-  const { data, error } = await sb.from('pre_order').update({ assigned_pekerja_id: DATA.currentUser.id }).eq('id', id).is('assigned_pekerja_id', null).select();
-  if (error) return toast('Gagal ambil tugasan: '+error.message,'err');
-  if (!data || !data.length) { toast('Pre-order ini dah diambil pekerja lain','err'); renderPreorderList(); return; }
+  const { error } = await sb.rpc('claim_preorder', { p_id: id });
+  if (error) { toast(error.message,'err'); renderPreorderList(); return; }
   renderPreorderList();
   toast('Tugasan berjaya diambil');
 }
@@ -1956,7 +1955,7 @@ async function mohonCuti() {
   const nota = document.getElementById('cuti-nota').value.trim();
   if (!mula || !tamat) return toast('Sila isi tarikh mula dan tamat','err');
   if (tamat < mula) return toast('Tarikh tamat mesti selepas/sama tarikh mula','err');
-  const { error } = await sb.from('permohonan_cuti').insert({ id: genId('CT'), pekerja_id: DATA.currentUser.id, jenis, tarikh_mula:mula, tarikh_tamat:tamat, nota, status:'menunggu' });
+  const { error } = await sb.rpc('hantar_permohonan_cuti', { p_id: genId('CT'), p_jenis:jenis, p_mula:mula, p_tamat:tamat, p_nota:nota });
   if (error) return toast('Gagal hantar permohonan: '+error.message,'err');
   document.getElementById('cuti-mula').value=''; document.getElementById('cuti-tamat').value=''; document.getElementById('cuti-nota').value='';
   renderSenaraiCutiSaya();

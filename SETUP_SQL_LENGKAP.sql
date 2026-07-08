@@ -339,3 +339,33 @@ CREATE POLICY "pemilik boleh padam gambar produk" ON storage.objects FOR DELETE 
 
 CREATE POLICY "sesiapa boleh upload bukti bayaran" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'bukti-bayaran');
 CREATE POLICY "staff boleh lihat bukti bayaran" ON storage.objects FOR SELECT USING (bucket_id = 'bukti-bayaran' AND auth.role() = 'authenticated');
+
+-- ═══ Hantar permohonan cuti & claim pre-order — atomik guna auth.uid() server-side ═══
+CREATE OR REPLACE FUNCTION hantar_permohonan_cuti(
+  p_id text, p_jenis text, p_mula date, p_tamat date, p_nota text
+) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()) THEN
+    RAISE EXCEPTION 'Tidak dibenarkan';
+  END IF;
+  INSERT INTO permohonan_cuti (id, pekerja_id, jenis, tarikh_mula, tarikh_tamat, nota, status)
+  VALUES (p_id, auth.uid(), p_jenis, p_mula, p_tamat, p_nota, 'menunggu');
+END;
+$$;
+GRANT EXECUTE ON FUNCTION hantar_permohonan_cuti(text,text,date,date,text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION claim_preorder(p_id text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()) THEN
+    RAISE EXCEPTION 'Tidak dibenarkan';
+  END IF;
+  UPDATE pre_order SET assigned_pekerja_id = auth.uid()
+    WHERE id = p_id AND assigned_pekerja_id IS NULL;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Pre-order ini sudah diambil oleh pekerja lain (atau tidak wujud)';
+  END IF;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION claim_preorder(text) TO authenticated;
