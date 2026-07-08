@@ -709,6 +709,10 @@
       <label class="form-label">Gambar Produk (boleh pilih 2+ gambar sekali — watermark & tajam automatik)</label>
       <div id="f-stok-gambar-preview-wrap" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
       <input type="file" accept="image/*" multiple class="form-input" id="f-stok-gambar" onchange="previewGambarStok()" />
+      <div class="map-search-row" style="margin-top:8px">
+        <input type="text" class="form-input" id="f-stok-gambar-url" placeholder="Atau tampal pautan URL gambar..." />
+        <button type="button" class="btn btn-secondary btn-sm" onclick="tambahGambarUrlStok()" style="flex-shrink:0">+ Tambah</button>
+      </div>
     </div>
     <button class="btn btn-primary" onclick="saveStok()">💾 Simpan Produk</button>
   </div>
@@ -768,8 +772,15 @@
   <div class="modal-box">
     <div class="modal-title">🏪 <span id="kedai-modal-title">Daftar Kedai Baru</span><button class="modal-close" onclick="closeModal('modal-tambah-kedai')">✕ Tutup</button></div>
     <input type="hidden" id="edit-kedai-id" />
-    <div class="form-group"><label class="form-label">Nama Kedai</label><input type="text" class="form-input" id="f-kedai-nama" placeholder="cth: Kedai Runcit Pak Ali" /></div>
-    <div class="form-group"><label class="form-label">Alamat</label><input type="text" class="form-input" id="f-kedai-alamat" placeholder="Alamat penuh" /></div>
+    <div class="form-group">
+      <label class="form-label">Nama Kedai</label>
+      <div class="map-search-row">
+        <input type="text" class="form-input" id="f-kedai-nama" placeholder="cth: Kedai Runcit Pak Ali" />
+        <button type="button" class="btn btn-secondary btn-sm" onclick="cariKedaiIkutNama()" style="flex-shrink:0">🔍 Cari Lokasi</button>
+      </div>
+      <div class="map-hint">Taip nama kedai dan tekan "Cari Lokasi" — alamat akan diisi automatik dari Google Maps.</div>
+    </div>
+    <div class="form-group"><label class="form-label">Alamat</label><input type="text" class="form-input" id="f-kedai-alamat" placeholder="Alamat penuh (auto-isi selepas cari lokasi)" /></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Negeri</label>
         <select class="form-input" id="f-kedai-negeri" onchange="isiDaerahSelect()"></select>
@@ -1069,7 +1080,7 @@ async function showApp() {
 //  PAGE NAVIGATION
 // ════════════════════════════════════════════════════
 async function setPage(p) {
-  if (p==='hantar' && useCloud && !kehadiranAktif) {
+  if (p==='hantar' && useCloud && currentRole==='pekerja' && !kehadiranAktif) {
     toast('Sila Thumb In dahulu di Dashboard sebelum rekod penghantaran','err');
     p = 'dashboard';
   }
@@ -1172,10 +1183,15 @@ function renderDashboard() {
 // ════════════════════════════════════════════════════
 //  STOK
 // ════════════════════════════════════════════════════
+function jumlahTerjualStok(stokId) {
+  return DATA.transaksi.reduce((total,t)=>total+(t.items||[]).filter(it=>it.stokId===stokId).reduce((a,it)=>a+(+it.qty||0),0), 0);
+}
+
 function renderStok(q='') {
   document.getElementById('stok-admin-actions').style.display=currentRole==='pemilik'?'flex':'none';
   const isPemilik = currentRole==='pemilik';
-  const list = q ? DATA.stok.filter(s=>s.nama.toLowerCase().includes(q.toLowerCase())) : DATA.stok;
+  const semua = [...DATA.stok].sort((a,b)=>jumlahTerjualStok(b.id)-jumlahTerjualStok(a.id)); // paling laris dulu
+  const list = q ? semua.filter(s=>s.nama.toLowerCase().includes(q.toLowerCase())) : semua;
   if (isPemilik) {
     const totalModal = DATA.stok.reduce((a,s)=>a+(s.harga_beli*s.stok),0);
     document.getElementById('stok-sub').textContent = `${DATA.stok.length} produk · Nilai modal: ${fmt(totalModal)}`;
@@ -1212,15 +1228,30 @@ function renderStok(q='') {
 
   // Restock select
   const rsSel = document.getElementById('rs-produk');
-  rsSel.innerHTML = DATA.stok.map(s=>`<option value="${s.id}">${s.nama} (baki: ${s.stok})</option>`).join('');
+  rsSel.innerHTML = semua.map(s=>`<option value="${s.id}">${s.nama} (baki: ${s.stok})</option>`).join('');
 }
 
 let stokGambarUrlsSedia = [];
 let stokGambarFilesPilihan = [];
+let stokGambarUrlManual = [];
 
 function renderGambarPreviewWrap(urls) {
   const wrap = document.getElementById('f-stok-gambar-preview-wrap');
   wrap.innerHTML = urls.map(u=>`<img src="${u}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)" />`).join('');
+}
+
+function refreshGambarPreview() {
+  const asas = stokGambarFilesPilihan.length ? stokGambarFilesPilihan.map(f=>URL.createObjectURL(f)) : stokGambarUrlsSedia;
+  renderGambarPreviewWrap([...asas, ...stokGambarUrlManual]);
+}
+
+function tambahGambarUrlStok() {
+  const input = document.getElementById('f-stok-gambar-url');
+  const url = input.value.trim();
+  if (!url) return toast('Masukkan URL gambar dahulu','err');
+  stokGambarUrlManual = [...stokGambarUrlManual, url];
+  input.value = '';
+  refreshGambarPreview();
 }
 
 function bukaModalStokBaru() {
@@ -1234,7 +1265,8 @@ function bukaModalStokBaru() {
   document.getElementById('f-stok-qty').value='';
   document.getElementById('f-stok-luput').value='';
   document.getElementById('f-stok-gambar').value='';
-  stokGambarUrlsSedia = []; stokGambarFilesPilihan = [];
+  document.getElementById('f-stok-gambar-url').value='';
+  stokGambarUrlsSedia = []; stokGambarFilesPilihan = []; stokGambarUrlManual = [];
   renderGambarPreviewWrap([]);
   showModal('modal-tambah-stok');
 }
@@ -1265,8 +1297,9 @@ function editStok(id) {
   document.getElementById('f-stok-qty').value=s.stok;
   document.getElementById('f-stok-luput').value=s.tarikh_luput||'';
   document.getElementById('f-stok-gambar').value='';
+  document.getElementById('f-stok-gambar-url').value='';
   stokGambarUrlsSedia = (s.gambar_urls && s.gambar_urls.length) ? s.gambar_urls : (s.gambar_url ? [s.gambar_url] : []);
-  stokGambarFilesPilihan = [];
+  stokGambarFilesPilihan = []; stokGambarUrlManual = [];
   renderGambarPreviewWrap(stokGambarUrlsSedia);
   showModal('modal-tambah-stok');
 }
@@ -1275,7 +1308,7 @@ function previewGambarStok() {
   const files = Array.from(document.getElementById('f-stok-gambar').files || []);
   if (!files.length) return;
   stokGambarFilesPilihan = files;
-  renderGambarPreviewWrap(files.map(f=>URL.createObjectURL(f)));
+  refreshGambarPreview();
 }
 
 // ── Watermark "WAFI TIJARAH TRADING" di tengah + tajamkan imej (percuma, client-side) ──
@@ -1357,6 +1390,7 @@ async function saveStok() {
       gambarUrls.push(sb.storage.from('produk-gambar').getPublicUrl(path).data.publicUrl);
     }
   }
+  gambarUrls = [...gambarUrls, ...stokGambarUrlManual];
 
   const obj={id:stokId,nama,unit:document.getElementById('f-stok-unit').value,harga_beli:beli,harga_jual:jual,stok:qty,kategori:document.getElementById('f-stok-kat').value,tarikh_luput:document.getElementById('f-stok-luput').value||null,gambar_url:gambarUrls[0]||null,gambar_urls:gambarUrls};
   if (useCloud) {
@@ -1589,6 +1623,26 @@ async function carianAlamatPeta() {
   });
 }
 
+async function cariKedaiIkutNama() {
+  const nama = document.getElementById('f-kedai-nama').value.trim();
+  if (!nama) return toast('Masukkan nama kedai dahulu','err');
+  await initKedaiMap();
+  if (!kedaiMap) return toast('Peta belum aktif — masukkan Google Maps API key dahulu','err');
+  toast('Mencari lokasi kedai...');
+  const svc = new google.maps.places.PlacesService(kedaiMap);
+  svc.textSearch({ query: nama, region: 'my' }, (results, status) => {
+    if (status !== google.maps.places.PlacesServiceStatus.OK || !results.length) {
+      toast('Kedai tidak dijumpai di Google Maps — cuba cari alamat manual atau klik peta terus','err');
+      return;
+    }
+    const r = results[0];
+    const loc = r.geometry.location;
+    setKedaiMarker(loc.lat(), loc.lng(), true);
+    document.getElementById('f-kedai-alamat').value = r.formatted_address || '';
+    toast('Lokasi & alamat dijumpai — sahkan/laras pin di peta jika perlu');
+  });
+}
+
 async function gunakanLokasiSemasa() {
   if (!navigator.geolocation) return toast('GPS tidak disokong pelayar ini','err');
   await initKedaiMap();
@@ -1702,10 +1756,22 @@ async function rekodBayaran() {
 // ════════════════════════════════════════════════════
 let hItems=[{stokId:'',qty:1}];
 let hBayar='terus';
+let poDestinasiCache = {}; // { '_PO_<id>': po } — pre-order kedai belum berdaftar, untuk pilihan destinasi Hantar
 
 async function renderHantarSelects() {
   const sel=document.getElementById('h-kedai');
-  sel.innerHTML='<option value="">-- Pilih kedai --</option>'+DATA.kedai.filter(k=>k.status==='aktif').map(k=>`<option value="${k.id}">${k.nama} · ${k.daerah}</option>`).join('');
+  let opsiPO = '';
+  poDestinasiCache = {};
+  if (useCloud && DATA.currentUser?.id) {
+    const { data: poList } = await sb.from('pre_order').select('*').eq('assigned_pekerja_id', DATA.currentUser.id).neq('status','selesai');
+    (poList||[]).forEach(po => {
+      const sudahBerdaftar = po.kedai_id && DATA.kedai.some(k=>k.id===po.kedai_id);
+      if (sudahBerdaftar) return; // dah ada dalam senarai kedai biasa, tak perlu opsi berasingan
+      poDestinasiCache['_PO_'+po.id] = po;
+      opsiPO += `<option value="_PO_${po.id}">📦 ${esc(po.kedai_nama)} (Pre-Order)</option>`;
+    });
+  }
+  sel.innerHTML='<option value="">-- Pilih kedai --</option>'+opsiPO+DATA.kedai.filter(k=>k.status==='aktif').map(k=>`<option value="${k.id}">${k.nama} · ${k.daerah}</option>`).join('');
   if (useCloud) await loadStokBawaan();
   renderHItems();
 }
@@ -1840,9 +1906,26 @@ function setHantarTab(t) {
 }
 
 async function submitHantar() {
-  const kedaiId=document.getElementById('h-kedai').value;
+  let kedaiId=document.getElementById('h-kedai').value;
   if(!kedaiId) return toast('Sila pilih kedai','err');
   if(hItems.some(it=>!it.stokId||+it.qty<1)) return toast('Sila isi semua item','err');
+
+  // Destinasi dari pre-order yang belum berdaftar sebagai kedai — daftar automatik dahulu
+  if (kedaiId.startsWith('_PO_')) {
+    const po = poDestinasiCache[kedaiId];
+    if (!po) return toast('Pre-order ini sudah tidak sah — sila muat semula','err');
+    const kedaiObj = {
+      id: genId('K'), nama: po.kedai_nama, alamat: po.alamat || 'Alamat belum disahkan',
+      negeri: '', daerah: '', telefon: po.kedai_telefon || '',
+      lat: po.lat || null, lng: po.lng || null,
+      nota: 'Didaftarkan automatik dari Pre-Order', status: 'aktif', hutang: 0, last_visit: null,
+    };
+    const { error: kErr } = await sb.from('kedai').insert(kedaiObj);
+    if (kErr) return toast('Gagal daftar kedai dari pre-order: '+kErr.message,'err');
+    await loadData();
+    kedaiId = kedaiObj.id;
+    toast(`Kedai "${po.kedai_nama}" berjaya didaftarkan automatik`);
+  }
   for(const it of hItems){
     const s=DATA.stok.find(s=>s.id===it.stokId);
     if(!s||bakiUntukHantar(s)<+it.qty) return toast(`Stok ${s?.nama||'?'} tidak mencukupi (baki bawaan: ${s?bakiUntukHantar(s):0})`,'err');
@@ -1891,6 +1974,12 @@ async function submitHantar() {
   document.getElementById('h-kedai').value='';
   document.getElementById('h-nota').value='';
   renderHItems();
+
+  // Terus bawa ke ruangan Jana & Cetak Resit supaya boleh terus hantar kepada kedai
+  await setPage('lebih');
+  document.getElementById('resit-sel').value = trx.id;
+  await renderResit(trx.id);
+  document.getElementById('resit-preview').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 function renderSejarah(kedaiId='') {
@@ -2763,10 +2852,10 @@ async function renderKehadiranStatus() {
     btnOut.style.display = '';
     if (navHantar) navHantar.style.opacity = '';
   } else {
-    statusEl.textContent = 'Anda belum mula kerja hari ini — Thumb In dahulu untuk buka tab Hantar';
+    statusEl.textContent = currentRole==='pemilik' ? 'Anda belum mula kerja hari ini' : 'Anda belum mula kerja hari ini — Thumb In dahulu untuk buka tab Hantar';
     btnIn.style.display = '';
     btnOut.style.display = 'none';
-    if (navHantar) navHantar.style.opacity = '0.4';
+    if (navHantar) navHantar.style.opacity = currentRole==='pemilik' ? '' : '0.4';
   }
 }
 

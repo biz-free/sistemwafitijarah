@@ -458,3 +458,8 @@ CREATE POLICY "pemilik padam stok_pekerja" ON stok_pekerja FOR DELETE USING (is_
 -- Pekerja: bilangan pre-order "baru" yang belum ditugaskan
 -- (Dikira terus di client bila diperlukan — tiada perubahan skema untuk ini)
 -- (Gambar berbilang & jumlah_terjual sudah termasuk dalam senarai_produk_awam versi ini)
+
+-- ═══ Alamat & lokasi GPS pre-order (pembeli cari lokasi kedai sendiri di borang awam) ═══
+ALTER TABLE pre_order ADD COLUMN IF NOT EXISTS alamat text;
+ALTER TABLE pre_order ADD COLUMN IF NOT EXISTS lat float8;
+ALTER TABLE pre_order ADD COLUMN IF NOT EXISTS lng float8;

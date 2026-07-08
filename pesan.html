@@ -27,6 +27,10 @@
     .form-label { font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.4px; }
     .form-input { width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;outline:none;background:#FAFCFE;color:var(--text); }
     textarea.form-input { resize:none;height:60px; }
+    .map-search-row { display:flex;gap:8px;margin-bottom:8px; }
+    .map-search-row input { flex:1; }
+    #po-map { height:180px;border-radius:12px;border:1.5px solid var(--border);margin-bottom:6px; }
+    .map-hint { font-size:11px;color:var(--muted);margin-bottom:12px; }
     .btn { padding:13px 20px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;width:100%; }
     .btn-outline { background:transparent;border:1.5px dashed var(--teal);color:var(--teal); }
     .btn-primary { background:linear-gradient(135deg,var(--teal),var(--teal2));color:#fff;margin-top:6px; }
@@ -63,7 +67,7 @@
     /* ── DISKAUN BANNER ── */
     .diskaun-banner { background:linear-gradient(135deg,#FFF8E6,#FFF0CC);border:1.5px solid var(--gold);border-radius:12px;padding:14px;margin-bottom:14px; }
     .diskaun-banner .tajuk { font-weight:800;color:var(--navy);font-size:14px;margin-bottom:4px; }
-    .diskaun-banner img { max-width:160px;display:block;margin:10px auto;border-radius:8px; }
+    .diskaun-banner img { max-width:260px;width:100%;display:block;margin:10px auto;border-radius:10px;background:#fff;padding:10px;border:1px solid var(--border);image-rendering:-webkit-optimize-contrast; }
     .bayar-toggle { display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px; }
     .bayar-opt { padding:10px 6px;border:2px solid var(--border);border-radius:10px;cursor:pointer;font-weight:700;font-size:11px;text-align:center;background:#fff; }
     .bayar-opt.aktif { border-color:var(--green);color:var(--green);background:#1D7A4A14; }
@@ -72,8 +76,8 @@
 
     /* ── BANNER PROMOSI BERGERAK (sticky, kekal semasa scroll produk) ── */
     .promo-banner { position:sticky;top:0;z-index:50;height:36px;overflow:hidden;background:linear-gradient(90deg,#FFD873,var(--gold));border-radius:10px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1); }
-    .promo-track { position:absolute;left:-100%;top:0;white-space:nowrap;color:var(--navy);font-weight:800;font-size:13px;line-height:36px;animation:promo-move 11s linear infinite; }
-    @keyframes promo-move { from{left:-100%;} to{left:100%;} }
+    .promo-track { position:absolute;left:100%;top:0;white-space:nowrap;color:var(--navy);font-weight:800;font-size:13px;line-height:36px;animation:promo-move 11s linear infinite; }
+    @keyframes promo-move { from{left:100%;} to{left:-100%;} }
 
     /* ── LIGHTBOX GAMBAR (zoom) ── */
     .produk-img { cursor:zoom-in; }
@@ -145,11 +149,22 @@
       <div class="section-title">📋 Maklumat Kedai</div>
       <div class="form-group">
         <label class="form-label">Nama Kedai</label>
-        <input type="text" class="form-input" id="p-nama" placeholder="cth: Kedai Runcit Pak Ali" />
+        <div class="map-search-row">
+          <input type="text" class="form-input" id="p-nama" placeholder="cth: Kedai Runcit Pak Ali" />
+          <button type="button" class="form-input" style="width:auto;background:var(--teal);color:#fff;border:none;font-weight:700;font-size:12px;flex-shrink:0" onclick="cariLokasiKedaiPO()">🔍 Cari</button>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">No. Telefon Kedai</label>
         <input type="tel" class="form-input" id="p-tel" placeholder="01x-xxxxxxx" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">📍 Alamat Kedai (auto-isi selepas cari, boleh laras)</label>
+        <textarea class="form-input" id="p-alamat" placeholder="Taip nama kedai di atas dan tekan Cari"></textarea>
+        <div id="po-map"></div>
+        <div class="map-hint">Klik/seret pin di peta untuk laras lokasi jika perlu.</div>
+        <input type="hidden" id="p-lat" />
+        <input type="hidden" id="p-lng" />
       </div>
       <div class="form-group">
         <label class="form-label">Nota (cth: minta hantar hari Jumaat)</label>
@@ -192,6 +207,69 @@ const SUPABASE_URL = 'https://smepriytkoxkmpvjvvzq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtZXByaXl0a294a21wdmp2dnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzODE1OTcsImV4cCI6MjA5ODk1NzU5N30.bLDjFNZ_gMm9ufCkA4TeFbw1rysuLnlQN-qW_WW0zr8';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ── Google Maps (carian lokasi kedai ikut nama) ──
+const GOOGLE_MAPS_API_KEY = 'AIzaSyCsxv1gL53nEAs-qf__w13GpeyIyUAHqws';
+let googleMapsLoadPromise = null;
+function isGoogleMapsDikonfigur() { return GOOGLE_MAPS_API_KEY !== 'YOUR_GOOGLE_MAPS_API_KEY'; }
+function muatkanGoogleMaps() {
+  if (!isGoogleMapsDikonfigur()) return Promise.reject(new Error('Google Maps API key belum ditetapkan'));
+  if (googleMapsLoadPromise) return googleMapsLoadPromise;
+  googleMapsLoadPromise = new Promise((resolve, reject) => {
+    window.onGoogleMapsReadyPO = () => resolve();
+    const s = document.createElement('script');
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async&callback=onGoogleMapsReadyPO`;
+    s.async = true; s.defer = true;
+    s.onerror = () => reject(new Error('Gagal muat Google Maps'));
+    document.head.appendChild(s);
+  });
+  return googleMapsLoadPromise;
+}
+let poMap = null, poMarker = null;
+const PO_PUSAT_DEFAULT = { lat:5.15, lng:100.85 };
+async function initPoMap() {
+  if (poMap) return;
+  const el = document.getElementById('po-map');
+  if (!isGoogleMapsDikonfigur()) { el.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px">📍 Peta belum aktif</div>'; return; }
+  try { await muatkanGoogleMaps(); } catch(e) { el.innerHTML = `<div style="padding:14px;text-align:center;color:var(--red);font-size:12px">${esc(e.message)}</div>`; return; }
+  poMap = new google.maps.Map(el, { center: PO_PUSAT_DEFAULT, zoom: 8 });
+  poMarker = new google.maps.Marker({ position: PO_PUSAT_DEFAULT, map: poMap, draggable: true });
+  poMarker.addListener('dragend', () => {
+    const p = poMarker.getPosition();
+    document.getElementById('p-lat').value = p.lat().toFixed(6);
+    document.getElementById('p-lng').value = p.lng().toFixed(6);
+  });
+  poMap.addListener('click', e => setPoMarker(e.latLng.lat(), e.latLng.lng(), true));
+}
+async function setPoMarker(lat, lng, panTo) {
+  await initPoMap();
+  if (!poMap) return;
+  document.getElementById('p-lat').value = (+lat).toFixed(6);
+  document.getElementById('p-lng').value = (+lng).toFixed(6);
+  const pos = { lat:+lat, lng:+lng };
+  poMarker.setPosition(pos);
+  if (panTo) { poMap.setCenter(pos); poMap.setZoom(15); }
+  google.maps.event.trigger(poMap, 'resize');
+}
+async function cariLokasiKedaiPO() {
+  const nama = document.getElementById('p-nama').value.trim();
+  if (!nama) return toast('Taip nama kedai dahulu','err');
+  await initPoMap();
+  if (!poMap) return toast('Peta belum aktif buat masa ini','err');
+  toast('Mencari lokasi kedai...');
+  const svc = new google.maps.places.PlacesService(poMap);
+  svc.textSearch({ query: nama, region: 'my' }, (results, status) => {
+    if (status !== google.maps.places.PlacesServiceStatus.OK || !results.length) {
+      toast('Kedai tidak dijumpai — sila klik peta untuk tanda lokasi manual','err');
+      return;
+    }
+    const r = results[0];
+    const loc = r.geometry.location;
+    setPoMarker(loc.lat(), loc.lng(), true);
+    document.getElementById('p-alamat').value = r.formatted_address || '';
+    toast('Lokasi & alamat dijumpai — laras pin jika perlu');
+  });
+}
+
 const fmt = n => 'RM ' + Number(n||0).toFixed(2);
 const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function toast(msg, type='ok') {
@@ -220,6 +298,7 @@ async function initHalaman() {
   document.getElementById('kiraan-diskaun-peratus').textContent = TETAPAN.diskaun_peratus;
   document.getElementById('promo-track').textContent = `PROMOSI POTONGAN ${TETAPAN.diskaun_peratus}%, JIKA ANDA BELI MINIMA ${fmt(TETAPAN.minima_transfer)} DARI SISTEM INI (INSTANT TRANSFER/QR)`;
   renderProdukGrid();
+  initPoMap();
 
   if (kedaiIdDariQR) {
     const { data: kedai } = await sb.rpc('maklumat_kedai_awam', { p_id: kedaiIdDariQR });
@@ -359,6 +438,9 @@ async function hantarPesanan() {
     kedai_id: kedaiIdDariQR || null,
     kedai_nama: nama,
     kedai_telefon: tel,
+    alamat: document.getElementById('p-alamat').value.trim() || null,
+    lat: +document.getElementById('p-lat').value || null,
+    lng: +document.getElementById('p-lng').value || null,
     items: entries.map(([id,qty])=>{ const p=PRODUK.find(p=>p.id===id); return { stokId:id, nama:p?.nama||'?', unit:p?.unit||'', qty }; }),
     nota, status: 'baru',
     bayar_metod: bayarMetod,
