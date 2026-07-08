@@ -1631,10 +1631,10 @@ async function cariKedaiIkutNama() {
   toast('Mencari lokasi kedai...');
   const svc = new google.maps.places.PlacesService(kedaiMap);
   svc.textSearch({ query: nama, region: 'my' }, (results, status) => {
-    if (status !== google.maps.places.PlacesServiceStatus.OK || !results.length) {
-      toast('Kedai tidak dijumpai di Google Maps — cuba cari alamat manual atau klik peta terus','err');
-      return;
-    }
+    console.log('Places textSearch status:', status);
+    if (status === 'ZERO_RESULTS') { toast('Kedai tidak dijumpai — cuba cari alamat manual atau klik peta terus','err'); return; }
+    if (status === 'REQUEST_DENIED') { toast('Places API tidak dibenarkan untuk key ini — semak Google Cloud Console (status: '+status+')','err'); return; }
+    if (status !== 'OK' || !results.length) { toast('Carian gagal (status: '+status+')','err'); return; }
     const r = results[0];
     const loc = r.geometry.location;
     setKedaiMarker(loc.lat(), loc.lng(), true);
