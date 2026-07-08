@@ -256,18 +256,18 @@ async function cariLokasiKedaiPO() {
   await initPoMap();
   if (!poMap) return toast('Peta belum aktif buat masa ini','err');
   toast('Mencari lokasi kedai...');
-  const svc = new google.maps.places.PlacesService(poMap);
-  svc.textSearch({ query: nama, region: 'my' }, (results, status) => {
-    console.log('Places textSearch status:', status);
-    if (status === 'ZERO_RESULTS') { toast('Kedai tidak dijumpai — sila klik peta untuk tanda lokasi manual','err'); return; }
-    if (status === 'REQUEST_DENIED') { toast('Places API tidak dibenarkan untuk key ini (status: '+status+')','err'); return; }
-    if (status !== 'OK' || !results.length) { toast('Carian gagal (status: '+status+')','err'); return; }
-    const r = results[0];
-    const loc = r.geometry.location;
-    setPoMarker(loc.lat(), loc.lng(), true);
-    document.getElementById('p-alamat').value = r.formatted_address || '';
+  try {
+    const { Place } = await google.maps.importLibrary('places');
+    const { places } = await Place.searchByText({ textQuery: nama, fields: ['displayName','formattedAddress','location'], region: 'my', maxResultCount: 1 });
+    if (!places || !places.length) { toast('Kedai tidak dijumpai — sila klik peta untuk tanda lokasi manual','err'); return; }
+    const r = places[0];
+    setPoMarker(r.location.lat(), r.location.lng(), true);
+    document.getElementById('p-alamat').value = r.formattedAddress || '';
     toast('Lokasi & alamat dijumpai — laras pin jika perlu');
-  });
+  } catch (e) {
+    console.log('Places searchByText error:', e);
+    toast('Carian gagal: '+e.message,'err');
+  }
 }
 
 const fmt = n => 'RM ' + Number(n||0).toFixed(2);
