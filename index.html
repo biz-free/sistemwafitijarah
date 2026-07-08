@@ -1579,7 +1579,10 @@ async function carianAlamatPeta() {
   await initKedaiMap();
   if (!kedaiMap || !googleGeocoder) return toast('Peta belum aktif — masukkan Google Maps API key dahulu','err');
   googleGeocoder.geocode({ address: q, region: 'my' }, (results, status) => {
-    if (status !== 'OK' || !results.length) { toast('Alamat tidak dijumpai, cuba kata kunci lain','err'); return; }
+    if (status === 'ZERO_RESULTS') { toast('Alamat tidak dijumpai, cuba kata kunci lain','err'); return; }
+    if (status === 'REQUEST_DENIED') { toast('Geocoding API tidak aktif/dibenarkan untuk key ini — aktifkan "Geocoding API" dalam Google Cloud Console','err'); return; }
+    if (status === 'OVER_QUERY_LIMIT') { toast('Had carian API tercapai, cuba sebentar lagi','err'); return; }
+    if (status !== 'OK' || !results.length) { toast('Carian gagal ('+status+')','err'); return; }
     const loc = results[0].geometry.location;
     setKedaiMarker(loc.lat(), loc.lng(), true);
     toast('Lokasi dijumpai — laras pin jika perlu');
