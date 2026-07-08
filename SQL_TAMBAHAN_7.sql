@@ -56,7 +56,8 @@ GRANT EXECUTE ON FUNCTION tugaskan_preorder(text, uuid) TO authenticated;
 -- ═══ Gambar produk berbilang (galeri) ═══
 ALTER TABLE stok ADD COLUMN IF NOT EXISTS gambar_urls jsonb DEFAULT '[]';
 
-CREATE OR REPLACE FUNCTION senarai_produk_awam()
+DROP FUNCTION IF EXISTS senarai_produk_awam();
+CREATE FUNCTION senarai_produk_awam()
 RETURNS TABLE(id text, nama text, unit text, harga_jual float, kategori text, gambar_url text, gambar_urls jsonb, jumlah_terjual bigint)
 LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
   SELECT s.id, s.nama, s.unit, s.harga_jual, s.kategori, s.gambar_url, s.gambar_urls,
@@ -66,12 +67,19 @@ $$;
 GRANT EXECUTE ON FUNCTION senarai_produk_awam() TO anon, authenticated;
 
 -- ═══ Padam data (pemilik sahaja) ═══
+DROP POLICY IF EXISTS "pemilik padam stok" ON stok;
 CREATE POLICY "pemilik padam stok" ON stok FOR DELETE USING (is_pemilik());
+DROP POLICY IF EXISTS "pemilik padam kedai" ON kedai;
 CREATE POLICY "pemilik padam kedai" ON kedai FOR DELETE USING (is_pemilik());
+DROP POLICY IF EXISTS "pemilik padam transaksi" ON transaksi;
 CREATE POLICY "pemilik padam transaksi" ON transaksi FOR DELETE USING (is_pemilik());
+DROP POLICY IF EXISTS "pemilik padam pre_order" ON pre_order;
 CREATE POLICY "pemilik padam pre_order" ON pre_order FOR DELETE USING (is_pemilik());
+DROP POLICY IF EXISTS "pemilik padam kehadiran" ON kehadiran;
 CREATE POLICY "pemilik padam kehadiran" ON kehadiran FOR DELETE USING (is_pemilik());
+DROP POLICY IF EXISTS "pemilik padam permohonan_cuti" ON permohonan_cuti;
 CREATE POLICY "pemilik padam permohonan_cuti" ON permohonan_cuti FOR DELETE USING (is_pemilik());
+DROP POLICY IF EXISTS "pemilik padam stok_pekerja" ON stok_pekerja;
 CREATE POLICY "pemilik padam stok_pekerja" ON stok_pekerja FOR DELETE USING (is_pemilik());
 
 -- ═══ Notifikasi ringkas — kiraan siap (tiada jadual baharu, kira terus dari data sedia ada) ═══
