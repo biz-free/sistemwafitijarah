@@ -64,14 +64,26 @@
     .diskaun-banner { background:linear-gradient(135deg,#FFF8E6,#FFF0CC);border:1.5px solid var(--gold);border-radius:12px;padding:14px;margin-bottom:14px; }
     .diskaun-banner .tajuk { font-weight:800;color:var(--navy);font-size:14px;margin-bottom:4px; }
     .diskaun-banner img { max-width:160px;display:block;margin:10px auto;border-radius:8px; }
-    .bayar-toggle { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px; }
-    .bayar-opt { padding:10px;border:2px solid var(--border);border-radius:10px;cursor:pointer;font-weight:700;font-size:12px;text-align:center;background:#fff; }
+    .bayar-toggle { display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px; }
+    .bayar-opt { padding:10px 6px;border:2px solid var(--border);border-radius:10px;cursor:pointer;font-weight:700;font-size:11px;text-align:center;background:#fff; }
     .bayar-opt.aktif { border-color:var(--green);color:var(--green);background:#1D7A4A14; }
+    .kiraan-row { display:flex;justify-content:space-between;font-size:13px;padding:4px 0; }
+    .kiraan-row.jumlah { font-weight:800;font-size:15px;border-top:1px solid var(--border);margin-top:6px;padding-top:8px; }
 
     /* ── BANNER PROMOSI BERGERAK (sticky, kekal semasa scroll produk) ── */
     .promo-banner { position:sticky;top:0;z-index:50;height:36px;overflow:hidden;background:linear-gradient(90deg,#FFD873,var(--gold));border-radius:10px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1); }
     .promo-track { position:absolute;left:-100%;top:0;white-space:nowrap;color:var(--navy);font-weight:800;font-size:13px;line-height:36px;animation:promo-move 11s linear infinite; }
     @keyframes promo-move { from{left:-100%;} to{left:100%;} }
+
+    /* ── LIGHTBOX GAMBAR (zoom) ── */
+    .produk-img { cursor:zoom-in; }
+    #lightbox { position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9998;display:none;align-items:center;justify-content:center;flex-direction:column;padding:20px; }
+    #lightbox.show { display:flex; }
+    #lightbox img { max-width:100%;max-height:70vh;border-radius:10px;transform:scale(0.9);transition:transform 0.25s;object-fit:contain; }
+    #lightbox img.zoomed { transform:scale(1.08); }
+    #lightbox .lb-close { position:absolute;top:16px;right:16px;background:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:16px;font-weight:800;cursor:pointer; }
+    #lightbox .lb-nav { display:flex;gap:16px;margin-top:16px; }
+    #lightbox .lb-nav button { background:#fff;border:none;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer; }
   </style>
 </head>
 <body>
@@ -93,32 +105,39 @@
       <div id="produk-grid" class="produk-grid"></div>
     </div>
 
-    <div class="card" id="diskaun-card" style="display:none">
-      <div class="diskaun-banner">
-        <div class="tajuk">🎉 Anda layak diskaun <span id="dk-peratus">5</span>%!</div>
-        <div style="font-size:12px;color:var(--muted)">Bayar terus via Online Transfer untuk elak hutang & dapat diskaun serta-merta.</div>
-        <div class="bayar-toggle">
-          <div class="bayar-opt" id="opt-cod" onclick="setBayarMetod('cod')">🚚 Bayar Bila Terima (COD)</div>
-          <div class="bayar-opt" id="opt-transfer" onclick="setBayarMetod('transfer')">🏦 Online Transfer (Diskaun)</div>
+    <div class="card">
+      <div class="section-title">💳 Kaedah Bayaran</div>
+      <div class="bayar-toggle">
+        <div class="bayar-opt aktif" id="opt-cod" onclick="setBayarMetod('cod')">🚚 COD (Bayar Bila Terima)</div>
+        <div class="bayar-opt" id="opt-transfer" onclick="setBayarMetod('transfer')">🏦 Online Transfer</div>
+        <div class="bayar-opt" id="opt-consignment" onclick="setBayarMetod('consignment')">🤝 Consignment</div>
+      </div>
+      <div id="diskaun-info" style="display:none;margin-top:12px">
+        <div class="diskaun-banner" style="margin-bottom:0">
+          <div class="tajuk">🎉 Anda layak diskaun <span id="dk-peratus">5</span>%!</div>
+          <div style="font-size:12px;color:var(--muted)">Bayar terus via Online Transfer untuk elak hutang & dapat diskaun serta-merta.</div>
+          <div id="bank-info" style="margin-top:10px">
+            <div style="text-align:center">
+              <img id="bank-qr-img" src="" alt="QR Bank" />
+              <div id="bank-butiran" style="font-size:12px;white-space:pre-line"></div>
+            </div>
+            <div class="form-group" style="margin-top:12px">
+              <label class="form-label">Tarikh Transaksi Transfer</label>
+              <input type="date" class="form-input" id="p-bayar-tarikh" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Masa Transaksi Transfer</label>
+              <input type="time" class="form-input" id="p-bayar-masa" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Muat Naik Bukti Pindahan (screenshot resit bank)</label>
+              <input type="file" accept="image/*" class="form-input" id="p-bukti-bayaran" />
+            </div>
+          </div>
         </div>
-        <div id="bank-info" style="display:none;margin-top:10px">
-          <div style="text-align:center">
-            <img id="bank-qr-img" src="" alt="QR Bank" />
-            <div id="bank-butiran" style="font-size:12px;white-space:pre-line"></div>
-          </div>
-          <div class="form-group" style="margin-top:12px">
-            <label class="form-label">Tarikh Transaksi Transfer</label>
-            <input type="date" class="form-input" id="p-bayar-tarikh" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Masa Transaksi Transfer</label>
-            <input type="time" class="form-input" id="p-bayar-masa" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Muat Naik Bukti Pindahan (screenshot resit bank)</label>
-            <input type="file" accept="image/*" class="form-input" id="p-bukti-bayaran" />
-          </div>
-        </div>
+      </div>
+      <div id="consignment-info" style="display:none;margin-top:12px;font-size:12px;color:var(--muted);background:#F5F0FF;border:1px solid var(--purple, #6B4EAF);border-radius:10px;padding:12px">
+        🤝 Barang akan dihantar dahulu, kedai bayar selepas barang habis dijual. Pihak kami akan hubungi kedai untuk perincian consignment.
       </div>
     </div>
 
@@ -136,8 +155,10 @@
         <label class="form-label">Nota (cth: minta hantar hari Jumaat)</label>
         <textarea class="form-input" id="p-nota" placeholder="Nota tambahan..."></textarea>
       </div>
-      <div class="form-group" style="display:flex;justify-content:space-between;font-size:14px;font-weight:800">
-        <span>JUMLAH:</span><span id="grand-total" style="color:var(--teal)">RM 0.00</span>
+      <div id="kiraan-jelas">
+        <div class="kiraan-row"><span>Subjumlah</span><span id="kiraan-subtotal">RM 0.00</span></div>
+        <div class="kiraan-row" id="kiraan-diskaun-row" style="display:none;color:var(--green)"><span>Diskaun (<span id="kiraan-diskaun-peratus">5</span>%)</span><span id="kiraan-diskaun-nilai">-RM 0.00</span></div>
+        <div class="kiraan-row jumlah"><span>JUMLAH AKHIR</span><span id="grand-total" style="color:var(--teal)">RM 0.00</span></div>
       </div>
       <button class="btn btn-primary" onclick="hantarPesanan()">📦 Hantar Pesanan</button>
     </div>
@@ -153,6 +174,15 @@
 <div id="cart-bar">
   <div class="cart-info">🛒 <span id="cart-count">0</span> jenis barang</div>
   <div class="cart-total" id="cart-total">RM 0.00</div>
+</div>
+
+<div id="lightbox">
+  <button class="lb-close" onclick="tutupLightbox()">✕</button>
+  <img id="lb-img" onclick="this.classList.toggle('zoomed')" />
+  <div class="lb-nav" id="lb-nav" style="display:none">
+    <button onclick="gambarSeterusnya(-1)">‹ Sebelum</button>
+    <button onclick="gambarSeterusnya(1)">Lepas ›</button>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -184,10 +214,11 @@ async function initHalaman() {
     sb.from('tetapan').select('*').eq('id', 1).single(),
   ]);
   if (e1) toast('Gagal muat senarai produk — sila cuba lagi kemudian','err');
-  PRODUK = produk || [];
+  PRODUK = (produk || []).sort((a,b)=>(b.jumlah_terjual||0)-(a.jumlah_terjual||0)); // paling laris dulu
   if (!e2 && tetapan) TETAPAN = tetapan;
   document.getElementById('dk-peratus').textContent = TETAPAN.diskaun_peratus;
-  document.getElementById('promo-track').textContent = `🎉 Beli lebih ${fmt(TETAPAN.minima_transfer)}, layak diskaun ${TETAPAN.diskaun_peratus}%! Bayar Online Transfer untuk elak hutang!`;
+  document.getElementById('kiraan-diskaun-peratus').textContent = TETAPAN.diskaun_peratus;
+  document.getElementById('promo-track').textContent = `PROMOSI POTONGAN ${TETAPAN.diskaun_peratus}%, JIKA ANDA BELI MINIMA ${fmt(TETAPAN.minima_transfer)} DARI SISTEM INI (INSTANT TRANSFER/QR)`;
   renderProdukGrid();
 
   if (kedaiIdDariQR) {
@@ -201,12 +232,19 @@ async function initHalaman() {
   }
 }
 
+function gambarProduk(p) {
+  if (p.gambar_urls && p.gambar_urls.length) return p.gambar_urls;
+  if (p.gambar_url) return [p.gambar_url];
+  return [];
+}
+
 function renderProdukGrid() {
   document.getElementById('produk-grid').innerHTML = PRODUK.map(p=>{
     const qty = cart[p.id] || 0;
+    const gambar = gambarProduk(p);
     return `<div class="produk-card ${qty>0?'dipilih':''}">
-      ${p.gambar_url
-        ? `<img class="produk-img" src="${esc(p.gambar_url)}" alt="${esc(p.nama)}" />`
+      ${gambar.length
+        ? `<img class="produk-img" src="${esc(gambar[0])}" alt="${esc(p.nama)}" onclick="bukaLightbox('${p.id}')" />`
         : `<div class="produk-img">📦</div>`}
       <div class="produk-info">
         <div class="produk-nama">${esc(p.nama)}</div>
@@ -222,6 +260,27 @@ function renderProdukGrid() {
   kemaskiniTotal();
 }
 
+// ── Lightbox galeri (tekan gambar untuk zoom, boleh ada 2+ gambar) ──
+let lbGambar = [], lbIndex = 0;
+function bukaLightbox(produkId) {
+  const p = PRODUK.find(p=>p.id===produkId); if (!p) return;
+  lbGambar = gambarProduk(p);
+  if (!lbGambar.length) return;
+  lbIndex = 0;
+  document.getElementById('lb-img').src = lbGambar[0];
+  document.getElementById('lb-img').className = '';
+  document.getElementById('lb-nav').style.display = lbGambar.length>1 ? 'flex' : 'none';
+  document.getElementById('lightbox').classList.add('show');
+}
+function gambarSeterusnya(delta) {
+  lbIndex = (lbIndex + delta + lbGambar.length) % lbGambar.length;
+  document.getElementById('lb-img').src = lbGambar[lbIndex];
+  document.getElementById('lb-img').className = '';
+}
+function tutupLightbox() {
+  document.getElementById('lightbox').classList.remove('show');
+}
+
 function ubahQty(id, delta) {
   cart[id] = Math.max(0, (cart[id]||0) + delta);
   if (cart[id] === 0) delete cart[id];
@@ -232,32 +291,41 @@ function subtotal() {
   return Object.entries(cart).reduce((a,[id,qty])=>{ const p=PRODUK.find(p=>p.id===id); return a+(p?p.harga_jual*qty:0); },0);
 }
 
+function layakDiskaunSemasa() {
+  return bayarMetod === 'transfer' && subtotal() >= TETAPAN.minima_transfer;
+}
+
 function kemaskiniTotal() {
   const tot = subtotal();
   const count = Object.keys(cart).length;
   document.getElementById('cart-count').textContent = count;
   document.getElementById('cart-total').textContent = fmt(tot);
   document.getElementById('cart-bar').className = count ? 'show' : '';
-  document.getElementById('grand-total').textContent = fmt(tot);
 
-  const layakDiskaun = tot >= TETAPAN.minima_transfer;
-  document.getElementById('diskaun-card').style.display = layakDiskaun ? 'block' : 'none';
-  if (!layakDiskaun) { bayarMetod = 'cod'; }
+  const layak = layakDiskaunSemasa();
+  const diskaunNilai = layak ? tot * TETAPAN.diskaun_peratus/100 : 0;
+  document.getElementById('kiraan-subtotal').textContent = fmt(tot);
+  document.getElementById('kiraan-diskaun-row').style.display = layak ? 'flex' : 'none';
+  document.getElementById('kiraan-diskaun-nilai').textContent = '-'+fmt(diskaunNilai);
+  document.getElementById('grand-total').textContent = fmt(tot - diskaunNilai);
+
+  const tajukEl = document.querySelector('#diskaun-info .tajuk');
+  if (tajukEl) tajukEl.style.opacity = layak ? '1' : '0.4';
 }
 
 function setBayarMetod(m) {
   bayarMetod = m;
   document.getElementById('opt-cod').className = 'bayar-opt' + (m==='cod'?' aktif':'');
   document.getElementById('opt-transfer').className = 'bayar-opt' + (m==='transfer'?' aktif':'');
-  const bankInfo = document.getElementById('bank-info');
+  document.getElementById('opt-consignment').className = 'bayar-opt' + (m==='consignment'?' aktif':'');
+  document.getElementById('diskaun-info').style.display = m==='transfer' ? 'block' : 'none';
+  document.getElementById('consignment-info').style.display = m==='consignment' ? 'block' : 'none';
   if (m === 'transfer') {
-    bankInfo.style.display = 'block';
     document.getElementById('bank-qr-img').src = TETAPAN.qr_bank_url || '';
     document.getElementById('bank-qr-img').style.display = TETAPAN.qr_bank_url ? '' : 'none';
     document.getElementById('bank-butiran').textContent = TETAPAN.butiran_bank || 'Sila hubungi kami untuk butiran akaun bank.';
-  } else {
-    bankInfo.style.display = 'none';
   }
+  kemaskiniTotal();
 }
 
 async function hantarPesanan() {

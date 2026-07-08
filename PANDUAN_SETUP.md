@@ -12,8 +12,24 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 3. `SQL_TAMBAHAN_3.sql` — Reset Kata Laluan, Thumb In/Out & Jejak GPS (perlu deploy Edge Function juga — lihat bahagian "Reset Kata Laluan Pekerja" di bawah)
 > 4. `SQL_TAMBAHAN_4.sql` — Gambar produk, QR Pre-Order pada resit & diskaun Online Transfer (perlu cipta Storage bucket `produk-gambar` dahulu)
 > 5. `SQL_TAMBAHAN_5.sql` — Stok ikut pekerja, tugasan pre-order, cuti/status pekerja, profil sendiri, bukti bayaran transfer (perlu cipta Storage bucket `bukti-bayaran` dahulu — **Public bucket: OFF**, data sensitif)
+> 6. `SQL_TAMBAHAN_6.sql` — Baiki ralat "row violates RLS" pada Mohon Cuti & isu claim pre-order salah
+> 7. `SQL_TAMBAHAN_7.sql` — Tempoh tugasan pre-order (auto-pulang lepas 1 hari), padam data, gambar berbilang, tugaskan pekerja oleh pemilik
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
+
+### 🗺️ Google Maps (menggantikan OpenStreetMap)
+
+Sistem kini guna **Google Maps** untuk peta pilih lokasi kedai, peta servis, dan lokasi live pekerja. Anda perlu API key sendiri:
+
+1. Pergi **console.cloud.google.com** → cipta project baharu (atau guna sedia ada)
+2. Aktifkan **Billing** (perlu kad kredit — Google beri free tier ~$200/bulan percuma, cukup untuk perniagaan kecil)
+3. Pergi **APIs & Services → Library** → aktifkan **"Maps JavaScript API"** dan **"Geocoding API"**
+4. Pergi **APIs & Services → Credentials** → **Create Credentials → API Key**
+5. (Disyorkan) Sekat key tersebut kepada domain `biz-free.github.io/*` sahaja (API Key → Application restrictions → HTTP referrers)
+6. Buka fail `index.html`, cari `const GOOGLE_MAPS_API_KEY = 'YOUR_GOOGLE_MAPS_API_KEY';`, ganti dengan key sebenar anda
+7. Upload semula ke GitHub
+
+> 💡 Pautan "Lihat di Google Maps" pada kad kedai **tidak perlukan API key** — ia buka terus aplikasi/laman Google Maps di peranti pekerja sendiri. Hanya peta INTERAKTIF (pilih lokasi, peta servis, lokasi live) yang perlukan API key.
 
 ## 📱 Cara Install Apps ke Phone (APK / PWA)
 
