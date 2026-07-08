@@ -785,6 +785,7 @@
       <div class="map-search-row">
         <input type="text" class="form-input" id="map-search" placeholder="Cari alamat/bandar..." />
         <button type="button" class="btn btn-secondary btn-sm" onclick="carianAlamatPeta()" style="flex-shrink:0">🔍 Cari</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="gunakanLokasiSemasa()" style="flex-shrink:0" title="Guna lokasi GPS semasa saya">📍 Lokasi Saya</button>
       </div>
       <div id="kedai-map"></div>
       <div class="map-hint">Pin akan letak di lokasi carian, atau klik/seret terus di peta.</div>
@@ -1583,6 +1584,18 @@ async function carianAlamatPeta() {
     setKedaiMarker(loc.lat(), loc.lng(), true);
     toast('Lokasi dijumpai — laras pin jika perlu');
   });
+}
+
+async function gunakanLokasiSemasa() {
+  if (!navigator.geolocation) return toast('GPS tidak disokong pelayar ini','err');
+  await initKedaiMap();
+  if (!kedaiMap) return toast('Peta belum aktif — masukkan Google Maps API key dahulu','err');
+  toast('Mengesan lokasi GPS anda...');
+  navigator.geolocation.getCurrentPosition(
+    pos => { setKedaiMarker(pos.coords.latitude, pos.coords.longitude, true); toast('Pin diletak di lokasi GPS anda'); },
+    err => toast('Gagal dapatkan lokasi: '+err.message,'err'),
+    { enableHighAccuracy:true, timeout:10000 }
+  );
 }
 
 async function bukaModalKedaiBaru() {
