@@ -27,7 +27,7 @@
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #EEF2F5; color: #182530; min-height: 100vh; overflow-x: hidden; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #EEF2F5; color: #182530; min-height: 100vh; overflow-x: hidden; zoom: 1.05; }
     :root {
       --navy: #0D2137; --teal: #0E7C7B; --teal2: #14A3A2;
       --gold: #C8922A; --gold2: #E8B84B; --red: #C0392B;
@@ -127,7 +127,7 @@
     .badge-muted { background:#607D8B1A;color:var(--muted); }
 
     /* ── LIST ITEMS ── */
-    .list-item { padding:12px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:10px; }
+    .list-item { position:relative;padding:12px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:10px; }
     .list-item:last-child { border-bottom:none;padding-bottom:0; }
     .list-item-title { font-weight:700;font-size:13px; }
     .list-item-sub { font-size:11px;color:var(--muted);margin-top:2px; }
@@ -161,6 +161,7 @@
     .bayar-opt { padding:10px;border:2px solid var(--border);border-radius:10px;cursor:pointer;font-weight:700;font-size:12px;text-align:center;transition:all 0.15s;background:#fff; }
     .bayar-opt.active-terus { border-color:var(--green);color:var(--green);background:#1D7A4A14; }
     .bayar-opt.active-hutang { border-color:var(--red);color:var(--red);background:#C0392B14; }
+    .bayar-opt.active-jenis { border-color:var(--teal);color:var(--teal);background:#0E7C8614; }
 
     /* ── RESIT ── */
     .resit-box { background:#fff;border:2px solid var(--navy);border-radius:12px;padding:24px;font-family:'Courier New',monospace;font-size:12px; }
@@ -412,8 +413,19 @@
 
       <div class="card" style="border-left:4px solid var(--teal)">
         <div class="form-group">
+          <label class="form-label">Jenis Rekod</label>
+          <div class="bayar-toggle" style="margin-bottom:0">
+            <div class="bayar-opt active-jenis" id="opt-jenis-kedai" onclick="setHJenis('kedai')">🏪 Kedai Destinasi</div>
+            <div class="bayar-opt" id="opt-jenis-peribadi" onclick="setHJenis('peribadi')">🙋 Belian Peribadi</div>
+          </div>
+        </div>
+        <div class="form-group" id="h-kedai-wrap">
           <label class="form-label">Kedai Destinasi</label>
           <select class="form-input" id="h-kedai"></select>
+        </div>
+        <div class="form-group" id="h-pembeli-wrap" style="display:none">
+          <label class="form-label">Nama Pembeli (Optional)</label>
+          <input type="text" class="form-input" id="h-nama-pembeli" placeholder="cth: Pak Ali" />
         </div>
         <div class="form-group">
           <label class="form-label">Barang Dihantar</label>
@@ -429,7 +441,7 @@
         <div class="form-group">
           <label class="form-label">Status Pembayaran</label>
           <div class="bayar-toggle">
-            <div class="bayar-opt active-terus" id="opt-terus" onclick="setBayar('terus')">💵 Bayar Terus</div>
+            <div class="bayar-opt active-terus" id="opt-terus" onclick="setBayar('terus')">💵 Tunai</div>
             <div class="bayar-opt" id="opt-hutang" onclick="setBayar('hutang')">📋 Catat Hutang</div>
           </div>
         </div>
@@ -461,6 +473,19 @@
       </select>
       <div id="sejarah-list"></div>
     </div>
+  </div>
+
+  <!-- ── TEMPAHAN (senarai penuh semua pre-order) ── -->
+  <div id="page-tempahan" class="page">
+    <div class="section-title">📋 Tempahan</div>
+    <div class="section-sub" id="tp-jumlah">Senarai penuh semua tempahan pre-order</div>
+    <div class="card">
+      <div class="form-row" style="align-items:flex-end">
+        <div class="form-group"><label class="form-label">Tapis Ikut Bulan</label><input type="month" class="form-input" id="tp-bulan" onchange="renderTempahanList()" /></div>
+        <button class="btn btn-secondary" style="flex-shrink:0" onclick="document.getElementById('tp-bulan').value='';renderTempahanList()">Papar Semua</button>
+      </div>
+    </div>
+    <div id="tempahan-list"></div>
   </div>
 
   <!-- ── LEBIH ── -->
@@ -579,8 +604,7 @@
     <!-- Tetapan Kos Operasi (pemilik sahaja) -->
     <div class="card" id="tetapan-kos-card">
       <div class="card-title">⚙️ Tetapan Kos Operasi</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Kadar ini digunakan untuk kira untung bersih sebenar dalam Laporan Bulanan</div>
-      <div class="form-group"><label class="form-label">Upah Pekerja (RM per stok dihantar)</label><input type="number" class="form-input" id="set-upah" step="0.10" min="0" onchange="saveSettings()" /></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Kadar ini digunakan untuk kira untung bersih sebenar dalam Laporan Bulanan. Upah pekerja kini ditetapkan per-produk (lihat Edit Produk di tab Stok).</div>
       <div class="form-group"><label class="form-label">Minyak Kenderaan (RM per km)</label><input type="number" class="form-input" id="set-minyak" step="0.10" min="0" onchange="saveSettings()" /></div>
       <div class="form-group"><label class="form-label">Duit Makan (RM sehari seorang pekerja)</label><input type="number" class="form-input" id="set-makan" step="0.50" min="0" onchange="saveSettings()" /></div>
     </div>
@@ -614,6 +638,8 @@
     <!-- Status Live Pekerja -->
     <div class="card" id="status-live-card">
       <div class="card-title">📡 Status Live Pekerja</div>
+      <div id="status-live-map" style="height:260px;border-radius:12px;margin-bottom:12px;overflow:hidden"></div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:10px">🗺️ Laluan GPS hari ini bagi setiap pekerja (Thumb In sehingga Thumb Out/sekarang), 1 warna = 1 pekerja</div>
       <div id="status-live-list"></div>
     </div>
 
@@ -670,6 +696,9 @@
     <span class="nav-icon">🚚</span><span class="nav-label">Hantar</span>
     <span class="nav-badge" id="badge-hantar-nav" style="display:none">!</span>
   </button>
+  <button class="nav-item" onclick="setPage('tempahan')" id="nav-tempahan">
+    <span class="nav-icon">📋</span><span class="nav-label">Tempahan</span>
+  </button>
   <button class="nav-item" onclick="setPage('analisis')" id="nav-analisis">
     <span class="nav-icon">📈</span><span class="nav-label">Analisis</span>
   </button>
@@ -705,6 +734,7 @@
       <div class="form-group"><label class="form-label">Stok Semasa</label><input type="number" class="form-input" id="f-stok-qty" placeholder="0" min="0" /></div>
       <div class="form-group"><label class="form-label">Tarikh Luput (jika berkaitan)</label><input type="date" class="form-input" id="f-stok-luput" /></div>
     </div>
+    <div class="form-group"><label class="form-label">Upah Pekerja (RM per unit dihantar)</label><input type="number" class="form-input" id="f-stok-upah" step="0.10" min="0" placeholder="0.00" /></div>
     <div class="form-group">
       <label class="form-label">Gambar Produk (boleh pilih 2+ gambar sekali — watermark & tajam automatik)</label>
       <div id="f-stok-gambar-preview-wrap" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
@@ -1097,6 +1127,10 @@ async function setPage(p) {
     document.getElementById('link-preorder').value = location.href.replace(/index\.html.*$/,'').replace(/\/$/,'') + '/pesan.html';
     if (useCloud) checkPreorderBadge();
   }
+  if (p==='tempahan') {
+    if (!document.getElementById('tp-bulan').value) document.getElementById('tp-bulan').value = new Date().toISOString().slice(0,7);
+    renderTempahanList();
+  }
   if (p==='analisis' && currentRole==='pemilik') {
     if (!document.getElementById('an-dari').value) {
       const bulanIni = new Date().toISOString().slice(0,7);
@@ -1235,14 +1269,28 @@ let stokGambarUrlsSedia = [];
 let stokGambarFilesPilihan = [];
 let stokGambarUrlManual = [];
 
-function renderGambarPreviewWrap(urls) {
+function renderGambarPreviewWrap(items) {
   const wrap = document.getElementById('f-stok-gambar-preview-wrap');
-  wrap.innerHTML = urls.map(u=>`<img src="${u}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)" />`).join('');
+  wrap.innerHTML = items.map(it=>`
+    <div style="position:relative;width:64px;height:64px">
+      <img src="${it.url}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)" />
+      <button type="button" onclick="hapusGambarProduk('${it.src}',${it.idx})" title="Buang gambar ini" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;border:2px solid #fff;font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
+    </div>`).join('');
 }
 
 function refreshGambarPreview() {
-  const asas = stokGambarFilesPilihan.length ? stokGambarFilesPilihan.map(f=>URL.createObjectURL(f)) : stokGambarUrlsSedia;
-  renderGambarPreviewWrap([...asas, ...stokGambarUrlManual]);
+  const asas = stokGambarFilesPilihan.length
+    ? stokGambarFilesPilihan.map((f,i)=>({ url:URL.createObjectURL(f), src:'file', idx:i }))
+    : stokGambarUrlsSedia.map((u,i)=>({ url:u, src:'sedia', idx:i }));
+  const manual = stokGambarUrlManual.map((u,i)=>({ url:u, src:'manual', idx:i }));
+  renderGambarPreviewWrap([...asas, ...manual]);
+}
+
+function hapusGambarProduk(src, idx) {
+  if (src==='file') stokGambarFilesPilihan = stokGambarFilesPilihan.filter((_,i)=>i!==idx);
+  else if (src==='sedia') stokGambarUrlsSedia = stokGambarUrlsSedia.filter((_,i)=>i!==idx);
+  else if (src==='manual') stokGambarUrlManual = stokGambarUrlManual.filter((_,i)=>i!==idx);
+  refreshGambarPreview();
 }
 
 function tambahGambarUrlStok() {
@@ -1264,10 +1312,11 @@ function bukaModalStokBaru() {
   document.getElementById('f-stok-jual').value='';
   document.getElementById('f-stok-qty').value='';
   document.getElementById('f-stok-luput').value='';
+  document.getElementById('f-stok-upah').value='';
   document.getElementById('f-stok-gambar').value='';
   document.getElementById('f-stok-gambar-url').value='';
   stokGambarUrlsSedia = []; stokGambarFilesPilihan = []; stokGambarUrlManual = [];
-  renderGambarPreviewWrap([]);
+  refreshGambarPreview();
   showModal('modal-tambah-stok');
 }
 
@@ -1296,11 +1345,12 @@ function editStok(id) {
   document.getElementById('f-stok-jual').value=s.harga_jual;
   document.getElementById('f-stok-qty').value=s.stok;
   document.getElementById('f-stok-luput').value=s.tarikh_luput||'';
+  document.getElementById('f-stok-upah').value=s.upah_pekerja||'';
   document.getElementById('f-stok-gambar').value='';
   document.getElementById('f-stok-gambar-url').value='';
   stokGambarUrlsSedia = (s.gambar_urls && s.gambar_urls.length) ? s.gambar_urls : (s.gambar_url ? [s.gambar_url] : []);
   stokGambarFilesPilihan = []; stokGambarUrlManual = [];
-  renderGambarPreviewWrap(stokGambarUrlsSedia);
+  refreshGambarPreview();
   showModal('modal-tambah-stok');
 }
 
@@ -1392,7 +1442,7 @@ async function saveStok() {
   }
   gambarUrls = [...gambarUrls, ...stokGambarUrlManual];
 
-  const obj={id:stokId,nama,unit:document.getElementById('f-stok-unit').value,harga_beli:beli,harga_jual:jual,stok:qty,kategori:document.getElementById('f-stok-kat').value,tarikh_luput:document.getElementById('f-stok-luput').value||null,gambar_url:gambarUrls[0]||null,gambar_urls:gambarUrls};
+  const obj={id:stokId,nama,unit:document.getElementById('f-stok-unit').value,harga_beli:beli,harga_jual:jual,stok:qty,kategori:document.getElementById('f-stok-kat').value,tarikh_luput:document.getElementById('f-stok-luput').value||null,upah_pekerja:+document.getElementById('f-stok-upah').value||0,gambar_url:gambarUrls[0]||null,gambar_urls:gambarUrls};
   if (useCloud) {
     const { error } = await sb.from('stok').upsert(obj);
     if (error) return toast('Gagal simpan produk: '+error.message,'err');
@@ -1894,6 +1944,17 @@ function setBayar(v) {
   document.getElementById('opt-terus').className='bayar-opt'+(v==='terus'?' active-terus':'');
   document.getElementById('opt-hutang').className='bayar-opt'+(v==='hutang'?' active-hutang':'');
 }
+
+let hJenis='kedai';
+function setHJenis(v) {
+  hJenis=v;
+  document.getElementById('opt-jenis-kedai').className='bayar-opt'+(v==='kedai'?' active-jenis':'');
+  document.getElementById('opt-jenis-peribadi').className='bayar-opt'+(v==='peribadi'?' active-jenis':'');
+  document.getElementById('h-kedai-wrap').style.display = v==='kedai'?'':'none';
+  document.getElementById('h-pembeli-wrap').style.display = v==='peribadi'?'':'none';
+  document.getElementById('opt-hutang').style.display = v==='peribadi'?'none':'';
+  if (v==='peribadi') setBayar('terus');
+}
 function setHantarTab(t) {
   ['baru','preorder','sejarah'].forEach(tab=>{
     document.getElementById('hantar-'+tab).style.display = t===tab?'':'none';
@@ -1906,12 +1967,14 @@ function setHantarTab(t) {
 }
 
 async function submitHantar() {
-  let kedaiId=document.getElementById('h-kedai').value;
-  if(!kedaiId) return toast('Sila pilih kedai','err');
+  const peribadi = hJenis==='peribadi';
+  let kedaiId = peribadi ? null : document.getElementById('h-kedai').value;
+  const namaPembeli = peribadi ? document.getElementById('h-nama-pembeli').value.trim() : null;
+  if(!peribadi && !kedaiId) return toast('Sila pilih kedai','err');
   if(hItems.some(it=>!it.stokId||+it.qty<1)) return toast('Sila isi semua item','err');
 
   // Destinasi dari pre-order yang belum berdaftar sebagai kedai — daftar automatik dahulu
-  if (kedaiId.startsWith('_PO_')) {
+  if (!peribadi && kedaiId.startsWith('_PO_')) {
     const po = poDestinasiCache[kedaiId];
     if (!po) return toast('Pre-order ini sudah tidak sah — sila muat semula','err');
     const kedaiObj = {
@@ -1933,7 +1996,8 @@ async function submitHantar() {
   const jumlah=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty):0); },0);
 
   // Jarak dikira automatik dari lokasi GPS pekerja semasa ke lokasi berdaftar kedai
-  const kedaiTujuan = DATA.kedai.find(k=>k.id===kedaiId);
+  // (tak relevan untuk belian peribadi — tiada kedai destinasi berdaftar)
+  const kedaiTujuan = peribadi ? null : DATA.kedai.find(k=>k.id===kedaiId);
   let jarakKm = 0;
   if (kedaiTujuan?.lat && kedaiTujuan?.lng) {
     const posKini = await getGpsPosition();
@@ -1941,10 +2005,11 @@ async function submitHantar() {
     else toast('Gagal dapatkan GPS — jarak direkod sebagai 0km','err');
   }
 
+  const statusBayar = peribadi ? 'selesai' : (hBayar==='terus'?'selesai':'hutang');
   const trx={
-    id:genId('T'), tarikh_masa:new Date().toISOString(), kedai_id:kedaiId,
+    id:genId('T'), tarikh_masa:new Date().toISOString(), kedai_id:kedaiId, nama_pembeli:namaPembeli||null,
     items:hItems.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return{stokId:it.stokId,qty:+it.qty,harga:s.harga_jual}; }),
-    jumlah, status:hBayar==='terus'?'selesai':'hutang',
+    jumlah, status:statusBayar,
     nota:document.getElementById('h-nota').value, resit:genResit(),
     jarak_km: jarakKm,
     created_by: DATA.currentUser?.email || DATA.currentUser?.nama || null,
@@ -1955,6 +2020,7 @@ async function submitHantar() {
     const { error } = await sb.rpc('submit_penghantaran', {
       p_id:trx.id, p_kedai_id:trx.kedai_id, p_items:trx.items,
       p_jumlah:trx.jumlah, p_status:trx.status, p_nota:trx.nota, p_resit:trx.resit, p_jarak_km:trx.jarak_km,
+      p_nama_pembeli:trx.nama_pembeli,
     });
     if (error) return toast('Gagal rekod penghantaran: '+error.message,'err');
     await loadData();
@@ -1962,16 +2028,17 @@ async function submitHantar() {
   } else {
     DATA.transaksi.push(trx);
     DATA.stok=DATA.stok.map(s=>{ const it=hItems.find(i=>i.stokId===s.id); return it?{...s,stok:s.stok-(+it.qty)}:s; });
-    DATA.kedai=DATA.kedai.map(k=>{
+    if (!peribadi) DATA.kedai=DATA.kedai.map(k=>{
       if(k.id===kedaiId){
         return{...k, hutang:hBayar==='hutang'?k.hutang+jumlah:k.hutang, last_visit:new Date().toISOString().slice(0,10)};
       } return k;
     });
     saveData();
   }
-  toast(`✅ ${trx.resit} · ${fmt(jumlah)} · ${hBayar==='terus'?'Bayar terus':'Catat hutang'}`);
-  hItems=[{stokId:'',qty:1}]; hBayar='terus'; setBayar('terus');
+  toast(`✅ ${trx.resit} · ${fmt(jumlah)} · ${statusBayar==='selesai'?'Tunai':'Catat hutang'}`);
+  hItems=[{stokId:'',qty:1}]; hBayar='terus'; setBayar('terus'); setHJenis('kedai');
   document.getElementById('h-kedai').value='';
+  document.getElementById('h-nama-pembeli').value='';
   document.getElementById('h-nota').value='';
   renderHItems();
 
@@ -1982,14 +2049,20 @@ async function submitHantar() {
   document.getElementById('resit-preview').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
+// Nama destinasi paparan untuk 1 transaksi — kedai berdaftar, atau "Belian Peribadi" jika tiada kedai
+function namaDestinasiTrx(t) {
+  if (t.kedai_id) return DATA.kedai.find(k=>k.id===t.kedai_id)?.nama || '?';
+  return t.nama_pembeli ? `🙋 Belian Peribadi: ${t.nama_pembeli}` : '🙋 Belian Peribadi';
+}
+
 function renderSejarah(kedaiId='') {
   const list=[...DATA.transaksi].filter(t=>kedaiId?t.kedai_id===kedaiId:true).sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
   document.getElementById('sejarah-list').innerHTML = list.map(t=>{
-    const k=DATA.kedai.find(k=>k.id===t.kedai_id)||{nama:'?'};
+    const namaDestinasi = namaDestinasiTrx(t);
     const itemsStr=t.items.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `${s.nama} ×${it.qty}`; }).join(' · ');
     return `<div class="trx-card ${t.status==='hutang'?'hutang':''}">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-        <div><div style="font-weight:800;font-size:13px">${esc(k.nama)}</div><div style="font-size:10px;color:var(--muted)">${fmtDT(t.tarikh_masa)} · ${esc(t.resit||'')}</div></div>
+        <div><div style="font-weight:800;font-size:13px">${esc(namaDestinasi)}</div><div style="font-size:10px;color:var(--muted)">${fmtDT(t.tarikh_masa)} · ${esc(t.resit||'')}</div></div>
         <div style="text-align:right"><div style="font-weight:800;font-size:14px">${fmt(t.jumlah)}</div><span class="badge ${t.status==='selesai'?'badge-green':'badge-red'}">${t.status==='selesai'?'✓ Selesai':'⏳ Hutang'}</span></div>
       </div>
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
@@ -2117,6 +2190,49 @@ async function padamPreorder(id) {
   toast('Pre-order dipadam');
 }
 
+// ════════════════════════════════════════════════════
+//  TEMPAHAN — senarai penuh & arkib semua pre-order (bukan sekadar operasi claim)
+// ════════════════════════════════════════════════════
+async function renderTempahanList() {
+  const el = document.getElementById('tempahan-list');
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const bulan = document.getElementById('tp-bulan').value;
+  const { data, error } = await sb.from('pre_order').select('*').order('created_at',{ascending:false});
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const list = bulan ? (data||[]).filter(po=>(po.created_at||'').slice(0,7)===bulan) : (data||[]);
+  document.getElementById('tp-jumlah').textContent = `${list.length} tempahan${bulan?' pada '+bulan:' (semua)'}`;
+
+  const statusBadge = { baru:'badge-teal', diproses:'badge-gold', selesai:'badge-green' };
+  const statusTxt = { baru:'🆕 Baru', diproses:'⏳ Diproses', selesai:'✓ Selesai' };
+
+  el.innerHTML = list.map(po=>{
+    const itemsStr = (po.items||[]).map(it=>`${it.nama} ×${it.qty}`).join(' · ');
+    return `<div class="trx-card">
+      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="padamTempahan('${po.id}')" title="Padam tempahan">✕</button>`:''}
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
+        <div>
+          <div style="font-weight:800;font-size:13px">${esc(po.kedai_nama)}</div>
+          <div style="font-size:10px;color:var(--muted)">📞 ${esc(po.kedai_telefon||'-')} · ${fmtDT(po.created_at)}</div>
+          ${po.alamat?`<div style="font-size:10px;color:var(--muted)">📍 ${esc(po.alamat)}</div>`:''}
+        </div>
+        <span class="badge ${statusBadge[po.status]||'badge-teal'}" style="flex-shrink:0">${statusTxt[po.status]||po.status}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
+      ${po.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(po.nota)}</div>`:''}
+      ${po.bayar_metod==='consignment'?`<div style="font-size:12px;font-weight:700;margin-top:6px;color:var(--purple)">🤝 Consignment</div>`:po.jumlah_asal?`<div style="font-size:12px;font-weight:700;margin-top:6px">${po.bayar_metod==='transfer'?`🏦 Transfer — ${fmt(po.jumlah_selepas_diskaun||po.jumlah_asal)}`:`🚚 COD — ${fmt(po.jumlah_asal)}`}</div>`:''}
+      ${po.lat&&po.lng?`<a class="btn btn-secondary btn-sm" style="text-decoration:none;margin-top:8px;display:inline-block" href="https://www.google.com/maps/search/?api=1&query=${po.lat},${po.lng}" target="_blank" rel="noopener">🗺️ Lihat di Google Maps</a>`:''}
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Tiada tempahan dalam julat ini</div></div>';
+}
+
+async function padamTempahan(id) {
+  if (!confirm('Padam rekod tempahan ini secara kekal?')) return;
+  const { error } = await sb.from('pre_order').delete().eq('id', id);
+  if (error) return toast('Gagal padam: '+error.message,'err');
+  renderTempahanList();
+  toast('Tempahan dipadam');
+}
+
 async function tugaskanPreorder(id, pekerjaId) {
   const { error } = await sb.rpc('tugaskan_preorder', { p_id:id, p_pekerja_id: pekerjaId||null });
   if (error) return toast('Gagal tugaskan: '+error.message,'err');
@@ -2180,8 +2296,7 @@ function renderResitSel() {
   const sel=document.getElementById('resit-sel');
   const sorted=[...DATA.transaksi].sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
   sel.innerHTML='<option value="">-- Pilih transaksi --</option>'+sorted.map(t=>{
-    const k=DATA.kedai.find(k=>k.id===t.kedai_id)||{nama:'?'};
-    return `<option value="${t.id}">${t.resit||t.id} · ${k.nama} · ${fmt(t.jumlah)}</option>`;
+    return `<option value="${t.id}">${t.resit||t.id} · ${esc(namaDestinasiTrx(t))} · ${fmt(t.jumlah)}</option>`;
   }).join('');
 }
 
@@ -2189,7 +2304,8 @@ async function renderResit(id) {
   const el=document.getElementById('resit-preview');
   if(!id){el.innerHTML='';return;}
   const t=DATA.transaksi.find(t=>t.id===id); if(!t){el.innerHTML='';return;}
-  const k=DATA.kedai.find(k=>k.id===t.kedai_id)||{nama:'?',alamat:'—'};
+  const peribadi = !t.kedai_id;
+  const k=DATA.kedai.find(k=>k.id===t.kedai_id)||{nama:t.nama_pembeli||'Belian Peribadi',alamat:'—'};
 
   // Cari maklumat pekerja yang buat penghantaran ini — supaya kedai boleh repeat order terus dengannya
   let pekerja = null;
@@ -2208,8 +2324,8 @@ async function renderResit(id) {
     </div>
     <div class="resit-row" style="font-weight:700"><span>NO. RESIT</span><span>${esc(t.resit||t.id)}</span></div>
     <div class="resit-row"><span>TARIKH</span><span>${fmtDT(t.tarikh_masa)}</span></div>
-    <div class="resit-row"><span>KEDAI</span><span style="text-align:right;max-width:60%">${esc(k.nama)}</span></div>
-    <div class="resit-row"><span>ALAMAT</span><span style="text-align:right;max-width:60%">${esc(k.alamat)}</span></div>
+    <div class="resit-row"><span>${peribadi?'PEMBELI':'KEDAI'}</span><span style="text-align:right;max-width:60%">${esc(k.nama)}</span></div>
+    ${peribadi?'':`<div class="resit-row"><span>ALAMAT</span><span style="text-align:right;max-width:60%">${esc(k.alamat)}</span></div>`}
     <div class="resit-items">
       <div class="resit-item-row" style="font-weight:700;color:var(--muted);font-size:10px;padding-bottom:6px">
         <span>PRODUK</span><span style="text-align:center">QTY</span><span style="text-align:right">HARGA</span><span style="text-align:right">JUMLAH</span>
@@ -2220,17 +2336,19 @@ async function renderResit(id) {
     <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">STATUS</span><span style="font-weight:700;color:${t.status==='selesai'?'var(--green)':'var(--red)'}">⬤ ${t.status==='selesai'?'TELAH DIBAYAR':'BELUM DIBAYAR / HUTANG'}</span></div>
     ${t.nota?`<div style="margin-top:8px;font-size:10px;color:var(--muted)">Nota: ${esc(t.nota)}</div>`:''}
     ${pekerja?.telefon?`<div style="margin-top:10px;padding:8px;background:#F0FFF4;border:1px dashed var(--green);border-radius:6px;font-size:10px;text-align:center">🔁 Nak repeat order? Hubungi terus <strong>${esc(pekerja.nama||'penghantar')}</strong>: ${esc(pekerja.telefon)}</div>`:''}
-    <div style="text-align:center;margin-top:12px">
+    ${peribadi?'':`<div style="text-align:center;margin-top:12px">
       <div id="resit-qr" style="width:100px;height:100px;margin:0 auto"></div>
       <div style="font-size:9px;color:var(--muted);margin-top:2px">📱 Imbas untuk repeat order terus</div>
-    </div>
+    </div>`}
     <div class="resit-footer">Terima kasih atas kepercayaan anda!<br/>Produk Halal · Berkualiti · Amanah<br/><strong>— WAFI TIJARAH TRADING —</strong></div>
   </div>`;
 
-  const pesanUrl = `${location.origin}${location.pathname.replace(/index\.html$/,'')}pesan.html?kedai=${encodeURIComponent(t.kedai_id)}`;
-  const qrEl = document.getElementById('resit-qr');
-  if (qrEl && window.QRCode) {
-    new QRCode(qrEl, { text: pesanUrl, width: 100, height: 100, correctLevel: QRCode.CorrectLevel.M });
+  if (!peribadi) {
+    const pesanUrl = `${location.origin}${location.pathname.replace(/index\.html$/,'')}pesan.html?kedai=${encodeURIComponent(t.kedai_id)}`;
+    const qrEl = document.getElementById('resit-qr');
+    if (qrEl && window.QRCode) {
+      new QRCode(qrEl, { text: pesanUrl, width: 100, height: 100, correctLevel: QRCode.CorrectLevel.M });
+    }
   }
 }
 
@@ -2245,7 +2363,6 @@ async function muatTurunResitPDF() {
   if(!box) { toast('Sila pilih transaksi dahulu','err'); return null; }
   const id=document.getElementById('resit-sel').value;
   const t=DATA.transaksi.find(t=>t.id===id);
-  const k=DATA.kedai.find(k=>k.id===t?.kedai_id);
   toast('Menjana PDF...');
   const canvas = await html2canvas(box, { scale:2, backgroundColor:'#ffffff' });
   const img = canvas.toDataURL('image/png');
@@ -2259,7 +2376,7 @@ async function muatTurunResitPDF() {
   const maxH = pageH - margin*2;
   if (imgH > maxH) { imgH = maxH; imgW = imgH * (canvas.width/canvas.height); }
   pdf.addImage(img, 'PNG', (pageW-imgW)/2, margin, imgW, imgH);
-  const namaFail = `${t?.resit||id}-${k?.nama||'Kedai'}-RM${(t?.jumlah||0).toFixed(2)}`.replace(/[\/\\?%*:|"<>]/g,'-');
+  const namaFail = `${t?.resit||id}-${t?namaDestinasiTrx(t):'Kedai'}-RM${(t?.jumlah||0).toFixed(2)}`.replace(/[\/\\?%*:|"<>]/g,'-');
   pdf.save(`${namaFail}.pdf`);
   return t;
 }
@@ -2297,9 +2414,9 @@ async function renderLaporan() {
   const untung=fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0); },0);
 
   const jumlahStok = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
-  const jumlahKm = fil.reduce((a,t)=>a+(+t.jarak_km||0),0);
+  const { totalKm: jumlahKm, kmIkutPekerja } = await kiraJarakKehadiranJulat(bulan+'-01T00:00:00', akhirBulanISO(bulan));
   const hariKerja = new Set(fil.map(t=>`${(t.tarikh_masa||'').slice(0,10)}|${t.created_by||'?'}`)).size;
-  const kosUpah = jumlahStok*SETTINGS.upah;
+  const kosUpah = fil.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
   const kosMinyak = jumlahKm*SETTINGS.minyak;
   const kosMakan = hariKerja*SETTINGS.makan;
   const kosOperasi = kosUpah+kosMinyak+kosMakan;
@@ -2314,10 +2431,10 @@ async function renderLaporan() {
   }
   const pecahanPekerja = pekerjaIds.map(pid=>{
     const filPekerja = fil.filter(t=>t.created_by===pid);
-    const stokPekerja = filPekerja.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
-    const kmPekerja = filPekerja.reduce((a,t)=>a+(+t.jarak_km||0),0);
+    const upahPekerja = filPekerja.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
+    const kmPekerja = kmIkutPekerja[pid] || 0;
     const hariPekerja = new Set(filPekerja.map(t=>(t.tarikh_masa||'').slice(0,10))).size;
-    const jumlahPekerja = stokPekerja*SETTINGS.upah + kmPekerja*SETTINGS.minyak + hariPekerja*SETTINGS.makan;
+    const jumlahPekerja = upahPekerja + kmPekerja*SETTINGS.minyak + hariPekerja*SETTINGS.makan;
     return { nama: profilMap[pid]||pid, bilangan: filPekerja.length, jumlah: jumlahPekerja };
   }).sort((a,b)=>b.jumlah-a.jumlah);
 
@@ -2415,25 +2532,29 @@ function muatTurunCSV() {
 // ════════════════════════════════════════════════════
 //  TETAPAN KOS OPERASI
 // ════════════════════════════════════════════════════
-const SETTINGS_DEF = { upah:1.00, minyak:0.50, makan:10.00 };
+const SETTINGS_DEF = { minyak:0.50, makan:10.00 };
 let SETTINGS = {...SETTINGS_DEF};
 
 function loadSettings() {
   SETTINGS = JSON.parse(localStorage.getItem('wafi_settings') || 'null') || {...SETTINGS_DEF};
-  document.getElementById('set-upah').value = SETTINGS.upah;
   document.getElementById('set-minyak').value = SETTINGS.minyak;
   document.getElementById('set-makan').value = SETTINGS.makan;
 }
 
 function saveSettings() {
   SETTINGS = {
-    upah: +document.getElementById('set-upah').value || 0,
     minyak: +document.getElementById('set-minyak').value || 0,
     makan: +document.getElementById('set-makan').value || 0,
   };
   localStorage.setItem('wafi_settings', JSON.stringify(SETTINGS));
   renderLaporan();
   toast('Tetapan kos dikemaskini');
+}
+
+// Upah pekerja kini ditetapkan per-produk (medan "upah_pekerja" pada setiap stok),
+// bukan kadar sejagat — jumlah upah 1 penghantaran = SUM(qty x upah_pekerja produk).
+function jumlahUpahTransaksi(t) {
+  return t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(x=>x.id===it.stokId); return s+(+stokItem?.upah_pekerja||0)*it.qty; },0);
 }
 
 // ════════════════════════════════════════════════════
@@ -2509,20 +2630,20 @@ async function tukarPasswordSaya() {
 }
 
 // ── Kiraan upah peribadi (khusus akaun yang log masuk sekarang) ──
-function renderUpahSaya() {
+async function renderUpahSaya() {
   if (!useCloud) { document.getElementById('upah-saya-output').innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
   const bulan = document.getElementById('upah-saya-bulan').value;
   const fil = DATA.transaksi.filter(t => t.tarikh_masa?.startsWith(bulan) && (t.created_by===DATA.currentUser?.id || t.created_by===DATA.currentUser?.email));
   const jumlahStok = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
-  const jumlahKm = fil.reduce((a,t)=>a+(+t.jarak_km||0),0);
+  const { totalKm: jumlahKm } = await kiraJarakKehadiranJulat(bulan+'-01T00:00:00', akhirBulanISO(bulan), DATA.currentUser.id);
   const hariKerja = new Set(fil.map(t=>(t.tarikh_masa||'').slice(0,10))).size;
-  const kosUpah = jumlahStok*SETTINGS.upah;
+  const kosUpah = fil.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
   const kosMinyak = jumlahKm*SETTINGS.minyak;
   const kosMakan = hariKerja*SETTINGS.makan;
   const jumlahUpah = kosUpah+kosMinyak+kosMakan;
   document.getElementById('upah-saya-output').innerHTML = `
     <div class="list-item"><div class="list-item-title">Bilangan Penghantaran</div><div class="list-item-val">${fil.length}</div></div>
-    <div class="list-item"><div class="list-item-title">Upah (${jumlahStok} stok × ${fmt(SETTINGS.upah)})</div><div class="list-item-val">${fmt(kosUpah)}</div></div>
+    <div class="list-item"><div class="list-item-title">Upah (${jumlahStok} unit dihantar)</div><div class="list-item-val">${fmt(kosUpah)}</div></div>
     <div class="list-item"><div class="list-item-title">Minyak (${jumlahKm.toFixed(1)} km × ${fmt(SETTINGS.minyak)})</div><div class="list-item-val">${fmt(kosMinyak)}</div></div>
     <div class="list-item"><div class="list-item-title">Duit Makan (${hariKerja} hari)</div><div class="list-item-val">${fmt(kosMakan)}</div></div>
     <div class="total-box" style="margin-top:10px"><span class="total-label">JUMLAH UPAH ANDA</span><span class="total-val">${fmt(jumlahUpah)}</span></div>`;
@@ -2608,6 +2729,44 @@ async function renderStatusLive() {
     return `<div class="list-item"><div><div class="list-item-title">${esc(p.nama)}</div><div class="list-item-sub">Tamat kerja ${fmtDT(k.thumb_out_masa)}</div></div><span class="badge badge-muted">Selesai</span></div>`;
   }));
   el.innerHTML = rows.join('') || '<div class="empty"><div class="empty-text">Tiada pekerja didaftarkan lagi</div></div>';
+
+  renderStatusLiveMap(pekerjaList, kehadiranHariIni);
+}
+
+// Peta tunggal memaparkan laluan GPS (Thumb In -> ... -> Thumb Out/sekarang) semua
+// pekerja hari ini serentak, 1 warna berbeza setiap pekerja.
+let statusLiveMap = null;
+const WARNA_PEKERJA = ['#0E7C86','#C0392B','#E8B84B','#6B3FA0','#1D7A4A','#2C5F8A','#D4622C'];
+
+async function renderStatusLiveMap(pekerjaList, kehadiranHariIni) {
+  const mapEl = document.getElementById('status-live-map');
+  if (!isGoogleMapsDikonfigur()) { mapEl.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">📍 Peta belum aktif — masukkan Google Maps API key dalam index.html</div>'; return; }
+  try { await muatkanGoogleMaps(); } catch(e) { mapEl.innerHTML = `<div style="padding:16px;text-align:center;color:var(--red);font-size:12px">${esc(e.message)}</div>`; return; }
+  if (!statusLiveMap) statusLiveMap = new google.maps.Map(mapEl, { center: PETA_PUSAT_DEFAULT, zoom: 8 });
+
+  const sesiDenganLokasi = (kehadiranHariIni||[]).filter(k=>k.thumb_in_lat!=null);
+  const bounds = new google.maps.LatLngBounds();
+  let adaTitik = false;
+
+  for (let i=0; i<sesiDenganLokasi.length; i++) {
+    const k = sesiDenganLokasi[i];
+    const p = pekerjaList?.find(p=>p.id===k.pekerja_id);
+    const warna = WARNA_PEKERJA[i % WARNA_PEKERJA.length];
+    const { data: titik } = await sb.from('gps_track').select('lat,lng').eq('kehadiran_id', k.id).order('tarikh_masa');
+    const laluan = [{ lat:k.thumb_in_lat, lng:k.thumb_in_lng }, ...(titik||[]).map(t=>({lat:t.lat,lng:t.lng}))];
+    if (k.thumb_out_lat!=null) laluan.push({ lat:k.thumb_out_lat, lng:k.thumb_out_lng });
+    laluan.forEach(pt=>{ bounds.extend(pt); adaTitik = true; });
+    new google.maps.Polyline({ path: laluan, strokeColor: warna, strokeWeight: 3, strokeOpacity: 0.85, map: statusLiveMap });
+    const titikAkhir = laluan[laluan.length-1];
+    new google.maps.Marker({
+      position: titikAkhir, map: statusLiveMap,
+      label: { text: (p?.nama||'?').charAt(0).toUpperCase(), color:'#fff', fontWeight:'700' },
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 12, fillColor: warna, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 },
+      title: `${p?.nama||'?'}${k.status==='aktif'?' (sedang bekerja)':' (selesai)'}`,
+    });
+  }
+  if (adaTitik) { statusLiveMap.fitBounds(bounds); }
+  google.maps.event.trigger(statusLiveMap, 'resize');
 }
 
 async function luluskanCuti(id, status) {
@@ -2626,15 +2785,40 @@ async function renderSenaraiPekerja() {
   const { data, error } = await sb.from('profiles').select('*').order('nama');
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat senarai: ${esc(error.message)}</div></div>`; return; }
   const pekerja = (data||[]).filter(p=>p.role==='pekerja');
-  el.innerHTML = pekerja.map(p=>`
+  el.innerHTML = pekerja.map(p=>{
+    const tidakAktif = p.status==='tidak_aktif';
+    return `
     <div class="list-item">
+      ${tidakAktif?`<button class="btn-delete-icon" onclick="padamPekerja('${p.id}','${esc(p.nama||p.email)}')" title="Padam pekerja">✕</button>`:''}
       <div>
         <div class="list-item-title">${esc(p.nama||'-')}</div>
         <div class="list-item-sub">${esc(p.email||'')}${p.telefon?' · '+esc(p.telefon):''}</div>
-        ${p.must_change_password?'<span class="badge badge-gold" style="margin-top:4px">Perlu tukar kata laluan</span>':''}
+        <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">
+          ${p.must_change_password?'<span class="badge badge-gold">Perlu tukar kata laluan</span>':''}
+          <span class="badge ${tidakAktif?'badge-red':'badge-green'}">${tidakAktif?'Tidak Aktif':'Aktif'}</span>
+        </div>
       </div>
-      <button class="btn btn-secondary btn-sm" onclick="resetKeAdmin123('${p.id}','${esc(p.nama||p.email)}')">🔑 Reset abc123</button>
-    </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada pekerja didaftarkan lagi</div></div>';
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
+        <button class="btn btn-secondary btn-sm" onclick="resetKeAdmin123('${p.id}','${esc(p.nama||p.email)}')">🔑 Reset abc123</button>
+        <button class="btn btn-secondary btn-sm" onclick="togglStatusPekerja('${p.id}','${tidakAktif?'aktif':'tidak_aktif'}')">${tidakAktif?'✅ Aktifkan Semula':'🚫 Tidak Aktif'}</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-text">Tiada pekerja didaftarkan lagi</div></div>';
+}
+
+async function togglStatusPekerja(id, statusBaru) {
+  const { error } = await sb.from('profiles').update({ status: statusBaru }).eq('id', id);
+  if (error) return toast('Gagal kemaskini status: '+error.message,'err');
+  toast(statusBaru==='tidak_aktif' ? 'Pekerja ditandakan tidak aktif' : 'Pekerja diaktifkan semula');
+  renderSenaraiPekerja();
+}
+
+async function padamPekerja(id, nama) {
+  if (!confirm(`Padam profil pekerja "${nama}" secara kekal?\n\nNota: akaun log masuk (auth) pekerja ini tidak dipadam, cuma profil & akses app dibuang.`)) return;
+  const { error } = await sb.from('profiles').delete().eq('id', id);
+  if (error) return toast('Gagal padam: '+error.message,'err');
+  toast(`Pekerja "${nama}" dipadam`);
+  renderSenaraiPekerja();
 }
 
 async function resetKeAdmin123(pekerjaId, nama) {
@@ -2867,6 +3051,56 @@ function haversineKm(a, b) {
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
 }
 
+// Jarak 1 sesi kehadiran: titik GPS Thumb In -> GPS kedai-kedai yang dihantar (ikut
+// urutan masa) semasa sesi itu -> titik GPS Thumb Out. Guna titik kedai berdaftar
+// (tetap/stabil) bukan trail GPS mentah, supaya tak terjejas gangguan/derau sinyal.
+function jarakSesiKehadiran(sesi, penghantaranSesi) {
+  const titik = [];
+  if (sesi.thumb_in_lat != null) titik.push({ lat:sesi.thumb_in_lat, lng:sesi.thumb_in_lng });
+  [...penghantaranSesi].sort((a,b)=>new Date(a.tarikh_masa)-new Date(b.tarikh_masa)).forEach(t=>{
+    const k = DATA.kedai.find(k=>k.id===t.kedai_id);
+    if (k?.lat != null && k?.lng != null) titik.push({ lat:k.lat, lng:k.lng });
+  });
+  if (sesi.thumb_out_lat != null) titik.push({ lat:sesi.thumb_out_lat, lng:sesi.thumb_out_lng });
+  let jarak = 0;
+  for (let i=1;i<titik.length;i++) jarak += haversineKm(titik[i-1], titik[i]);
+  return jarak;
+}
+
+function akhirBulanISO(bulanYYYYMM) {
+  const [y,m] = bulanYYYYMM.split('-').map(Number);
+  const akhir = new Date(y, m, 0);
+  return `${bulanYYYYMM}-${String(akhir.getDate()).padStart(2,'0')}T23:59:59`;
+}
+
+// Jumlah jarak sebenar (bukan trail GPS mentah) bagi semua sesi kehadiran dalam julat
+// tarikh — pilihan sesi thumb in/out berganda pada hari sama tetap digabung sebagai
+// satu jumlah pekerja tersebut (bukan didarab 2x). Pulangkan jumlah keseluruhan dan
+// pecahan ikut pekerja (dikunci ikut created_by supaya sepadan dengan data transaksi).
+async function kiraJarakKehadiranJulat(dariISO, hinggaISO, pekerjaId=null) {
+  if (!useCloud) return { totalKm:0, kmIkutPekerja:{} };
+  let q = sb.from('kehadiran').select('*').gte('thumb_in_masa', dariISO).lte('thumb_in_masa', hinggaISO);
+  if (pekerjaId) q = q.eq('pekerja_id', pekerjaId);
+  const { data: sesiSemua } = await q;
+
+  // created_by pada transaksi = auth.uid() pekerja (ditetapkan server-side oleh RPC
+  // submit_penghantaran), jadi ia sepadan terus dengan kehadiran.pekerja_id.
+  let totalKm = 0;
+  const kmIkutPekerja = {};
+  (sesiSemua||[]).forEach(sesi => {
+    const tarikhSesi = (sesi.thumb_in_masa||'').slice(0,10);
+    const penghantaranSesi = DATA.transaksi.filter(t=>{
+      if (t.created_by !== sesi.pekerja_id) return false;
+      if ((t.tarikh_masa||'').slice(0,10) !== tarikhSesi) return false;
+      return t.tarikh_masa >= sesi.thumb_in_masa && (!sesi.thumb_out_masa || t.tarikh_masa <= sesi.thumb_out_masa);
+    });
+    const km = jarakSesiKehadiran(sesi, penghantaranSesi);
+    totalKm += km;
+    kmIkutPekerja[sesi.pekerja_id] = (kmIkutPekerja[sesi.pekerja_id]||0) + km;
+  });
+  return { totalKm, kmIkutPekerja };
+}
+
 async function renderLaporanKehadiran() {
   const el = document.getElementById('kehadiran-report-output');
   const tarikh = document.getElementById('kh-tarikh').value;
@@ -2878,28 +3112,34 @@ async function renderLaporanKehadiran() {
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
 
   const { data: profil } = await sb.from('profiles').select('id,nama');
-  const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
 
-  const results = [];
-  for (const s of (sesi||[])) {
-    const { data: titik } = await sb.from('gps_track').select('lat,lng,tarikh_masa').eq('kehadiran_id', s.id).order('tarikh_masa');
-    const semua = [];
-    if (s.thumb_in_lat) semua.push({ lat:s.thumb_in_lat, lng:s.thumb_in_lng });
-    (titik||[]).forEach(t=>semua.push({ lat:t.lat, lng:t.lng }));
-    if (s.thumb_out_lat) semua.push({ lat:s.thumb_out_lat, lng:s.thumb_out_lng });
+  // Gabungkan semua sesi (walaupun thumb in/out berganda) ikut pekerja — tetap dikira 1 hari
+  const kumpulan = {};
+  (sesi||[]).forEach(s => { (kumpulan[s.pekerja_id] ||= []).push(s); });
+
+  const results = Object.entries(kumpulan).map(([pekerjaId, sesiPekerja]) => {
+    const p = profil?.find(x=>x.id===pekerjaId);
+    const penghantaranHari = DATA.transaksi.filter(t=>t.created_by===pekerjaId && (t.tarikh_masa||'').slice(0,10)===tarikh);
     let jarak = 0;
-    for (let i=1;i<semua.length;i++) jarak += haversineKm(semua[i-1], semua[i]);
-    results.push({ ...s, jarak, bilTitik: semua.length });
-  }
+    sesiPekerja.forEach(s => {
+      const penghantaranSesi = penghantaranHari.filter(t=>t.tarikh_masa>=s.thumb_in_masa && (!s.thumb_out_masa || t.tarikh_masa<=s.thumb_out_masa));
+      jarak += jarakSesiKehadiran(s, penghantaranSesi);
+    });
+    const masihAktif = sesiPekerja.some(s=>s.status==='aktif');
+    const thumbInAwal = [...sesiPekerja].sort((a,b)=>a.thumb_in_masa.localeCompare(b.thumb_in_masa))[0].thumb_in_masa;
+    const selesai = sesiPekerja.filter(s=>s.thumb_out_masa).map(s=>s.thumb_out_masa).sort();
+    const thumbOutAkhir = masihAktif ? null : (selesai[selesai.length-1] || null);
+    return { nama: p?.nama||pekerjaId, jarak, masihAktif, thumbInAwal, thumbOutAkhir, bilSesi: sesiPekerja.length };
+  });
 
-  el.innerHTML = results.map(s=>`
+  el.innerHTML = results.map(r=>`
     <div class="trx-card">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-        <div style="font-weight:800;font-size:13px">${esc(namaPekerja(s.pekerja_id))}</div>
-        <span class="badge ${s.status==='aktif'?'badge-gold':'badge-green'}">${s.status==='aktif'?'Sedang Bekerja':'Selesai'}</span>
+        <div style="font-weight:800;font-size:13px">${esc(r.nama)}</div>
+        <span class="badge ${r.masihAktif?'badge-gold':'badge-green'}">${r.masihAktif?'Sedang Bekerja':'Selesai'}</span>
       </div>
-      <div style="font-size:11px;color:var(--muted)">Thumb In: ${fmtDT(s.thumb_in_masa)}${s.thumb_out_masa?' · Thumb Out: '+fmtDT(s.thumb_out_masa):''}</div>
-      <div style="font-size:13px;font-weight:700;color:var(--teal);margin-top:6px">📏 Anggaran jarak: ${s.jarak.toFixed(1)} km <span style="font-weight:400;color:var(--muted);font-size:11px">(kos minyak: ${fmt(s.jarak*SETTINGS.minyak)})</span></div>
+      <div style="font-size:11px;color:var(--muted)">Thumb In: ${fmtDT(r.thumbInAwal)}${r.thumbOutAkhir?' · Thumb Out: '+fmtDT(r.thumbOutAkhir):''}${r.bilSesi>1?` · ${r.bilSesi} sesi (digabung 1 hari)`:''}</div>
+      <div style="font-size:13px;font-weight:700;color:var(--teal);margin-top:6px">📏 Jarak sebenar: ${r.jarak.toFixed(1)} km <span style="font-weight:400;color:var(--muted);font-size:11px">(kos minyak: ${fmt(r.jarak*SETTINGS.minyak)})</span></div>
     </div>`).join('') || '<div class="empty"><div class="empty-icon">📍</div><div class="empty-text">Tiada rekod kehadiran pada tarikh ini</div></div>';
 }
 

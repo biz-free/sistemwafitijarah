@@ -15,6 +15,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 6. `SQL_TAMBAHAN_6.sql` — Baiki ralat "row violates RLS" pada Mohon Cuti & isu claim pre-order salah
 > 7. `SQL_TAMBAHAN_7.sql` — Tempoh tugasan pre-order (auto-pulang lepas 1 hari), padam data, gambar berbilang, tugaskan pekerja oleh pemilik
 > 8. `SQL_TAMBAHAN_8.sql` — Alamat & lokasi GPS pada pre-order (pembeli cari lokasi kedai sendiri di borang awam)
+> 9. `SQL_TAMBAHAN_9.sql` — Belian peribadi (tiada kedai), upah pekerja per-produk, status pekerja tidak aktif (boleh dipadam)
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
