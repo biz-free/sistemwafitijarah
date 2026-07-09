@@ -17,8 +17,10 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const errorParam = url.searchParams.get("error");
+  console.log("EasyParcel callback dipanggil. Full URL:", req.url, "| code hadir:", !!code, "| error param:", errorParam);
 
   if (errorParam || !code) {
+    console.error("EasyParcel redirect tiada code sah — semua query params:", Object.fromEntries(url.searchParams));
     return Response.redirect(REDIRECT_BALIK_GAGAL, 302);
   }
 
