@@ -16,10 +16,23 @@
       --gold: #C8922A; --red: #C0392B; --green: #1D7A4A;
       --bg: #EEF2F5; --card: #FFFFFF; --border: #D5E2EC; --text: #182530; --muted: #607D8B;
     }
-    header { background:linear-gradient(135deg,#0D2137,#1A3A55);padding:20px 16px;text-align:center; }
+    header { background:linear-gradient(135deg,#0D2137,#1A3A55);padding:20px 16px;text-align:center;position:relative; }
     header img { width:56px;height:56px;border-radius:50%;margin-bottom:8px; }
     header h1 { color:#fff;font-size:16px;font-weight:800; }
     header p { color:#E8B84B;font-size:12px;margin-top:2px; }
+    #btn-akaun { position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.15);border:none;color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer; }
+
+    /* ── MODAL AKAUN ── */
+    .modal-overlay { position:fixed;inset:0;background:rgba(13,33,55,0.6);z-index:9000;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto; }
+    .modal-overlay.show { display:flex; }
+    .modal-box { background:#fff;border-radius:14px;padding:20px;max-width:440px;width:100%;position:relative; }
+    .modal-close { position:absolute;top:14px;right:14px;background:var(--border);border:none;border-radius:50%;width:28px;height:28px;font-size:13px;font-weight:800;cursor:pointer; }
+    .akaun-alamat-card { border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:12px;position:relative; }
+    .akaun-alamat-card.utama { border-color:var(--teal);background:#0E7C7B0A; }
+    .akaun-pesanan-card { border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:12px; }
+    .btn-sm { padding:8px 12px;font-size:12px;width:auto; }
+    .btn-outline { background:transparent;border:1.5px dashed var(--teal);color:var(--teal); }
+    .btn-link { background:none;border:none;color:var(--teal);font-size:12px;font-weight:700;cursor:pointer;text-decoration:underline;padding:0; }
     #main { max-width:640px;margin:0 auto;padding:16px 16px 20px; }
     .card { background:#fff;border-radius:14px;border:1px solid var(--border);padding:16px;box-shadow:0 1px 4px rgba(0,0,0,0.05);margin-bottom:14px; }
     .section-title { font-size:15px;font-weight:800;color:var(--navy);margin-bottom:10px; }
@@ -82,6 +95,7 @@
 <body>
 
 <header>
+  <button id="btn-akaun" onclick="bukaAkaunModal()">👤 <span id="akaun-label">Akaun Saya</span></button>
   <img src="logo.png" alt="Wafi Tijarah Trading" />
   <h1>Wafi Tijarah Trading</h1>
   <p>Kedai Online · Produk Halal Berkualiti</p>
@@ -96,6 +110,12 @@
 
     <div class="card">
       <div class="section-title">📋 Maklumat Penerima</div>
+      <div class="form-group" id="alamat-tersimpan-wrap" style="display:none">
+        <label class="form-label">Guna Alamat Tersimpan</label>
+        <select class="form-input" id="c-alamat-pilihan" onchange="isiAlamatTersimpan()">
+          <option value="">-- Isi manual di bawah --</option>
+        </select>
+      </div>
       <div class="form-group">
         <label class="form-label">Nama Penuh</label>
         <input type="text" class="form-input" id="c-nama" placeholder="cth: Ahmad bin Ali" />
@@ -132,6 +152,11 @@
             <option value="W.P. Labuan">W.P. Labuan</option>
           </select>
         </div>
+      </div>
+      <div class="form-group" id="simpan-alamat-wrap" style="display:none;margin-bottom:0">
+        <label style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="c-simpan-alamat" style="width:auto" /> Simpan alamat ini untuk pesanan akan datang
+        </label>
       </div>
     </div>
 
@@ -184,6 +209,48 @@
   </div>
   <div class="footer-link">
     <a href="pengurusan.html">🔐 Log Masuk Pekerja/Pemilik</a>
+  </div>
+</div>
+
+<div class="modal-overlay" id="akaun-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="tutupAkaunModal()">✕</button>
+
+    <div id="akaun-guest">
+      <div class="section-title" id="akaun-tajuk">Log Masuk</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Log masuk (optional) untuk simpan alamat & lihat sejarah pesanan anda. Tak mahu daftar? Anda tetap boleh buat pesanan sebagai tetamu.</div>
+      <div class="form-group"><label class="form-label">Emel</label><input type="email" class="form-input" id="ak-emel" /></div>
+      <div class="form-group" id="ak-nama-wrap" style="display:none"><label class="form-label">Nama Penuh</label><input type="text" class="form-input" id="ak-nama" /></div>
+      <div class="form-group"><label class="form-label">Kata Laluan</label><input type="password" class="form-input" id="ak-pass" /></div>
+      <button class="btn btn-primary" id="btn-ak-submit" onclick="hantarLoginSignup()">Log Masuk</button>
+      <div style="text-align:center;margin-top:12px;font-size:12px">
+        <span id="ak-toggle-text">Belum ada akaun?</span> <button class="btn-link" onclick="togglAkaunMod()" id="ak-toggle-link">Daftar sini</button>
+      </div>
+    </div>
+
+    <div id="akaun-logged" style="display:none">
+      <div class="section-title">👤 Akaun Saya</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px" id="ak-emel-paparan"></div>
+      <button class="btn btn-sm" style="background:var(--red);color:#fff;margin-bottom:16px" onclick="logKeluar()">Log Keluar</button>
+
+      <div class="section-title" style="font-size:13px">📍 Alamat Tersimpan</div>
+      <div id="senarai-alamat"></div>
+      <button class="btn btn-outline btn-sm" onclick="bukaFormAlamatBaru()" style="margin-bottom:16px">+ Tambah Alamat</button>
+      <div id="form-alamat-baru" style="display:none;margin-bottom:16px;border:1.5px dashed var(--border);border-radius:10px;padding:12px">
+        <div class="form-group"><label class="form-label">Label</label><input type="text" class="form-input" id="na-label" placeholder="cth: Rumah, Pejabat" /></div>
+        <div class="form-group"><label class="form-label">Nama Penerima</label><input type="text" class="form-input" id="na-nama" /></div>
+        <div class="form-group"><label class="form-label">Telefon</label><input type="tel" class="form-input" id="na-tel" /></div>
+        <div class="form-group"><label class="form-label">Alamat</label><textarea class="form-input" id="na-alamat"></textarea></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Poskod</label><input type="text" class="form-input" id="na-poskod" /></div>
+          <div class="form-group"><label class="form-label">Negeri</label><input type="text" class="form-input" id="na-negeri" placeholder="cth: Kedah" /></div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="simpanAlamatBaru()">Simpan Alamat</button>
+      </div>
+
+      <div class="section-title" style="font-size:13px">🧾 Sejarah Pesanan</div>
+      <div id="senarai-pesanan-saya"></div>
+    </div>
   </div>
 </div>
 
@@ -244,6 +311,149 @@ async function initHalaman() {
   document.getElementById('bank-qr-img').style.display = TETAPAN.qr_bank_url ? '' : 'none';
   document.getElementById('bank-butiran').textContent = TETAPAN.butiran_bank || 'Sila hubungi kami untuk butiran akaun bank.';
   renderProdukGrid();
+  await muatkanStatusAkaun();
+}
+
+// ════════════════════════════════════════════════════
+//  AKAUN PELANGGAN (optional — guest checkout kekal berfungsi tanpa ini)
+// ════════════════════════════════════════════════════
+let currentCustomer = null;
+let akaunMode = 'login';
+let alamatSaya = [];
+
+async function muatkanStatusAkaun() {
+  const { data: { session } } = await sb.auth.getSession();
+  currentCustomer = session?.user || null;
+  if (currentCustomer) {
+    document.getElementById('akaun-label').textContent = 'Akaun Saya';
+    document.getElementById('akaun-guest').style.display = 'none';
+    document.getElementById('akaun-logged').style.display = 'block';
+    document.getElementById('ak-emel-paparan').textContent = currentCustomer.email;
+    document.getElementById('simpan-alamat-wrap').style.display = '';
+    await Promise.all([renderAlamatTersimpan(), renderPesananSaya()]);
+    // Pra-isi nama/emel checkout dari akaun (masih boleh diedit)
+    if (!document.getElementById('c-emel').value) document.getElementById('c-emel').value = currentCustomer.email || '';
+  } else {
+    document.getElementById('akaun-label').textContent = 'Akaun Saya';
+    document.getElementById('akaun-guest').style.display = 'block';
+    document.getElementById('akaun-logged').style.display = 'none';
+    document.getElementById('simpan-alamat-wrap').style.display = 'none';
+    document.getElementById('alamat-tersimpan-wrap').style.display = 'none';
+  }
+}
+
+function bukaAkaunModal() { document.getElementById('akaun-modal').classList.add('show'); }
+function tutupAkaunModal() { document.getElementById('akaun-modal').classList.remove('show'); }
+
+function togglAkaunMod() {
+  akaunMode = akaunMode === 'login' ? 'signup' : 'login';
+  const signup = akaunMode === 'signup';
+  document.getElementById('akaun-tajuk').textContent = signup ? 'Daftar Akaun' : 'Log Masuk';
+  document.getElementById('ak-nama-wrap').style.display = signup ? '' : 'none';
+  document.getElementById('btn-ak-submit').textContent = signup ? 'Daftar' : 'Log Masuk';
+  document.getElementById('ak-toggle-text').textContent = signup ? 'Sudah ada akaun?' : 'Belum ada akaun?';
+  document.getElementById('ak-toggle-link').textContent = signup ? 'Log masuk sini' : 'Daftar sini';
+}
+
+async function hantarLoginSignup() {
+  const emel = document.getElementById('ak-emel').value.trim();
+  const pass = document.getElementById('ak-pass').value;
+  if (!emel || !pass) return toast('Sila isi emel dan kata laluan','err');
+  if (akaunMode === 'signup') {
+    const nama = document.getElementById('ak-nama').value.trim();
+    if (!nama) return toast('Sila isi nama penuh','err');
+    if (pass.length < 6) return toast('Kata laluan mesti sekurang-kurangnya 6 aksara','err');
+    const { error } = await sb.auth.signUp({ email: emel, password: pass, options: { data: { nama } } });
+    if (error) return toast('Gagal daftar: '+error.message,'err');
+    toast('Akaun berjaya didaftarkan!');
+  } else {
+    const { error } = await sb.auth.signInWithPassword({ email: emel, password: pass });
+    if (error) return toast('Log masuk gagal: '+error.message,'err');
+    toast('Log masuk berjaya!');
+  }
+  document.getElementById('ak-emel').value = ''; document.getElementById('ak-pass').value = '';
+  await muatkanStatusAkaun();
+}
+
+async function logKeluar() {
+  await sb.auth.signOut();
+  currentCustomer = null;
+  toast('Log keluar berjaya');
+  await muatkanStatusAkaun();
+}
+
+function bukaFormAlamatBaru() {
+  document.getElementById('form-alamat-baru').style.display = 'block';
+}
+
+async function simpanAlamatBaru() {
+  if (!currentCustomer) return;
+  const alamat = document.getElementById('na-alamat').value.trim();
+  if (!alamat) return toast('Sila isi alamat','err');
+  const payload = {
+    auth_uid: currentCustomer.id,
+    label: document.getElementById('na-label').value.trim() || 'Rumah',
+    nama_penerima: document.getElementById('na-nama').value.trim(),
+    telefon: document.getElementById('na-tel').value.trim(),
+    alamat,
+    poskod: document.getElementById('na-poskod').value.trim(),
+    negeri: document.getElementById('na-negeri').value.trim(),
+    utama: alamatSaya.length === 0,
+  };
+  const { error } = await sb.from('alamat_pelanggan').insert(payload);
+  if (error) return toast('Gagal simpan alamat: '+error.message,'err');
+  ['na-label','na-nama','na-tel','na-alamat','na-poskod','na-negeri'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('form-alamat-baru').style.display = 'none';
+  toast('Alamat disimpan');
+  await renderAlamatTersimpan();
+}
+
+async function padamAlamat(id) {
+  if (!confirm('Padam alamat ini?')) return;
+  const { error } = await sb.from('alamat_pelanggan').delete().eq('id', id);
+  if (error) return toast('Gagal padam: '+error.message,'err');
+  await renderAlamatTersimpan();
+}
+
+async function renderAlamatTersimpan() {
+  const { data } = await sb.from('alamat_pelanggan').select('*').order('utama',{ascending:false}).order('created_at');
+  alamatSaya = data || [];
+  document.getElementById('senarai-alamat').innerHTML = alamatSaya.map(a=>`
+    <div class="akaun-alamat-card ${a.utama?'utama':''}">
+      <button class="btn-delete-icon" onclick="padamAlamat('${a.id}')" title="Padam" style="position:absolute;top:8px;right:8px;background:var(--red);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer">✕</button>
+      <div style="font-weight:700">${esc(a.label)} ${a.utama?'⭐':''}</div>
+      <div style="color:var(--muted);margin-top:2px">${esc(a.nama_penerima||'')} ${a.telefon?'· '+esc(a.telefon):''}</div>
+      <div style="color:var(--muted);margin-top:2px">${esc(a.alamat)}${a.poskod?', '+esc(a.poskod):''}${a.negeri?', '+esc(a.negeri):''}</div>
+    </div>`).join('') || '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Tiada alamat tersimpan lagi</div>';
+
+  const sel = document.getElementById('c-alamat-pilihan');
+  document.getElementById('alamat-tersimpan-wrap').style.display = alamatSaya.length ? '' : 'none';
+  sel.innerHTML = '<option value="">-- Isi manual di bawah --</option>' + alamatSaya.map(a=>`<option value="${a.id}">${esc(a.label)} — ${esc(a.alamat).slice(0,40)}</option>`).join('');
+}
+
+function isiAlamatTersimpan() {
+  const id = document.getElementById('c-alamat-pilihan').value;
+  const a = alamatSaya.find(a=>a.id===id);
+  if (!a) return;
+  document.getElementById('c-nama').value = a.nama_penerima || '';
+  document.getElementById('c-tel').value = a.telefon || '';
+  document.getElementById('c-alamat').value = a.alamat || '';
+  document.getElementById('c-poskod').value = a.poskod || '';
+  document.getElementById('c-negeri').value = a.negeri || '';
+  kemaskiniTotal();
+}
+
+async function renderPesananSaya() {
+  const { data } = await sb.from('pesanan_edagang').select('*').order('created_at',{ascending:false});
+  const statusTxt = { baru:'🆕 Baru', diproses:'⏳ Diproses', dihantar:'🚚 Dihantar', selesai:'✓ Selesai', dibatalkan:'✕ Dibatalkan' };
+  document.getElementById('senarai-pesanan-saya').innerHTML = (data||[]).map(o=>`
+    <div class="akaun-pesanan-card">
+      <div style="display:flex;justify-content:space-between;font-weight:700">
+        <span>${esc(o.id)}</span><span>${statusTxt[o.status_pesanan]||o.status_pesanan}</span>
+      </div>
+      <div style="color:var(--muted);margin-top:2px">${fmt(o.jumlah)} · ${new Date(o.created_at).toLocaleDateString('ms-MY')}</div>
+      ${o.no_tracking?`<div style="color:var(--teal);margin-top:2px">📦 Tracking: ${esc(o.no_tracking)}${o.nama_kurier?' ('+esc(o.nama_kurier)+')':''}</div>`:''}
+    </div>`).join('') || '<div style="font-size:12px;color:var(--muted)">Tiada pesanan lagi</div>';
 }
 
 function gambarProduk(p) {
@@ -354,6 +564,7 @@ async function hantarPesanan() {
 
   const payload = {
     id,
+    auth_uid: currentCustomer?.id || null,
     pelanggan_nama: nama,
     pelanggan_telefon: tel,
     pelanggan_email: emel || null,
@@ -371,6 +582,13 @@ async function hantarPesanan() {
   };
   const { error } = await sb.from('pesanan_edagang').insert(payload);
   if (error) return toast('Gagal buat pesanan: '+error.message,'err');
+
+  if (currentCustomer && document.getElementById('c-simpan-alamat').checked) {
+    await sb.from('alamat_pelanggan').insert({
+      auth_uid: currentCustomer.id, label: 'Rumah', nama_penerima: nama, telefon: tel,
+      alamat, poskod, negeri, utama: alamatSaya.length === 0,
+    });
+  }
 
   document.getElementById('form-card').style.display='none';
   document.getElementById('cart-bar').className='';

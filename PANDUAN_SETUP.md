@@ -153,6 +153,10 @@ Laman utama terbuka untuk pelanggan awam (bukan kedai runcit) beli terus secara 
 - Kos penghantaran kadar **flat ikut zon sahaja** (belum ikut berat produk — EasyParcel belum disambung).
 - Tiada paparan pesanan e-dagang dalam `pengurusan.html` (apps pengurusan) lagi — akan ditambah bila diperlukan.
 
+**Akaun Pelanggan (optional):** Butang "👤 Akaun Saya" di header benarkan pelanggan daftar/log masuk untuk simpan alamat & lihat sejarah pesanan — guest checkout (tanpa akaun) tetap berfungsi sepenuhnya untuk yang tak mahu daftar.
+
+> ⚠️ Jika pelanggan baru daftar tapi tak boleh terus log masuk selepas "Daftar" (kekal di skrin log masuk), sebabnya sama seperti isu akaun pekerja: Supabase perlukan pengesahan e-mel dahulu. Jika mahu pelanggan terus boleh belanja lepas daftar (tanpa perlu sahkan e-mel), pergi ke Supabase → **Authentication → Providers → Email** dan matikan "Confirm email".
+
 ### 🖼️ Gambar Produk & Diskaun Online Transfer
 - **Gambar produk**: Bila tambah/edit produk di **Stok**, pemilik boleh muat naik gambar (dipaparkan di borang pre-order supaya kedai nampak produk sebelum order).
 - **Diskaun Online Transfer**: Di **Lagi → Tetapan Pre-Order & Diskaun**, pemilik tetapkan minima pesanan (lalai RM500) & peratus diskaun (lalai 5%), serta muat naik gambar QR bank & butiran akaun. Bila kedai buat pre-order melebihi minima DAN pilih "Online Transfer" sebagai kaedah bayar, diskaun terpakai automatik — ini menggalakkan kedai bayar terus (elak hutang) berbanding COD.

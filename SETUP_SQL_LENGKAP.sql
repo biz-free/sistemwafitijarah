@@ -541,6 +541,7 @@ ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS pesanan_edagang (
   id text PRIMARY KEY,
+  auth_uid uuid REFERENCES auth.users(id),
   pelanggan_nama text NOT NULL,
   pelanggan_telefon text NOT NULL,
   pelanggan_email text,
@@ -567,11 +568,35 @@ ALTER TABLE pesanan_edagang ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "sesiapa boleh buat pesanan" ON pesanan_edagang;
 CREATE POLICY "sesiapa boleh buat pesanan" ON pesanan_edagang FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "staff boleh baca pesanan" ON pesanan_edagang;
-CREATE POLICY "staff boleh baca pesanan" ON pesanan_edagang FOR SELECT USING (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "staff boleh baca semua pesanan" ON pesanan_edagang;
+CREATE POLICY "staff boleh baca semua pesanan" ON pesanan_edagang FOR SELECT
+  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()));
+DROP POLICY IF EXISTS "pelanggan boleh baca pesanan sendiri" ON pesanan_edagang;
+CREATE POLICY "pelanggan boleh baca pesanan sendiri" ON pesanan_edagang FOR SELECT
+  USING (auth.uid() IS NOT NULL AND auth.uid() = auth_uid);
 DROP POLICY IF EXISTS "staff boleh kemaskini pesanan" ON pesanan_edagang;
-CREATE POLICY "staff boleh kemaskini pesanan" ON pesanan_edagang FOR UPDATE USING (auth.uid() IS NOT NULL);
+CREATE POLICY "staff boleh kemaskini pesanan" ON pesanan_edagang FOR UPDATE
+  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()));
 DROP POLICY IF EXISTS "pemilik boleh padam pesanan" ON pesanan_edagang;
 CREATE POLICY "pemilik boleh padam pesanan" ON pesanan_edagang FOR DELETE USING (is_pemilik());
+
+CREATE TABLE IF NOT EXISTS alamat_pelanggan (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  auth_uid uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  label text DEFAULT 'Rumah',
+  nama_penerima text,
+  telefon text,
+  alamat text NOT NULL,
+  poskod text,
+  negeri text,
+  utama boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE alamat_pelanggan ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "pelanggan urus alamat sendiri" ON alamat_pelanggan;
+CREATE POLICY "pelanggan urus alamat sendiri" ON alamat_pelanggan FOR ALL
+  USING (auth.uid() = auth_uid) WITH CHECK (auth.uid() = auth_uid);
 
 CREATE TABLE IF NOT EXISTS baucar (
   kod text PRIMARY KEY,
