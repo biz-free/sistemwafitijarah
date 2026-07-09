@@ -4,6 +4,8 @@
 Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 📞 014-6363831 · ✉️ wafitijarahtrading@gmail.com
 
+> 🗂️ **Struktur fail:** `index.html` kini ialah **laman e-dagang runcit** (halaman utama di `www.wafitijarahtrading.com`). Sistem pengurusan penghantaran (log masuk pemilik/pekerja) di fail **`pengurusan.html`**, boleh dicapai melalui pautan "🔐 Log Masuk Pekerja/Pemilik" di bahagian bawah laman utama, atau terus di `www.wafitijarahtrading.com/pengurusan.html`. Borang repeat-order khas kedai runcit (B2B) kekal berasingan di **`pesan.html`**.
+
 > 🚨 **PENTING — jalankan SEGERA jika anda dah jalankan `SQL_TAMBAHAN_2.sql` sebelum ini:** ada bug "infinite recursion" pada dasar `profiles` yang boleh sekat log masuk & urus stok/kedai. Jalankan `SQL_HOTFIX_RECURSION.sql` di SQL Editor SEKARANG untuk baiki (selamat, tak hilang data).
 >
 > 🆕 **Sudah sambung Supabase sebelum ini?** Jalankan SQL tambahan mengikut turutan (skip yang dah pernah jalankan):
@@ -17,7 +19,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 8. `SQL_TAMBAHAN_8.sql` — Alamat & lokasi GPS pada pre-order (pembeli cari lokasi kedai sendiri di borang awam)
 > 9. `SQL_TAMBAHAN_9.sql` — Belian peribadi (tiada kedai), upah pekerja per-produk, status pekerja tidak aktif (boleh dipadam)
 > 10. `SQL_TAMBAHAN_10.sql` — Baiki padam kedai (409 jika ada sejarah), diskaun COD/Transfer berasingan, had Consignment
-> 11. `SQL_TAMBAHAN_11.sql` — Fasa 1 Laman E-Dagang (`toko.html`): zon penghantaran, jadual pesanan e-dagang
+> 11. `SQL_TAMBAHAN_11.sql` — Fasa 1 Laman E-Dagang (`index.html`): zon penghantaran, jadual pesanan e-dagang
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -30,7 +32,7 @@ Sistem kini guna **Google Maps** untuk peta pilih lokasi kedai, peta servis, dan
 3. Pergi **APIs & Services → Library** → aktifkan **"Maps JavaScript API"** dan **"Geocoding API"**
 4. Pergi **APIs & Services → Credentials** → **Create Credentials → API Key**
 5. (Disyorkan) Sekat key tersebut kepada domain `www.wafitijarahtrading.com/*` sahaja (API Key → Application restrictions → HTTP referrers) — tambah `biz-free.github.io/*` sekali sepanjang tempoh peralihan domain
-6. Buka fail `index.html`, cari `const GOOGLE_MAPS_API_KEY = 'YOUR_GOOGLE_MAPS_API_KEY';`, ganti dengan key sebenar anda
+6. Buka fail `pengurusan.html`, cari `const GOOGLE_MAPS_API_KEY = 'YOUR_GOOGLE_MAPS_API_KEY';`, ganti dengan key sebenar anda
 7. Upload semula ke GitHub
 
 > 💡 Pautan "Lihat di Google Maps" pada kad kedai **tidak perlukan API key** — ia buka terus aplikasi/laman Google Maps di peranti pekerja sendiri. Hanya peta INTERAKTIF (pilih lokasi, peta servis, lokasi live) yang perlukan API key.
@@ -42,7 +44,7 @@ Sistem kini guna **Google Maps** untuk peta pilih lokasi kedai, peta servis, dan
 **Pilihan A: GitHub Pages (Disyorkan, 100% Percuma)**
 1. Daftar akaun di github.com
 2. Klik "New Repository" → nama: `wafi-app`
-3. Upload semua fail (index.html, manifest.json, sw.js, icon-192.png, icon-512.png)
+3. Upload semua fail (index.html, pengurusan.html, pesan.html, manifest.json, sw.js, icon-192.png, icon-512.png)
 4. Pergi Settings → Pages → Source: main branch
 5. URL apps anda: `https://[username].github.io/wafi-app`
 
@@ -104,7 +106,7 @@ Kedua-dua pemilik & pekerja boleh tekan "Lupa kata laluan?" di skrin log masuk, 
 ### 🔑 Reset Kata Laluan Pekerja ke "abc123" (Pemilik sahaja)
 Di **Lagi → Urus Pekerja**, pemilik boleh tekan **"🔑 Reset abc123"** pada mana-mana pekerja yang lupa kata laluan. Pekerja tersebut akan diminta **tetapkan kata laluan baharu** (tak boleh abc123 semula) sebelum boleh masuk ke ruang utama pada log masuk seterusnya.
 
-> ⚠️ **Kenapa hanya pemilik boleh buat ini (bukan sesiapa dari skrin log masuk)?** Jika sesiapa boleh reset password akaun lain ke nilai tetap (abc123) hanya dengan tahu e-mel — itu jadi lubang keselamatan (curi akaun). Sebab itu tindakan ini perlu pengesahan pemilik yang sudah log masuk, dan dijalankan melalui **Edge Function** (kod pelayan berasingan yang pegang kunci admin Supabase secara selamat — kunci ini TIDAK PERNAH masuk ke dalam kod `index.html` yang orang ramai boleh lihat).
+> ⚠️ **Kenapa hanya pemilik boleh buat ini (bukan sesiapa dari skrin log masuk)?** Jika sesiapa boleh reset password akaun lain ke nilai tetap (abc123) hanya dengan tahu e-mel — itu jadi lubang keselamatan (curi akaun). Sebab itu tindakan ini perlu pengesahan pemilik yang sudah log masuk, dan dijalankan melalui **Edge Function** (kod pelayan berasingan yang pegang kunci admin Supabase secara selamat — kunci ini TIDAK PERNAH masuk ke dalam kod `pengurusan.html` yang orang ramai boleh lihat).
 
 **Deploy Edge Function (buat SEKALI sahaja):**
 1. Pastikan Node.js dipasang di komputer anda (untuk `npx`)
@@ -143,13 +145,13 @@ Satu link awam **`pesan.html`** (cth: `https://www.wafitijarahtrading.com/pesan.
 
 Setiap resit turut jana **kod QR unik** yang terus bawa kedai tersebut ke `pesan.html?kedai=<id kedai>` — bila diimbas, nama & no. telefon kedai automatik terisi (kedai tak perlu taip semula), memudahkan repeat order terus dari resit lama.
 
-### 🛒 Laman E-Dagang B2C (`toko.html`) — Fasa 1
-Laman terbuka untuk pelanggan awam (bukan kedai runcit) beli terus secara runcit: `https://www.wafitijarahtrading.com/toko.html`. Guna semula katalog produk yang sama (Stok), tetapi checkout berasingan — pelanggan isi alamat penghantaran + poskod + negeri, kos penghantaran dikira automatik ikut zon (Semenanjung vs Sabah/Sarawak/Labuan, kadar boleh ubah di jadual `zon_penghantaran`). Pesanan masuk ke jadual `pesanan_edagang` (belum ada paparan dalam apps lagi — sila semak terus di Supabase Table Editor buat masa ini).
+### 🛒 Laman E-Dagang B2C (`index.html`) — Fasa 1
+Laman utama terbuka untuk pelanggan awam (bukan kedai runcit) beli terus secara runcit: `https://www.wafitijarahtrading.com/`. Guna semula katalog produk yang sama (Stok), tetapi checkout berasingan — pelanggan isi alamat penghantaran + poskod + negeri, kos penghantaran dikira automatik ikut zon (Semenanjung vs Sabah/Sarawak/Labuan, kadar boleh ubah di jadual `zon_penghantaran`). Pesanan masuk ke jadual `pesanan_edagang` (belum ada paparan dalam apps lagi — sila semak terus di Supabase Table Editor buat masa ini).
 
 **Had Fasa 1 (sengaja, bukan bug):**
 - Bayaran hanya **Online Transfer manual** (sama seperti pre-order kedai) — belum ada payment gateway (Billplz/SenangPay).
 - Kos penghantaran kadar **flat ikut zon sahaja** (belum ikut berat produk — EasyParcel belum disambung).
-- Tiada paparan pesanan e-dagang dalam `index.html` (apps pengurusan) lagi — akan ditambah bila diperlukan.
+- Tiada paparan pesanan e-dagang dalam `pengurusan.html` (apps pengurusan) lagi — akan ditambah bila diperlukan.
 
 ### 🖼️ Gambar Produk & Diskaun Online Transfer
 - **Gambar produk**: Bila tambah/edit produk di **Stok**, pemilik boleh muat naik gambar (dipaparkan di borang pre-order supaya kedai nampak produk sebelum order).
@@ -399,8 +401,8 @@ $$;
 - Salin **anon/public key** (panjang, bermula dengan eyJ...)
 
 **6. Masukkan dalam apps**
-- Buka fail `index.html`
-- Cari baris ini (dekat permulaan `<script>`):
+- Ketiga-tiga fail **`index.html`** (laman e-dagang), **`pengurusan.html`** (sistem pengurusan) dan **`pesan.html`** (repeat-order kedai) ada credentials Supabase sendiri — perlu kemas kini **SEMUA fail**.
+- Dalam setiap fail, cari baris ini (dekat permulaan `<script>`):
 ```javascript
 const SUPABASE_URL = 'YOUR_SUPABASE_URL';
 const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';

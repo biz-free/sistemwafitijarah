@@ -519,7 +519,7 @@ ALTER TABLE pre_order ADD CONSTRAINT pre_order_kedai_id_fkey
 ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS diskaun_cod_peratus float DEFAULT 5;
 ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS consignment_limit float DEFAULT 300;
 
--- ═══ Fasa 1 Laman E-Dagang (toko.html): zon penghantaran & pesanan e-dagang ═══
+-- ═══ Fasa 1 Laman E-Dagang (index.html): zon penghantaran & pesanan e-dagang ═══
 CREATE TABLE IF NOT EXISTS zon_penghantaran (
   id text PRIMARY KEY,
   nama text NOT NULL,
