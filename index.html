@@ -53,6 +53,8 @@
     #success-box p { color:var(--muted);font-size:13px; }
 
     /* ── KATALOG PRODUK ── */
+    .kategori-pill { flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:#fff;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap; }
+    .kategori-pill.aktif { border-color:var(--teal);background:var(--teal);color:#fff; }
     .produk-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
     .produk-card { background:#fff;border:1.5px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color 0.15s; }
     .produk-card.dipilih { border-color:var(--teal);box-shadow:0 0 0 2px #0E7C7B22; }
@@ -105,6 +107,18 @@
   <div id="form-card">
     <div class="card">
       <div class="section-title">🛍️ Katalog Produk</div>
+      <div class="form-group">
+        <input type="text" class="form-input" id="cari-produk" placeholder="🔍 Cari produk..." oninput="renderProdukGrid()" />
+      </div>
+      <div id="kategori-pills" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:10px"></div>
+      <div class="form-group" style="margin-bottom:14px">
+        <select class="form-input" id="susun-produk" onchange="renderProdukGrid()">
+          <option value="laris">🔥 Paling Laris</option>
+          <option value="harga-rendah">💰 Harga: Rendah ke Tinggi</option>
+          <option value="harga-tinggi">💰 Harga: Tinggi ke Rendah</option>
+          <option value="nama">🔤 Nama A-Z</option>
+        </select>
+      </div>
       <div id="produk-grid" class="produk-grid"></div>
     </div>
 
@@ -310,6 +324,7 @@ async function initHalaman() {
   document.getElementById('bank-qr-img').src = TETAPAN.qr_bank_url || '';
   document.getElementById('bank-qr-img').style.display = TETAPAN.qr_bank_url ? '' : 'none';
   document.getElementById('bank-butiran').textContent = TETAPAN.butiran_bank || 'Sila hubungi kami untuk butiran akaun bank.';
+  renderKategoriPills();
   renderProdukGrid();
   await muatkanStatusAkaun();
 }
@@ -462,8 +477,40 @@ function gambarProduk(p) {
   return [];
 }
 
+let kategoriAktif = '';
+
+function renderKategoriPills() {
+  const kategoriSenarai = [...new Set(PRODUK.map(p=>p.kategori).filter(Boolean))].sort();
+  document.getElementById('kategori-pills').innerHTML = [
+    `<button class="kategori-pill ${!kategoriAktif?'aktif':''}" onclick="pilihKategori('')">Semua</button>`,
+    ...kategoriSenarai.map(k=>`<button class="kategori-pill ${kategoriAktif===k?'aktif':''}" onclick="pilihKategori('${esc(k)}')">${esc(k)}</button>`),
+  ].join('');
+}
+
+function pilihKategori(k) {
+  kategoriAktif = k;
+  renderKategoriPills();
+  renderProdukGrid();
+}
+
+function produkTertapis() {
+  const carian = document.getElementById('cari-produk').value.trim().toLowerCase();
+  const susunan = document.getElementById('susun-produk').value;
+  let list = PRODUK.filter(p=>{
+    if (kategoriAktif && p.kategori !== kategoriAktif) return false;
+    if (carian && !p.nama.toLowerCase().includes(carian)) return false;
+    return true;
+  });
+  if (susunan === 'harga-rendah') list = [...list].sort((a,b)=>a.harga_jual-b.harga_jual);
+  else if (susunan === 'harga-tinggi') list = [...list].sort((a,b)=>b.harga_jual-a.harga_jual);
+  else if (susunan === 'nama') list = [...list].sort((a,b)=>a.nama.localeCompare(b.nama));
+  else list = [...list].sort((a,b)=>(b.jumlah_terjual||0)-(a.jumlah_terjual||0));
+  return list;
+}
+
 function renderProdukGrid() {
-  document.getElementById('produk-grid').innerHTML = PRODUK.map(p=>{
+  const list = produkTertapis();
+  document.getElementById('produk-grid').innerHTML = list.map(p=>{
     const qty = cart[p.id] || 0;
     const gambar = gambarProduk(p);
     return `<div class="produk-card ${qty>0?'dipilih':''}">
@@ -480,7 +527,7 @@ function renderProdukGrid() {
         </div>
       </div>
     </div>`;
-  }).join('') || '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:20px">Tiada produk tersedia buat masa ini</div>';
+  }).join('') || '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:20px">Tiada produk dijumpai</div>';
   kemaskiniTotal();
 }
 
