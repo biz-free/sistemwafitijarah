@@ -637,6 +637,14 @@
       <button class="btn btn-primary" onclick="saveTetapanDiskaun()">💾 Simpan Tetapan</button>
     </div>
 
+    <!-- EasyParcel (pemilik sahaja) -->
+    <div class="card" id="easyparcel-card">
+      <div class="card-title">🚚 EasyParcel (Penghantaran Automatik)</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Sambungkan akaun EasyParcel untuk kadar penghantaran sebenar & jana label secara automatik (akan aktif secara berperingkat).</div>
+      <div id="easyparcel-status" style="font-size:12px;font-weight:700;margin-bottom:10px">Menyemak status...</div>
+      <button class="btn btn-primary" id="btn-easyparcel-connect" onclick="sambungEasyParcel()">🔗 Sambung EasyParcel</button>
+    </div>
+
     <!-- Urus Pekerja (pemilik sahaja) -->
     <div class="card" id="urus-pekerja-card">
       <div class="card-title">👥 Urus Pekerja</div>
@@ -1106,7 +1114,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['laporan-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card'];
+  const pemilikOnly = ['laporan-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -1167,6 +1175,7 @@ async function setPage(p) {
       loadTetapanDiskaun();
       renderSenaraiCutiSemua();
       renderStatusLive();
+      semakStatusEasyParcel();
     }
   }
 }
@@ -2726,6 +2735,46 @@ function previewQrBank() {
   prev.style.display = 'block';
 }
 
+// ════════════════════════════════════════════════════
+//  EASYPARCEL — sambungan OAuth (Fasa 3a: sambungan sahaja,
+//  kadar/label automatik akan disambung dalam fasa seterusnya)
+// ════════════════════════════════════════════════════
+const EASYPARCEL_CLIENT_ID = 'd49fd1b6-16d3-445f-b912-56b011c85b23';
+const EASYPARCEL_REDIRECT_URI = 'https://smepriytkoxkmpvjvvzq.supabase.co/functions/v1/easyparcel-oauth-callback';
+
+function sambungEasyParcel() {
+  const state = crypto.randomUUID();
+  const authUrl = `https://api.easyparcel.com/oauth/login?client_id=${encodeURIComponent(EASYPARCEL_CLIENT_ID)}&redirect_uri=${encodeURIComponent(EASYPARCEL_REDIRECT_URI)}&state=${state}`;
+  window.location.href = authUrl;
+}
+
+// Selepas EasyParcel redirect balik ke sini dengan ?easyparcel=berjaya/gagal
+function semakBalikanEasyParcel() {
+  const hasil = new URLSearchParams(location.search).get('easyparcel');
+  if (!hasil) return;
+  if (hasil === 'berjaya') toast('EasyParcel berjaya disambungkan!');
+  else toast('Gagal sambung EasyParcel — sila cuba semula','err');
+  history.replaceState({}, '', location.pathname);
+  setPage('lebih');
+  setTimeout(()=>document.getElementById('easyparcel-card')?.scrollIntoView({behavior:'smooth'}), 300);
+}
+
+async function semakStatusEasyParcel() {
+  if (!useCloud) return;
+  const el = document.getElementById('easyparcel-status');
+  const btn = document.getElementById('btn-easyparcel-connect');
+  const { data, error } = await sb.rpc('easyparcel_status');
+  const s = data?.[0];
+  if (error || !s) { el.textContent = 'Gagal semak status sambungan.'; return; }
+  if (s.connected) {
+    el.innerHTML = `<span style="color:var(--green)">✅ Disambungkan</span> — ${new Date(s.connected_at).toLocaleString('ms-MY')}`;
+    btn.textContent = '🔄 Sambung Semula';
+  } else {
+    el.innerHTML = '<span style="color:var(--muted)">⚪ Belum disambungkan</span>';
+    btn.textContent = '🔗 Sambung EasyParcel';
+  }
+}
+
 async function saveTetapanDiskaun() {
   let qrUrl = qrBankUrlSedia;
   if (qrBankFilePilihan) {
@@ -3369,6 +3418,7 @@ window.addEventListener('load',()=>{
             return;
           }
           await showApp();
+          semakBalikanEasyParcel();
           return;
         }
       }

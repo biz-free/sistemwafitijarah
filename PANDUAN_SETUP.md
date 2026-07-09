@@ -21,6 +21,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 10. `SQL_TAMBAHAN_10.sql` — Baiki padam kedai (409 jika ada sejarah), diskaun COD/Transfer berasingan, had Consignment
 > 11. `SQL_TAMBAHAN_11.sql` — Fasa 1 Laman E-Dagang (`index.html`): zon penghantaran, jadual pesanan e-dagang
 > 12. `SQL_TAMBAHAN_12.sql` — **Wajib** untuk checkout e-dagang berfungsi: baiki bukti bayaran & tarikh/masa transfer yang belum disimpan
+> 13. `SQL_TAMBAHAN_13.sql` — Sambungan OAuth EasyParcel (Fasa 3a) — lihat bahagian "🚚 Sambung EasyParcel" di bawah untuk setup Edge Function
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -157,6 +158,34 @@ Laman utama terbuka untuk pelanggan awam (bukan kedai runcit) beli terus secara 
 **Akaun Pelanggan (optional):** Butang "👤 Akaun Saya" di header benarkan pelanggan daftar/log masuk untuk simpan alamat & lihat sejarah pesanan — guest checkout (tanpa akaun) tetap berfungsi sepenuhnya untuk yang tak mahu daftar.
 
 > ⚠️ Jika pelanggan baru daftar tapi tak boleh terus log masuk selepas "Daftar" (kekal di skrin log masuk), sebabnya sama seperti isu akaun pekerja: Supabase perlukan pengesahan e-mel dahulu. Jika mahu pelanggan terus boleh belanja lepas daftar (tanpa perlu sahkan e-mel), pergi ke Supabase → **Authentication → Providers → Email** dan matikan "Confirm email".
+
+### 🚚 Sambung EasyParcel (Fasa 3a — sambungan OAuth sahaja)
+Di **Profile**, kad "🚚 EasyParcel" benarkan pemilik sambungkan akaun EasyParcel (guna OAuth 2.0 — anda log masuk & benarkan akses terus di laman EasyParcel, bukan taip password di sini). Buat masa ini, sambungan ini **cuma simpan token akses** — kadar penghantaran sebenar & jana label automatik akan disambung dalam fasa seterusnya.
+
+> 🔒 `client_secret` EasyParcel **TIDAK PERNAH** masuk ke kod client-side — ia disimpan sebagai *secret* Edge Function sahaja (lihat langkah deploy di bawah), dan token akses/refresh disimpan dalam jadual `easyparcel_auth` yang **tertutup sepenuhnya** dari client (tiada sesiapa, termasuk pemilik log masuk, boleh baca token mentah melalui apps — hanya Edge Function guna kunci admin boleh akses).
+
+**Deploy Edge Function (buat SEKALI sahaja):**
+1. Daftar app di [developer.easyparcel.com](https://developer.easyparcel.com) jika belum, salin **Client ID** dan **Client Secret**
+2. Daftarkan **Redirect URI** app tersebut kepada:
+   ```
+   https://smepriytkoxkmpvjvvzq.supabase.co/functions/v1/easyparcel-oauth-callback
+   ```
+3. Buka Command Prompt/Terminal, masuk ke folder `wafi-app`
+4. Log masuk & pautkan CLI (skip jika dah buat untuk fungsi lain sebelum ini):
+   ```
+   npx supabase login
+   npx supabase link --project-ref smepriytkoxkmpvjvvzq
+   ```
+5. Tetapkan secret (client_secret **TIDAK BOLEH** masuk kod, letak di sini sahaja):
+   ```
+   npx supabase secrets set EASYPARCEL_CLIENT_ID=d49fd1b6-16d3-445f-b912-56b011c85b23
+   npx supabase secrets set EASYPARCEL_CLIENT_SECRET=<client secret sebenar anda>
+   ```
+6. Deploy fungsi — **PENTING**: kena guna `--no-verify-jwt` sebab EasyParcel redirect terus browser ke sini (bukan panggilan dari kod app dengan token log masuk):
+   ```
+   npx supabase functions deploy easyparcel-oauth-callback --no-verify-jwt
+   ```
+7. Selesai — kembali ke **Profile → EasyParcel**, tekan "🔗 Sambung EasyParcel", log masuk ke akaun EasyParcel anda & benarkan akses. Anda akan dibawa balik ke apps dengan status "✅ Disambungkan".
 
 ### 🖼️ Gambar Produk & Diskaun Online Transfer
 - **Gambar produk**: Bila tambah/edit produk di **Stok**, pemilik boleh muat naik gambar (dipaparkan di borang pre-order supaya kedai nampak produk sebelum order).

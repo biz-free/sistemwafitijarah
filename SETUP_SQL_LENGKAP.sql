@@ -615,3 +615,23 @@ DROP POLICY IF EXISTS "semua boleh baca baucar aktif" ON baucar;
 CREATE POLICY "semua boleh baca baucar aktif" ON baucar FOR SELECT USING (aktif = true);
 DROP POLICY IF EXISTS "pemilik urus baucar" ON baucar;
 CREATE POLICY "pemilik urus baucar" ON baucar FOR ALL USING (is_pemilik());
+
+-- ═══ Fasa 3a — Sambungan OAuth EasyParcel (lihat PANDUAN_SETUP.md untuk deploy Edge Function) ═══
+CREATE TABLE IF NOT EXISTS easyparcel_auth (
+  id int PRIMARY KEY DEFAULT 1,
+  access_token text,
+  refresh_token text,
+  expires_at timestamptz,
+  connected_at timestamptz,
+  CONSTRAINT easyparcel_auth_single_row CHECK (id = 1)
+);
+INSERT INTO easyparcel_auth (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+ALTER TABLE easyparcel_auth ENABLE ROW LEVEL SECURITY;
+-- (Sengaja tiada CREATE POLICY — jadual tertutup dari client, hanya Edge Function/service_role boleh akses.)
+
+CREATE OR REPLACE FUNCTION easyparcel_status()
+RETURNS TABLE(connected boolean, connected_at timestamptz, expires_at timestamptz)
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  SELECT (access_token IS NOT NULL), connected_at, expires_at FROM easyparcel_auth WHERE id = 1;
+$$;
+GRANT EXECUTE ON FUNCTION easyparcel_status() TO authenticated;
