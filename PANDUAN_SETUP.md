@@ -4,8 +4,6 @@
 Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 📞 014-6363831 · ✉️ wafitijarahtrading@gmail.com
 
-> 🗂️ **Struktur fail (kemas kini):** `index.html` kini ialah **borang pesanan awam** (halaman utama yang dilihat pelanggan/kedai di `www.wafitijarahtrading.com`). Sistem pengurusan penghantaran (log masuk pemilik/pekerja) kini di fail **`pengurusan.html`**, boleh dicapai melalui pautan "🔐 Log Masuk Pekerja/Pemilik" di bahagian bawah borang pesanan, atau terus di `www.wafitijarahtrading.com/pengurusan.html`.
-
 > 🚨 **PENTING — jalankan SEGERA jika anda dah jalankan `SQL_TAMBAHAN_2.sql` sebelum ini:** ada bug "infinite recursion" pada dasar `profiles` yang boleh sekat log masuk & urus stok/kedai. Jalankan `SQL_HOTFIX_RECURSION.sql` di SQL Editor SEKARANG untuk baiki (selamat, tak hilang data).
 >
 > 🆕 **Sudah sambung Supabase sebelum ini?** Jalankan SQL tambahan mengikut turutan (skip yang dah pernah jalankan):
@@ -31,7 +29,7 @@ Sistem kini guna **Google Maps** untuk peta pilih lokasi kedai, peta servis, dan
 3. Pergi **APIs & Services → Library** → aktifkan **"Maps JavaScript API"** dan **"Geocoding API"**
 4. Pergi **APIs & Services → Credentials** → **Create Credentials → API Key**
 5. (Disyorkan) Sekat key tersebut kepada domain `www.wafitijarahtrading.com/*` sahaja (API Key → Application restrictions → HTTP referrers) — tambah `biz-free.github.io/*` sekali sepanjang tempoh peralihan domain
-6. Buka fail `pengurusan.html`, cari `const GOOGLE_MAPS_API_KEY = 'YOUR_GOOGLE_MAPS_API_KEY';`, ganti dengan key sebenar anda
+6. Buka fail `index.html`, cari `const GOOGLE_MAPS_API_KEY = 'YOUR_GOOGLE_MAPS_API_KEY';`, ganti dengan key sebenar anda
 7. Upload semula ke GitHub
 
 > 💡 Pautan "Lihat di Google Maps" pada kad kedai **tidak perlukan API key** — ia buka terus aplikasi/laman Google Maps di peranti pekerja sendiri. Hanya peta INTERAKTIF (pilih lokasi, peta servis, lokasi live) yang perlukan API key.
@@ -43,7 +41,7 @@ Sistem kini guna **Google Maps** untuk peta pilih lokasi kedai, peta servis, dan
 **Pilihan A: GitHub Pages (Disyorkan, 100% Percuma)**
 1. Daftar akaun di github.com
 2. Klik "New Repository" → nama: `wafi-app`
-3. Upload semua fail (index.html, pengurusan.html, manifest.json, sw.js, icon-192.png, icon-512.png)
+3. Upload semua fail (index.html, manifest.json, sw.js, icon-192.png, icon-512.png)
 4. Pergi Settings → Pages → Source: main branch
 5. URL apps anda: `https://[username].github.io/wafi-app`
 
@@ -105,7 +103,7 @@ Kedua-dua pemilik & pekerja boleh tekan "Lupa kata laluan?" di skrin log masuk, 
 ### 🔑 Reset Kata Laluan Pekerja ke "abc123" (Pemilik sahaja)
 Di **Lagi → Urus Pekerja**, pemilik boleh tekan **"🔑 Reset abc123"** pada mana-mana pekerja yang lupa kata laluan. Pekerja tersebut akan diminta **tetapkan kata laluan baharu** (tak boleh abc123 semula) sebelum boleh masuk ke ruang utama pada log masuk seterusnya.
 
-> ⚠️ **Kenapa hanya pemilik boleh buat ini (bukan sesiapa dari skrin log masuk)?** Jika sesiapa boleh reset password akaun lain ke nilai tetap (abc123) hanya dengan tahu e-mel — itu jadi lubang keselamatan (curi akaun). Sebab itu tindakan ini perlu pengesahan pemilik yang sudah log masuk, dan dijalankan melalui **Edge Function** (kod pelayan berasingan yang pegang kunci admin Supabase secara selamat — kunci ini TIDAK PERNAH masuk ke dalam kod `pengurusan.html` yang orang ramai boleh lihat).
+> ⚠️ **Kenapa hanya pemilik boleh buat ini (bukan sesiapa dari skrin log masuk)?** Jika sesiapa boleh reset password akaun lain ke nilai tetap (abc123) hanya dengan tahu e-mel — itu jadi lubang keselamatan (curi akaun). Sebab itu tindakan ini perlu pengesahan pemilik yang sudah log masuk, dan dijalankan melalui **Edge Function** (kod pelayan berasingan yang pegang kunci admin Supabase secara selamat — kunci ini TIDAK PERNAH masuk ke dalam kod `index.html` yang orang ramai boleh lihat).
 
 **Deploy Edge Function (buat SEKALI sahaja):**
 1. Pastikan Node.js dipasang di komputer anda (untuk `npx`)
@@ -140,9 +138,9 @@ Pemilik boleh daftar akaun pekerja baru terus dari **Lagi → Urus Pekerja** (na
 > ⚠️ Jika akaun pekerja baru tak boleh log masuk serta-merta ("Email not confirmed"), pergi ke Supabase → **Authentication → Providers → Email** dan matikan "Confirm email" — supaya akaun terus aktif sebaik didaftarkan tanpa perlu sahkan e-mel.
 
 ### 🔗 Link & QR Pre-Order untuk Kedai (Repeat Order)
-Halaman utama **`https://www.wafitijarahtrading.com/`** (fail `index.html`) boleh dikongsi terus dengan mana-mana kedai — borang ini kini **interaktif & bergambar**: kedai layari katalog produk (gambar, harga, unit) dan guna butang +/− untuk tambah ke troli, TANPA perlu log masuk. Pesanan masuk terus ke tab **Hantar → Pre-Order** dalam `pengurusan.html` (nampak oleh pemilik & pekerja) untuk diproses jadi penghantaran sebenar.
+Satu link awam **`pesan.html`** (cth: `https://www.wafitijarahtrading.com/pesan.html`) boleh dikongsi terus dengan mana-mana kedai — borang ini kini **interaktif & bergambar**: kedai layari katalog produk (gambar, harga, unit) dan guna butang +/− untuk tambah ke troli, TANPA perlu log masuk. Pesanan masuk terus ke tab **Hantar → Pre-Order** dalam apps (nampak oleh pemilik & pekerja) untuk diproses jadi penghantaran sebenar.
 
-Setiap resit turut jana **kod QR unik** yang terus bawa kedai tersebut ke `www.wafitijarahtrading.com/?kedai=<id kedai>` — bila diimbas, nama & no. telefon kedai automatik terisi (kedai tak perlu taip semula), memudahkan repeat order terus dari resit lama.
+Setiap resit turut jana **kod QR unik** yang terus bawa kedai tersebut ke `pesan.html?kedai=<id kedai>` — bila diimbas, nama & no. telefon kedai automatik terisi (kedai tak perlu taip semula), memudahkan repeat order terus dari resit lama.
 
 ### 🖼️ Gambar Produk & Diskaun Online Transfer
 - **Gambar produk**: Bila tambah/edit produk di **Stok**, pemilik boleh muat naik gambar (dipaparkan di borang pre-order supaya kedai nampak produk sebelum order).
@@ -179,7 +177,7 @@ Tab "Lagi" ditukar nama kepada **Profile** — kini termasuk kemaskini nama/no. 
 Laporan Bulanan (pemilik) kini tunjuk pecahan upah **ikut setiap pekerja** berasingan (bukan jumlah gabungan sahaja) — memandangkan setiap pekerja hantar kuantiti berbeza, upah masing-masing pun berbeza.
 
 ### 🎉 Banner Promosi Bergerak (Pre-Order)
-Borang pesanan (`index.html`) kini ada banner emas bergerak dari kiri ke kanan (sticky, kekal kelihatan semasa scroll pilih produk) mempromosikan diskaun Online Transfer secara dinamik ikut tetapan semasa.
+`pesan.html` kini ada banner emas bergerak dari kiri ke kanan (sticky, kekal kelihatan semasa scroll pilih produk) mempromosikan diskaun Online Transfer secara dinamik ikut tetapan semasa.
 
 ### 📎 Bukti Bayaran Transfer
 Bila kedai pilih "Online Transfer" di borang pre-order, mereka kena isi tarikh & masa transaksi serta muat naik screenshot bukti pindahan — disimpan di bucket **sulit** (`bukti-bayaran`, bukan public) supaya hanya staff log masuk boleh lihat (butang "📎 Lihat Bukti Bayaran" di tab Pre-Order).
@@ -392,13 +390,13 @@ $$;
 - Salin **anon/public key** (panjang, bermula dengan eyJ...)
 
 **6. Masukkan dalam apps**
-- Kedua-dua fail **`index.html`** (borang pesanan) dan **`pengurusan.html`** (sistem pengurusan) ada credentials Supabase sendiri — perlu kemas kini **KEDUA-DUA fail**.
-- Dalam setiap fail, cari baris ini (dekat permulaan `<script>`):
+- Buka fail `index.html`
+- Cari baris ini (dekat permulaan `<script>`):
 ```javascript
 const SUPABASE_URL = 'YOUR_SUPABASE_URL';
 const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
 ```
-- Ganti dengan URL dan key anda (sama untuk kedua-dua fail)
+- Ganti dengan URL dan key anda
 - Upload semula ke GitHub/Netlify
 
 > ⚠️ Sebaik sahaja `SUPABASE_URL`/`SUPABASE_KEY` diisi, aplikasi automatik beralih ke mod cloud. Akaun awal (pemilik@wafi.com dll.) **tak lagi berfungsi** — log masuk guna akaun yang dicipta di Langkah 4.
