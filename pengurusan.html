@@ -3023,6 +3023,12 @@ async function sahkanWebAuthn() {
     });
     return true;
   } catch (e) {
+    // Kredential WebAuthn terikat ketat kepada domain (RP ID) semasa didaftarkan.
+    // Selepas tukar/tambah domain (cth: biz-free.github.io -> www.wafitijarahtrading.com),
+    // fingerprint lama jadi tak sah untuk domain baharu — tawarkan daftar semula terus.
+    if (confirm('Fingerprint/Face ID ini tidak sah untuk domain semasa (mungkin didaftarkan di domain lama). Daftar semula pada peranti ini sekarang?')) {
+      return await daftarWebAuthn();
+    }
     toast('Sahkan fingerprint/Face ID gagal: '+e.message,'err');
     return false;
   }
