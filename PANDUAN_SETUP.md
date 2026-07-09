@@ -17,6 +17,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 8. `SQL_TAMBAHAN_8.sql` — Alamat & lokasi GPS pada pre-order (pembeli cari lokasi kedai sendiri di borang awam)
 > 9. `SQL_TAMBAHAN_9.sql` — Belian peribadi (tiada kedai), upah pekerja per-produk, status pekerja tidak aktif (boleh dipadam)
 > 10. `SQL_TAMBAHAN_10.sql` — Baiki padam kedai (409 jika ada sejarah), diskaun COD/Transfer berasingan, had Consignment
+> 11. `SQL_TAMBAHAN_11.sql` — Fasa 1 Laman E-Dagang (`toko.html`): zon penghantaran, jadual pesanan e-dagang
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -141,6 +142,14 @@ Pemilik boleh daftar akaun pekerja baru terus dari **Lagi → Urus Pekerja** (na
 Satu link awam **`pesan.html`** (cth: `https://www.wafitijarahtrading.com/pesan.html`) boleh dikongsi terus dengan mana-mana kedai — borang ini kini **interaktif & bergambar**: kedai layari katalog produk (gambar, harga, unit) dan guna butang +/− untuk tambah ke troli, TANPA perlu log masuk. Pesanan masuk terus ke tab **Hantar → Pre-Order** dalam apps (nampak oleh pemilik & pekerja) untuk diproses jadi penghantaran sebenar.
 
 Setiap resit turut jana **kod QR unik** yang terus bawa kedai tersebut ke `pesan.html?kedai=<id kedai>` — bila diimbas, nama & no. telefon kedai automatik terisi (kedai tak perlu taip semula), memudahkan repeat order terus dari resit lama.
+
+### 🛒 Laman E-Dagang B2C (`toko.html`) — Fasa 1
+Laman terbuka untuk pelanggan awam (bukan kedai runcit) beli terus secara runcit: `https://www.wafitijarahtrading.com/toko.html`. Guna semula katalog produk yang sama (Stok), tetapi checkout berasingan — pelanggan isi alamat penghantaran + poskod + negeri, kos penghantaran dikira automatik ikut zon (Semenanjung vs Sabah/Sarawak/Labuan, kadar boleh ubah di jadual `zon_penghantaran`). Pesanan masuk ke jadual `pesanan_edagang` (belum ada paparan dalam apps lagi — sila semak terus di Supabase Table Editor buat masa ini).
+
+**Had Fasa 1 (sengaja, bukan bug):**
+- Bayaran hanya **Online Transfer manual** (sama seperti pre-order kedai) — belum ada payment gateway (Billplz/SenangPay).
+- Kos penghantaran kadar **flat ikut zon sahaja** (belum ikut berat produk — EasyParcel belum disambung).
+- Tiada paparan pesanan e-dagang dalam `index.html` (apps pengurusan) lagi — akan ditambah bila diperlukan.
 
 ### 🖼️ Gambar Produk & Diskaun Online Transfer
 - **Gambar produk**: Bila tambah/edit produk di **Stok**, pemilik boleh muat naik gambar (dipaparkan di borang pre-order supaya kedai nampak produk sebelum order).

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#0D2137" />
+  <meta name="description" content="Kedai Online - Wafi Tijarah Trading" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <title>Kedai Online · Wafi Tijarah Trading</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #EEF2F5; color: #182530; min-height: 100vh; padding-bottom: 90px; }
+    :root {
+      --navy: #0D2137; --teal: #0E7C7B; --teal2: #14A3A2;
+      --gold: #C8922A; --red: #C0392B; --green: #1D7A4A;
+      --bg: #EEF2F5; --card: #FFFFFF; --border: #D5E2EC; --text: #182530; --muted: #607D8B;
+    }
+    header { background:linear-gradient(135deg,#0D2137,#1A3A55);padding:20px 16px;text-align:center; }
+    header img { width:56px;height:56px;border-radius:50%;margin-bottom:8px; }
+    header h1 { color:#fff;font-size:16px;font-weight:800; }
+    header p { color:#E8B84B;font-size:12px;margin-top:2px; }
+    #main { max-width:640px;margin:0 auto;padding:16px 16px 20px; }
+    .card { background:#fff;border-radius:14px;border:1px solid var(--border);padding:16px;box-shadow:0 1px 4px rgba(0,0,0,0.05);margin-bottom:14px; }
+    .section-title { font-size:15px;font-weight:800;color:var(--navy);margin-bottom:10px; }
+    .form-group { margin-bottom:12px; }
+    .form-row { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+    .form-label { font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.4px; }
+    .form-input { width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;outline:none;background:#FAFCFE;color:var(--text); }
+    textarea.form-input { resize:none;height:60px; }
+    .btn { padding:13px 20px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;width:100%; }
+    .btn-primary { background:linear-gradient(135deg,var(--teal),var(--teal2));color:#fff;margin-top:6px; }
+    .btn:active { transform:scale(0.98); }
+    #toast { position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:12px 24px;border-radius:12px;font-size:13px;font-weight:700;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,0.25);opacity:0;transition:opacity 0.3s;pointer-events:none;max-width:320px;text-align:center; }
+    #toast.show { opacity:1; }
+    #toast.err { background:var(--red); }
+    #success-box { text-align:center;padding:32px 16px; }
+    #success-box .icon { font-size:48px;margin-bottom:12px; }
+    #success-box h2 { color:var(--navy);margin-bottom:8px; }
+    #success-box p { color:var(--muted);font-size:13px; }
+
+    /* ── KATALOG PRODUK ── */
+    .produk-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+    .produk-card { background:#fff;border:1.5px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color 0.15s; }
+    .produk-card.dipilih { border-color:var(--teal);box-shadow:0 0 0 2px #0E7C7B22; }
+    .produk-img { width:100%;height:130px;object-fit:contain;background:#F0F4F7;display:flex;align-items:center;justify-content:center;font-size:32px;cursor:zoom-in; }
+    .produk-info { padding:8px 10px; }
+    .produk-nama { font-size:12px;font-weight:700;line-height:1.3;height:31px;overflow:hidden; }
+    .produk-harga { font-size:13px;font-weight:800;color:var(--teal);margin-top:4px; }
+    .produk-unit { font-size:10px;color:var(--muted); }
+    .qty-stepper { display:flex;align-items:center;gap:6px;margin-top:8px; }
+    .qty-btn { width:28px;height:28px;border-radius:7px;border:1.5px solid var(--border);background:#fff;font-size:16px;font-weight:800;cursor:pointer;color:var(--teal);display:flex;align-items:center;justify-content:center; }
+    .qty-btn:active { transform:scale(0.92); }
+    .qty-val { flex:1;text-align:center;font-weight:800;font-size:14px; }
+
+    /* ── CART BAR ── */
+    #cart-bar { position:fixed;bottom:0;left:0;right:0;background:var(--navy);color:#fff;padding:12px 16px;display:none;align-items:center;justify-content:space-between;z-index:500;box-shadow:0 -4px 16px rgba(0,0,0,0.2); }
+    #cart-bar.show { display:flex; }
+    #cart-bar .cart-info { font-size:13px; }
+    #cart-bar .cart-total { font-weight:800;font-size:16px;color:var(--gold); }
+    #cart-bar button { background:var(--teal);color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px; }
+
+    .diskaun-banner { background:linear-gradient(135deg,#FFF8E6,#FFF0CC);border:1.5px solid var(--gold);border-radius:12px;padding:14px;margin-bottom:14px; }
+    .diskaun-banner .tajuk { font-weight:800;color:var(--navy);font-size:14px;margin-bottom:4px; }
+    .diskaun-banner img { max-width:260px;width:100%;display:block;margin:10px auto;border-radius:10px;background:#fff;padding:10px;border:1px solid var(--border); }
+    .kiraan-row { display:flex;justify-content:space-between;font-size:13px;padding:4px 0; }
+    .kiraan-row.jumlah { font-weight:800;font-size:15px;border-top:1px solid var(--border);margin-top:6px;padding-top:8px; }
+
+    /* ── LIGHTBOX GAMBAR (zoom) ── */
+    #lightbox { position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9998;display:none;align-items:center;justify-content:center;flex-direction:column;padding:20px; }
+    #lightbox.show { display:flex; }
+    #lightbox img { max-width:100%;max-height:70vh;border-radius:10px;transform:scale(0.9);transition:transform 0.25s;object-fit:contain; }
+    #lightbox img.zoomed { transform:scale(1.08); }
+    #lightbox .lb-close { position:absolute;top:16px;right:16px;background:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:16px;font-weight:800;cursor:pointer; }
+    #lightbox .lb-nav { display:flex;gap:16px;margin-top:16px; }
+    #lightbox .lb-nav button { background:#fff;border:none;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer; }
+
+    .footer-link { text-align:center;padding:16px 0;font-size:11px; }
+    .footer-link a { color:var(--muted);text-decoration:none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <img src="logo.png" alt="Wafi Tijarah Trading" />
+  <h1>Wafi Tijarah Trading</h1>
+  <p>Kedai Online · Produk Halal Berkualiti</p>
+</header>
+
+<div id="main">
+  <div id="form-card">
+    <div class="card">
+      <div class="section-title">🛍️ Katalog Produk</div>
+      <div id="produk-grid" class="produk-grid"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">📋 Maklumat Penerima</div>
+      <div class="form-group">
+        <label class="form-label">Nama Penuh</label>
+        <input type="text" class="form-input" id="c-nama" placeholder="cth: Ahmad bin Ali" />
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">No. Telefon</label><input type="tel" class="form-input" id="c-tel" placeholder="01x-xxxxxxx" /></div>
+        <div class="form-group"><label class="form-label">Emel (Optional)</label><input type="email" class="form-input" id="c-emel" placeholder="contoh@email.com" /></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Alamat Penghantaran</label>
+        <textarea class="form-input" id="c-alamat" placeholder="No. rumah, jalan, taman..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Poskod</label><input type="text" class="form-input" id="c-poskod" placeholder="cth: 05000" /></div>
+        <div class="form-group">
+          <label class="form-label">Negeri</label>
+          <select class="form-input" id="c-negeri" onchange="kemaskiniTotal()">
+            <option value="">-- Pilih Negeri --</option>
+            <option value="Perlis">Perlis</option>
+            <option value="Kedah">Kedah</option>
+            <option value="Pulau Pinang">Pulau Pinang</option>
+            <option value="Perak">Perak</option>
+            <option value="Selangor">Selangor</option>
+            <option value="W.P. Kuala Lumpur">W.P. Kuala Lumpur</option>
+            <option value="W.P. Putrajaya">W.P. Putrajaya</option>
+            <option value="Negeri Sembilan">Negeri Sembilan</option>
+            <option value="Melaka">Melaka</option>
+            <option value="Johor">Johor</option>
+            <option value="Pahang">Pahang</option>
+            <option value="Terengganu">Terengganu</option>
+            <option value="Kelantan">Kelantan</option>
+            <option value="Sabah">Sabah</option>
+            <option value="Sarawak">Sarawak</option>
+            <option value="W.P. Labuan">W.P. Labuan</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🏦 Bayaran (Online Transfer)</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Buat masa ini kami hanya terima bayaran Online Transfer/QR. Sila muat naik bukti pindahan selepas bayar.</div>
+      <div class="diskaun-banner" style="margin-bottom:0">
+        <div style="text-align:center">
+          <img id="bank-qr-img" src="" alt="QR Bank" />
+          <div id="bank-butiran" style="font-size:12px;white-space:pre-line"></div>
+        </div>
+        <div class="form-group" style="margin-top:12px">
+          <label class="form-label">Tarikh Transaksi Transfer</label>
+          <input type="date" class="form-input" id="c-bayar-tarikh" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Masa Transaksi Transfer</label>
+          <input type="time" class="form-input" id="c-bayar-masa" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Muat Naik Bukti Pindahan (screenshot resit bank)</label>
+          <input type="file" accept="image/*" class="form-input" id="c-bukti-bayaran" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">📝 Nota & Ringkasan</div>
+      <div class="form-group">
+        <label class="form-label">Nota (Optional)</label>
+        <textarea class="form-input" id="c-nota" placeholder="Nota tambahan..."></textarea>
+      </div>
+      <div id="kiraan-jelas">
+        <div class="kiraan-row"><span>Subjumlah</span><span id="kiraan-subtotal">RM 0.00</span></div>
+        <div class="kiraan-row"><span>Kos Penghantaran<span id="kiraan-zon-label"></span></span><span id="kiraan-penghantaran">RM 0.00</span></div>
+        <div class="kiraan-row jumlah"><span>JUMLAH AKHIR</span><span id="grand-total" style="color:var(--teal)">RM 0.00</span></div>
+      </div>
+      <button class="btn btn-primary" onclick="hantarPesanan()">📦 Buat Pesanan</button>
+    </div>
+  </div>
+
+  <div class="card" id="success-box" style="display:none">
+    <div class="icon">✅</div>
+    <h2>Pesanan Diterima!</h2>
+    <p>Terima kasih atas pembelian anda. Pihak kami akan sahkan pesanan & mula proses penghantaran tidak lama lagi.</p>
+  </div>
+
+  <div class="footer-link">
+    <a href="pesan.html">🏪 Kedai runcit? Guna borang repeat-order khas kedai di sini</a>
+  </div>
+</div>
+
+<div id="cart-bar">
+  <div class="cart-info">🛒 <span id="cart-count">0</span> jenis barang</div>
+  <div class="cart-total" id="cart-total">RM 0.00</div>
+</div>
+
+<div id="lightbox">
+  <button class="lb-close" onclick="tutupLightbox()">✕</button>
+  <img id="lb-img" onclick="this.classList.toggle('zoomed')" />
+  <div class="lb-nav" id="lb-nav" style="display:none">
+    <button onclick="gambarSeterusnya(-1)">‹ Sebelum</button>
+    <button onclick="gambarSeterusnya(1)">Lepas ›</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://smepriytkoxkmpvjvvzq.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtZXByaXl0a294a21wdmp2dnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzODE1OTcsImV4cCI6MjA5ODk1NzU5N30.bLDjFNZ_gMm9ufCkA4TeFbw1rysuLnlQN-qW_WW0zr8';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const fmt = n => 'RM ' + Number(n||0).toFixed(2);
+const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = (type==='ok'?'✅ ':'⚠️ ') + msg;
+  t.className = 'show' + (type==='err'?' err':'');
+  clearTimeout(t._t);
+  t._t = setTimeout(()=>t.className='', 3500);
+}
+
+// Negeri Sabah/Sarawak/Labuan guna zon berlainan (kadar lebih tinggi, tempoh lebih lama)
+const NEGERI_ZON_SABAH_SARAWAK = new Set(['Sabah','Sarawak','W.P. Labuan']);
+function zonUntukNegeri(negeri) {
+  if (!negeri) return null;
+  return NEGERI_ZON_SABAH_SARAWAK.has(negeri) ? 'sabah_sarawak' : 'semenanjung';
+}
+
+let PRODUK = [];
+let TETAPAN = { qr_bank_url: null, butiran_bank: '' };
+let ZON = {}; // { id: {nama, kadar_asas, kadar_per_kg, anggaran_hari} }
+let cart = {}; // { stokId: qty }
+
+async function initHalaman() {
+  const [{ data: produk, error: e1 }, { data: tetapan }, { data: zon }] = await Promise.all([
+    sb.rpc('senarai_produk_awam'),
+    sb.from('tetapan').select('qr_bank_url,butiran_bank').eq('id', 1).single(),
+    sb.from('zon_penghantaran').select('*'),
+  ]);
+  if (e1) toast('Gagal muat senarai produk — sila cuba lagi kemudian','err');
+  PRODUK = (produk || []).sort((a,b)=>(b.jumlah_terjual||0)-(a.jumlah_terjual||0));
+  if (tetapan) TETAPAN = { ...TETAPAN, ...tetapan };
+  (zon||[]).forEach(z => ZON[z.id] = z);
+  document.getElementById('bank-qr-img').src = TETAPAN.qr_bank_url || '';
+  document.getElementById('bank-qr-img').style.display = TETAPAN.qr_bank_url ? '' : 'none';
+  document.getElementById('bank-butiran').textContent = TETAPAN.butiran_bank || 'Sila hubungi kami untuk butiran akaun bank.';
+  renderProdukGrid();
+}
+
+function gambarProduk(p) {
+  if (p.gambar_urls && p.gambar_urls.length) return p.gambar_urls;
+  if (p.gambar_url) return [p.gambar_url];
+  return [];
+}
+
+function renderProdukGrid() {
+  document.getElementById('produk-grid').innerHTML = PRODUK.map(p=>{
+    const qty = cart[p.id] || 0;
+    const gambar = gambarProduk(p);
+    return `<div class="produk-card ${qty>0?'dipilih':''}">
+      ${gambar.length
+        ? `<img class="produk-img" src="${esc(gambar[0])}" alt="${esc(p.nama)}" onclick="bukaLightbox('${p.id}')" />`
+        : `<div class="produk-img">📦</div>`}
+      <div class="produk-info">
+        <div class="produk-nama">${esc(p.nama)}</div>
+        <div class="produk-harga">${fmt(p.harga_jual)} <span class="produk-unit">/${esc(p.unit)}</span></div>
+        <div class="qty-stepper">
+          <button class="qty-btn" onclick="ubahQty('${p.id}',-1)">−</button>
+          <div class="qty-val">${qty}</div>
+          <button class="qty-btn" onclick="ubahQty('${p.id}',1)">+</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('') || '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:20px">Tiada produk tersedia buat masa ini</div>';
+  kemaskiniTotal();
+}
+
+let lbGambar = [], lbIndex = 0;
+function bukaLightbox(produkId) {
+  const p = PRODUK.find(p=>p.id===produkId); if (!p) return;
+  lbGambar = gambarProduk(p);
+  if (!lbGambar.length) return;
+  lbIndex = 0;
+  document.getElementById('lb-img').src = lbGambar[0];
+  document.getElementById('lb-img').className = '';
+  document.getElementById('lb-nav').style.display = lbGambar.length>1 ? 'flex' : 'none';
+  document.getElementById('lightbox').classList.add('show');
+}
+function gambarSeterusnya(delta) {
+  lbIndex = (lbIndex + delta + lbGambar.length) % lbGambar.length;
+  document.getElementById('lb-img').src = lbGambar[lbIndex];
+  document.getElementById('lb-img').className = '';
+}
+function tutupLightbox() {
+  document.getElementById('lightbox').classList.remove('show');
+}
+
+function ubahQty(id, delta) {
+  cart[id] = Math.max(0, (cart[id]||0) + delta);
+  if (cart[id] === 0) delete cart[id];
+  renderProdukGrid();
+}
+
+function subtotal() {
+  return Object.entries(cart).reduce((a,[id,qty])=>{ const p=PRODUK.find(p=>p.id===id); return a+(p?p.harga_jual*qty:0); },0);
+}
+
+function kosPenghantaranSemasa() {
+  const zonId = zonUntukNegeri(document.getElementById('c-negeri').value);
+  if (!zonId || !ZON[zonId] || !Object.keys(cart).length) return 0;
+  return ZON[zonId].kadar_asas || 0;
+}
+
+function kemaskiniTotal() {
+  const tot = subtotal();
+  const count = Object.keys(cart).length;
+  document.getElementById('cart-count').textContent = count;
+  document.getElementById('cart-total').textContent = fmt(tot);
+  document.getElementById('cart-bar').className = count ? 'show' : '';
+
+  const zonId = zonUntukNegeri(document.getElementById('c-negeri').value);
+  const kosHantar = kosPenghantaranSemasa();
+  document.getElementById('kiraan-subtotal').textContent = fmt(tot);
+  document.getElementById('kiraan-penghantaran').textContent = fmt(kosHantar);
+  document.getElementById('kiraan-zon-label').textContent = zonId ? ` (${ZON[zonId]?.nama||''})` : '';
+  document.getElementById('grand-total').textContent = fmt(tot + kosHantar);
+}
+
+async function hantarPesanan() {
+  const nama = document.getElementById('c-nama').value.trim();
+  const tel = document.getElementById('c-tel').value.trim();
+  const emel = document.getElementById('c-emel').value.trim();
+  const alamat = document.getElementById('c-alamat').value.trim();
+  const poskod = document.getElementById('c-poskod').value.trim();
+  const negeri = document.getElementById('c-negeri').value;
+  const nota = document.getElementById('c-nota').value.trim();
+  if (!nama || !tel) return toast('Sila isi nama dan no. telefon','err');
+  if (!alamat || !poskod || !negeri) return toast('Sila lengkapkan alamat penghantaran','err');
+  const entries = Object.entries(cart);
+  if (!entries.length) return toast('Sila pilih sekurang-kurangnya satu barang','err');
+
+  const bayarTarikh = document.getElementById('c-bayar-tarikh').value;
+  const bayarMasa = document.getElementById('c-bayar-masa').value;
+  const fail = document.getElementById('c-bukti-bayaran').files[0];
+  if (!bayarTarikh || !bayarMasa || !fail) return toast('Sila isi tarikh, masa & muat naik bukti pindahan','err');
+
+  const id = 'ED' + Date.now().toString().slice(-8);
+  const ext = fail.name.split('.').pop();
+  const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(`${id}-${Date.now()}.${ext}`, fail);
+  if (upErr) return toast('Gagal muat naik bukti bayaran: '+upErr.message,'err');
+
+  const zonId = zonUntukNegeri(negeri);
+  const kosHantar = kosPenghantaranSemasa();
+  const sub = subtotal();
+
+  const payload = {
+    id,
+    pelanggan_nama: nama,
+    pelanggan_telefon: tel,
+    pelanggan_email: emel || null,
+    items: entries.map(([pid,qty])=>{ const p=PRODUK.find(p=>p.id===pid); return { stokId:pid, nama:p?.nama||'?', unit:p?.unit||'', harga:p?.harga_jual||0, qty }; }),
+    subjumlah: sub,
+    kos_penghantaran: kosHantar,
+    diskaun: 0,
+    jumlah: sub + kosHantar,
+    alamat, poskod, negeri,
+    zon_penghantaran: zonId,
+    kaedah_bayaran: 'transfer',
+    status_bayaran: 'menunggu',
+    status_pesanan: 'baru',
+    nota,
+  };
+  const { error } = await sb.from('pesanan_edagang').insert(payload);
+  if (error) return toast('Gagal buat pesanan: '+error.message,'err');
+
+  document.getElementById('form-card').style.display='none';
+  document.getElementById('cart-bar').className='';
+  document.getElementById('success-box').style.display='block';
+}
+
+initHalaman();
+</script>
+</body>
+</html>
