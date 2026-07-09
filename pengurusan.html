@@ -482,8 +482,9 @@
     <div class="section-title">📋 Tempahan</div>
     <div class="section-sub" id="tp-jumlah">Senarai penuh semua tempahan pre-order</div>
     <div style="display:flex;gap:0;background:var(--border);border-radius:10px;padding:3px;margin-bottom:14px">
-      <button id="tptab-tempahan" onclick="setTempahanTab('tempahan')" style="flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;background:var(--navy);color:#fff">📋 Tempahan</button>
-      <button id="tptab-transaksi" onclick="setTempahanTab('transaksi')" style="flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;background:transparent;color:var(--muted)">🧾 Transaksi Kedai</button>
+      <button id="tptab-tempahan" onclick="setTempahanTab('tempahan')" style="flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;background:var(--navy);color:#fff">📋 Tempahan</button>
+      <button id="tptab-transaksi" onclick="setTempahanTab('transaksi')" style="flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;background:transparent;color:var(--muted)">🧾 Transaksi Kedai</button>
+      <button id="tptab-edagang" onclick="setTempahanTab('edagang')" style="flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;background:transparent;color:var(--muted);position:relative">🛒 E-Dagang<span class="nav-badge" id="badge-edagang-tab" style="display:none;top:-4px">!</span></button>
     </div>
     <div class="card">
       <div class="form-row" style="align-items:flex-end">
@@ -493,6 +494,7 @@
     </div>
     <div id="tp-tempahan-wrap"><div id="tempahan-list"></div></div>
     <div id="tp-transaksi-wrap" style="display:none"><div id="transaksi-kedai-list"></div></div>
+    <div id="tp-edagang-wrap" style="display:none"><div id="edagang-list"></div></div>
   </div>
 
   <!-- ── LEBIH ── -->
@@ -707,6 +709,7 @@
   </button>
   <button class="nav-item" onclick="setPage('tempahan')" id="nav-tempahan">
     <span class="nav-icon">📋</span><span class="nav-label">Tempahan</span>
+    <span class="nav-badge" id="badge-tempahan-nav" style="display:none">!</span>
   </button>
   <button class="nav-item" onclick="setPage('analisis')" id="nav-analisis">
     <span class="nav-icon">📈</span><span class="nav-label">Analisis</span>
@@ -2098,6 +2101,8 @@ async function checkPreorderBadge() {
 // ── Notifikasi ringkas di bar bawah (dikira terus dari data, tiada jadual berasingan) ──
 async function kemaskiniNotifikasi() {
   if (!useCloud) return;
+  const { count: edagangCount } = await sb.from('pesanan_edagang').select('id',{count:'exact',head:true}).eq('status_pesanan','baru');
+  document.getElementById('badge-tempahan-nav').style.display = edagangCount ? '' : 'none';
   if (currentRole==='pemilik') {
     const [{ count: cutiCount }, { count: poCount }] = await Promise.all([
       sb.from('permohonan_cuti').select('id',{count:'exact',head:true}).eq('status','menunggu'),
@@ -2245,17 +2250,20 @@ async function padamTempahan(id) {
 let tempahanTab = 'tempahan';
 function setTempahanTab(t) {
   tempahanTab = t;
-  ['tempahan','transaksi'].forEach(tab=>{
+  ['tempahan','transaksi','edagang'].forEach(tab=>{
     document.getElementById('tptab-'+tab).style.background = t===tab?'var(--navy)':'transparent';
     document.getElementById('tptab-'+tab).style.color = t===tab?'#fff':'var(--muted)';
   });
   document.getElementById('tp-tempahan-wrap').style.display = t==='tempahan'?'':'none';
   document.getElementById('tp-transaksi-wrap').style.display = t==='transaksi'?'':'none';
+  document.getElementById('tp-edagang-wrap').style.display = t==='edagang'?'':'none';
   renderTempahanAktif();
 }
 
 function renderTempahanAktif() {
-  if (tempahanTab==='tempahan') renderTempahanList(); else renderTransaksiKedaiList();
+  if (tempahanTab==='tempahan') renderTempahanList();
+  else if (tempahanTab==='transaksi') renderTransaksiKedaiList();
+  else renderEdagangList();
 }
 
 async function renderTransaksiKedaiList() {
@@ -2294,6 +2302,75 @@ async function padamTransaksiKedai(id) {
   await loadData();
   renderTransaksiKedaiList();
   toast('Transaksi dipadam');
+}
+
+// ════════════════════════════════════════════════════
+//  E-DAGANG — urus pesanan dari laman e-dagang (index.html)
+// ════════════════════════════════════════════════════
+const EDAGANG_STATUS_BADGE = { baru:'badge-teal', diproses:'badge-gold', dihantar:'badge-gold', selesai:'badge-green', dibatalkan:'badge-red' };
+const EDAGANG_STATUS_TXT = { baru:'🆕 Baru', diproses:'⏳ Diproses', dihantar:'🚚 Dihantar', selesai:'✓ Selesai', dibatalkan:'✕ Dibatalkan' };
+const EDAGANG_BAYAR_TXT = { menunggu:'⏳ Menunggu Sahkan', disahkan:'✓ Disahkan', gagal:'✕ Gagal' };
+
+async function renderEdagangList() {
+  const el = document.getElementById('edagang-list');
+  const bulan = document.getElementById('tp-bulan').value;
+  const { data, error } = await sb.from('pesanan_edagang').select('*').order('created_at',{ascending:false});
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const list = bulan ? (data||[]).filter(o=>(o.created_at||'').slice(0,7)===bulan) : (data||[]);
+  document.getElementById('tp-jumlah').textContent = `${list.length} pesanan e-dagang${bulan?' pada '+bulan:' (semua)'}`;
+  document.getElementById('badge-edagang-tab').style.display = list.some(o=>o.status_pesanan==='baru') ? '' : 'none';
+
+  el.innerHTML = list.map(o=>{
+    const itemsStr = (o.items||[]).map(it=>`${it.nama} ×${it.qty}`).join(' · ');
+    return `<div class="trx-card">
+      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="padamEdagang('${o.id}')" title="Padam pesanan">✕</button>`:''}
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
+        <div>
+          <div style="font-weight:800;font-size:13px">${esc(o.id)} — ${esc(o.pelanggan_nama)}</div>
+          <div style="font-size:10px;color:var(--muted)">📞 ${esc(o.pelanggan_telefon)}${o.pelanggan_email?' · ✉️ '+esc(o.pelanggan_email):''} · ${fmtDT(o.created_at)}</div>
+          <div style="font-size:10px;color:var(--muted)">📍 ${esc(o.alamat||'')}, ${esc(o.poskod||'')} ${esc(o.negeri||'')}</div>
+        </div>
+        <span class="badge ${EDAGANG_STATUS_BADGE[o.status_pesanan]||'badge-teal'}" style="flex-shrink:0">${EDAGANG_STATUS_TXT[o.status_pesanan]||o.status_pesanan}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
+      ${o.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(o.nota)}</div>`:''}
+      <div style="font-size:12px;font-weight:700;margin-top:6px">Subjumlah: ${fmt(o.subjumlah)} + Penghantaran: ${fmt(o.kos_penghantaran)} = ${fmt(o.jumlah)}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">
+        <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="kemaskiniEdagang('${o.id}','status_pesanan',this.value)">
+          <option value="baru" ${o.status_pesanan==='baru'?'selected':''}>🆕 Baru</option>
+          <option value="diproses" ${o.status_pesanan==='diproses'?'selected':''}>⏳ Diproses</option>
+          <option value="dihantar" ${o.status_pesanan==='dihantar'?'selected':''}>🚚 Dihantar</option>
+          <option value="selesai" ${o.status_pesanan==='selesai'?'selected':''}>✓ Selesai</option>
+          <option value="dibatalkan" ${o.status_pesanan==='dibatalkan'?'selected':''}>✕ Dibatalkan</option>
+        </select>
+        <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="kemaskiniEdagang('${o.id}','status_bayaran',this.value)">
+          <option value="menunggu" ${o.status_bayaran==='menunggu'?'selected':''}>⏳ Bayaran Menunggu</option>
+          <option value="disahkan" ${o.status_bayaran==='disahkan'?'selected':''}>✓ Bayaran Disahkan</option>
+          <option value="gagal" ${o.status_bayaran==='gagal'?'selected':''}>✕ Bayaran Gagal</option>
+        </select>
+        ${o.bukti_bayaran_url?`<button class="btn btn-secondary btn-sm" onclick="lihatBuktiBayaran('${esc(o.bukti_bayaran_url)}')">📎 Bukti Bayaran</button>`:''}
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <input type="text" class="form-input" style="font-size:11px" placeholder="Nama kurier" value="${esc(o.nama_kurier||'')}" onchange="kemaskiniEdagang('${o.id}','nama_kurier',this.value)" />
+        <input type="text" class="form-input" style="font-size:11px" placeholder="No. Tracking" value="${esc(o.no_tracking||'')}" onchange="kemaskiniEdagang('${o.id}','no_tracking',this.value)" />
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-icon">🛒</div><div class="empty-text">Tiada pesanan e-dagang dalam julat ini</div></div>';
+}
+
+async function kemaskiniEdagang(id, field, value) {
+  const { error } = await sb.from('pesanan_edagang').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) return toast('Gagal kemaskini: '+error.message,'err');
+  toast('Pesanan dikemaskini');
+  renderEdagangList();
+}
+
+async function padamEdagang(id) {
+  if (!confirm('Padam pesanan e-dagang ini secara kekal?')) return;
+  const { error } = await sb.from('pesanan_edagang').delete().eq('id', id);
+  if (error) return toast('Gagal padam: '+error.message,'err');
+  toast('Pesanan dipadam');
+  renderEdagangList();
 }
 
 async function tugaskanPreorder(id, pekerjaId) {

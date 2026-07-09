@@ -20,6 +20,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 9. `SQL_TAMBAHAN_9.sql` — Belian peribadi (tiada kedai), upah pekerja per-produk, status pekerja tidak aktif (boleh dipadam)
 > 10. `SQL_TAMBAHAN_10.sql` — Baiki padam kedai (409 jika ada sejarah), diskaun COD/Transfer berasingan, had Consignment
 > 11. `SQL_TAMBAHAN_11.sql` — Fasa 1 Laman E-Dagang (`index.html`): zon penghantaran, jadual pesanan e-dagang
+> 12. `SQL_TAMBAHAN_12.sql` — **Wajib** untuk checkout e-dagang berfungsi: baiki bukti bayaran & tarikh/masa transfer yang belum disimpan
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -151,7 +152,7 @@ Laman utama terbuka untuk pelanggan awam (bukan kedai runcit) beli terus secara 
 **Had Fasa 1 (sengaja, bukan bug):**
 - Bayaran hanya **Online Transfer manual** (sama seperti pre-order kedai) — belum ada payment gateway (Billplz/SenangPay).
 - Kos penghantaran kadar **flat ikut zon sahaja** (belum ikut berat produk — EasyParcel belum disambung).
-- Tiada paparan pesanan e-dagang dalam `pengurusan.html` (apps pengurusan) lagi — akan ditambah bila diperlukan.
+- ~~Tiada paparan pesanan e-dagang dalam `pengurusan.html`~~ — **sudah ditambah**: tab **Tempahan → 🛒 E-Dagang** papar semua pesanan dengan butiran penuh, status bayaran/pesanan boleh dikemaskini, kurier/no. tracking boleh diisi, dan bukti bayaran boleh dilihat terus.
 
 **Akaun Pelanggan (optional):** Butang "👤 Akaun Saya" di header benarkan pelanggan daftar/log masuk untuk simpan alamat & lihat sejarah pesanan — guest checkout (tanpa akaun) tetap berfungsi sepenuhnya untuk yang tak mahu daftar.
 

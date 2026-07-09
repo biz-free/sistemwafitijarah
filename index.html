@@ -555,7 +555,8 @@ async function hantarPesanan() {
 
   const id = 'ED' + Date.now().toString().slice(-8);
   const ext = fail.name.split('.').pop();
-  const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(`${id}-${Date.now()}.${ext}`, fail);
+  const buktiPath = `${id}-${Date.now()}.${ext}`;
+  const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(buktiPath, fail);
   if (upErr) return toast('Gagal muat naik bukti bayaran: '+upErr.message,'err');
 
   const zonId = zonUntukNegeri(negeri);
@@ -578,6 +579,9 @@ async function hantarPesanan() {
     kaedah_bayaran: 'transfer',
     status_bayaran: 'menunggu',
     status_pesanan: 'baru',
+    bukti_bayaran_url: buktiPath,
+    bayar_tarikh: bayarTarikh,
+    bayar_masa: bayarMasa,
     nota,
   };
   const { error } = await sb.from('pesanan_edagang').insert(payload);

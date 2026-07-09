@@ -559,6 +559,9 @@ CREATE TABLE IF NOT EXISTS pesanan_edagang (
   kaedah_bayaran text DEFAULT 'transfer',
   status_bayaran text DEFAULT 'menunggu',
   status_pesanan text DEFAULT 'baru',
+  bukti_bayaran_url text,
+  bayar_tarikh date,
+  bayar_masa time,
   nota text,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
