@@ -22,6 +22,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 11. `SQL_TAMBAHAN_11.sql` — Fasa 1 Laman E-Dagang (`index.html`): zon penghantaran, jadual pesanan e-dagang
 > 12. `SQL_TAMBAHAN_12.sql` — **Wajib** untuk checkout e-dagang berfungsi: baiki bukti bayaran & tarikh/masa transfer yang belum disimpan
 > 13. `SQL_TAMBAHAN_13.sql` — Sambungan OAuth EasyParcel (Fasa 3a) — lihat bahagian "🚚 Sambung EasyParcel" di bawah untuk setup Edge Function
+> 14. `SQL_TAMBAHAN_14.sql` — Kadar penghantaran sebenar & label EasyParcel (Fasa 3b) — perlu deploy 2 Edge Function baru, lihat bahagian "🚚 Kadar Sebenar & Label EasyParcel" di bawah
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -152,7 +153,7 @@ Laman utama terbuka untuk pelanggan awam (bukan kedai runcit) beli terus secara 
 
 **Had Fasa 1 (sengaja, bukan bug):**
 - Bayaran hanya **Online Transfer manual** (sama seperti pre-order kedai) — belum ada payment gateway (Billplz/SenangPay).
-- Kos penghantaran kadar **flat ikut zon sahaja** (belum ikut berat produk — EasyParcel belum disambung).
+- Kos penghantaran guna **kadar sebenar EasyParcel** (ikut berat & alamat) bila EasyParcel disambung & alamat pengambilan diisi (Fasa 3b — lihat bahagian "🚚 Kadar Sebenar & Label EasyParcel" di bawah); jatuh balik ke kadar flat ikut zon jika EasyParcel tak dapat dihubungi.
 - ~~Tiada paparan pesanan e-dagang dalam `pengurusan.html`~~ — **sudah ditambah**: tab **Tempahan → 🛒 E-Dagang** papar semua pesanan dengan butiran penuh, status bayaran/pesanan boleh dikemaskini, kurier/no. tracking boleh diisi, dan bukti bayaran boleh dilihat terus.
 
 **Akaun Pelanggan (optional):** Butang "👤 Akaun Saya" di header benarkan pelanggan daftar/log masuk untuk simpan alamat & lihat sejarah pesanan — guest checkout (tanpa akaun) tetap berfungsi sepenuhnya untuk yang tak mahu daftar.
@@ -186,6 +187,20 @@ Di **Profile**, kad "🚚 EasyParcel" benarkan pemilik sambungkan akaun EasyParc
    npx supabase functions deploy easyparcel-oauth-callback --no-verify-jwt
    ```
 7. Selesai — kembali ke **Profile → EasyParcel**, tekan "🔗 Sambung EasyParcel", log masuk ke akaun EasyParcel anda & benarkan akses. Anda akan dibawa balik ke apps dengan status "✅ Disambungkan".
+
+### 🚚 Kadar Sebenar & Label EasyParcel (Fasa 3b)
+Selepas EasyParcel disambung (Fasa 3a di atas) dan `SQL_TAMBAHAN_14.sql` dijalankan, laman e-dagang boleh papar **kadar penghantaran sebenar** ikut kurier (bukan lagi kadar flat), dan pemilik/pekerja boleh **jana label & no. AWB terus** dari `pengurusan.html` — tiada lagi salin-tampel manual ke laman EasyParcel.
+
+**Langkah setup:**
+1. Di **Profile → EasyParcel**, isi & simpan **"📍 Alamat Pengambilan (Pickup)"** — ini alamat kedai/gudang yang EasyParcel akan jemput bungkusan. Wajib diisi sebelum kadar sebenar/label boleh berfungsi.
+2. (Optional tapi disarankan) Kemaskini **berat (kg)** setiap produk di **Stok** — lalai 0.5kg jika tak diisi. Berat digunakan untuk kira kos penghantaran yang tepat.
+3. Deploy 2 Edge Function baru (sekali sahaja, dari folder `wafi-app`):
+   ```
+   npx supabase functions deploy easyparcel-quotation
+   npx supabase functions deploy easyparcel-book-shipment
+   ```
+   (Tiada `--no-verify-jwt` untuk kedua-dua ini — berbeza dengan `easyparcel-oauth-callback` — sebab kedua-duanya dipanggil dari dalam apps dengan token log masuk yang sah.)
+4. Selesai. Di laman e-dagang, lepas pelanggan isi poskod & negeri, senarai kurier & harga sebenar akan terpapar untuk dipilih (jatuh balik senyap ke kadar flat jika EasyParcel tak dapat dihubungi — checkout tetap berfungsi). Di **Tempahan → 🛒 E-Dagang**, pesanan yang ada kurier dipilih akan papar butang **"📦 Buat Label EasyParcel"** — tekan untuk jana AWB terus lepas bayaran disahkan.
 
 ### 🖼️ Gambar Produk & Diskaun Online Transfer
 - **Gambar produk**: Bila tambah/edit produk di **Stok**, pemilik boleh muat naik gambar (dipaparkan di borang pre-order supaya kedai nampak produk sebelum order).

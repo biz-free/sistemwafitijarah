@@ -643,6 +643,44 @@
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Sambungkan akaun EasyParcel untuk kadar penghantaran sebenar & jana label secara automatik (akan aktif secara berperingkat).</div>
       <div id="easyparcel-status" style="font-size:12px;font-weight:700;margin-bottom:10px">Menyemak status...</div>
       <button class="btn btn-primary" id="btn-easyparcel-connect" onclick="sambungEasyParcel()">🔗 Sambung EasyParcel</button>
+
+      <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px">📍 Alamat Pengambilan (Pickup)</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Digunakan sebagai alamat "sender" bila jana label EasyParcel — wajib diisi sebelum boleh jana label.</div>
+        <div class="form-group"><label class="form-label">Nama Perniagaan</label><input type="text" class="form-input" id="ep-nama" /></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">No. Telefon</label><input type="tel" class="form-input" id="ep-telefon" placeholder="01x-xxxxxxx" /></div>
+          <div class="form-group"><label class="form-label">Emel</label><input type="email" class="form-input" id="ep-email" /></div>
+        </div>
+        <div class="form-group"><label class="form-label">Alamat</label><textarea class="form-input" id="ep-alamat" placeholder="No. rumah/kedai, jalan, taman..."></textarea></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Poskod</label><input type="text" class="form-input" id="ep-poskod" placeholder="cth: 06000" /></div>
+          <div class="form-group"><label class="form-label">Bandar</label><input type="text" class="form-input" id="ep-bandar" /></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Negeri</label>
+          <select class="form-input" id="ep-negeri">
+            <option value="">-- Pilih Negeri --</option>
+            <option value="Perlis">Perlis</option>
+            <option value="Kedah">Kedah</option>
+            <option value="Pulau Pinang">Pulau Pinang</option>
+            <option value="Perak">Perak</option>
+            <option value="Selangor">Selangor</option>
+            <option value="W.P. Kuala Lumpur">W.P. Kuala Lumpur</option>
+            <option value="W.P. Putrajaya">W.P. Putrajaya</option>
+            <option value="Negeri Sembilan">Negeri Sembilan</option>
+            <option value="Melaka">Melaka</option>
+            <option value="Johor">Johor</option>
+            <option value="Pahang">Pahang</option>
+            <option value="Terengganu">Terengganu</option>
+            <option value="Kelantan">Kelantan</option>
+            <option value="Sabah">Sabah</option>
+            <option value="Sarawak">Sarawak</option>
+            <option value="W.P. Labuan">W.P. Labuan</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="simpanAlamatPengambilan()">💾 Simpan Alamat Pengambilan</button>
+      </div>
     </div>
 
     <!-- Urus Pekerja (pemilik sahaja) -->
@@ -2363,6 +2401,9 @@ async function renderEdagangList() {
         <input type="text" class="form-input" style="font-size:11px" placeholder="Nama kurier" value="${esc(o.nama_kurier||'')}" onchange="kemaskiniEdagang('${o.id}','nama_kurier',this.value)" />
         <input type="text" class="form-input" style="font-size:11px" placeholder="No. Tracking" value="${esc(o.no_tracking||'')}" onchange="kemaskiniEdagang('${o.id}','no_tracking',this.value)" />
       </div>
+      ${o.kurier_service_id && !o.no_tracking ? `<button class="btn btn-primary btn-sm" style="margin-top:8px;width:100%" onclick="buatLabelEasyParcel('${o.id}', this)">📦 Buat Label EasyParcel</button>` : ''}
+      ${o.easyparcel_status==='gagal' && !o.no_tracking ? `<div style="font-size:11px;color:var(--red);margin-top:4px">⚠️ Percubaan jana label sebelum ini gagal — cuba lagi.</div>` : ''}
+      ${o.no_tracking && o.easyparcel_status==='ditempah' ? `<div style="font-size:11px;color:var(--green);margin-top:4px">✅ Label EasyParcel dijana</div>` : ''}
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-icon">🛒</div><div class="empty-text">Tiada pesanan e-dagang dalam julat ini</div></div>';
 }
@@ -2371,6 +2412,21 @@ async function kemaskiniEdagang(id, field, value) {
   const { error } = await sb.from('pesanan_edagang').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
   if (error) return toast('Gagal kemaskini: '+error.message,'err');
   toast('Pesanan dikemaskini');
+  renderEdagangList();
+}
+
+async function buatLabelEasyParcel(id, btnEl) {
+  btnEl.disabled = true;
+  btnEl.textContent = '⏳ Menjana label...';
+  const { data, error } = await sb.functions.invoke('easyparcel-book-shipment', { body: { orderId: id } });
+  if (error || data?.error) {
+    toast('Gagal jana label: ' + (data?.error || error.message), 'err');
+    btnEl.disabled = false;
+    btnEl.textContent = '📦 Buat Label EasyParcel';
+    renderEdagangList();
+    return;
+  }
+  toast('Label berjaya dijana! AWB: ' + data.awb);
   renderEdagangList();
 }
 
@@ -2773,6 +2829,34 @@ async function semakStatusEasyParcel() {
     el.innerHTML = '<span style="color:var(--muted)">⚪ Belum disambungkan</span>';
     btn.textContent = '🔗 Sambung EasyParcel';
   }
+  muatAlamatPengambilan();
+}
+
+async function muatAlamatPengambilan() {
+  const { data } = await sb.from('tetapan').select('pengirim_nama, pengirim_telefon, pengirim_email, pengirim_alamat, pengirim_poskod, pengirim_bandar, pengirim_negeri').eq('id', 1).single();
+  if (!data) return;
+  document.getElementById('ep-nama').value = data.pengirim_nama || '';
+  document.getElementById('ep-telefon').value = data.pengirim_telefon || '';
+  document.getElementById('ep-email').value = data.pengirim_email || '';
+  document.getElementById('ep-alamat').value = data.pengirim_alamat || '';
+  document.getElementById('ep-poskod').value = data.pengirim_poskod || '';
+  document.getElementById('ep-bandar').value = data.pengirim_bandar || '';
+  document.getElementById('ep-negeri').value = data.pengirim_negeri || '';
+}
+
+async function simpanAlamatPengambilan() {
+  const payload = {
+    pengirim_nama: document.getElementById('ep-nama').value.trim(),
+    pengirim_telefon: document.getElementById('ep-telefon').value.trim(),
+    pengirim_email: document.getElementById('ep-email').value.trim(),
+    pengirim_alamat: document.getElementById('ep-alamat').value.trim(),
+    pengirim_poskod: document.getElementById('ep-poskod').value.trim(),
+    pengirim_bandar: document.getElementById('ep-bandar').value.trim(),
+    pengirim_negeri: document.getElementById('ep-negeri').value,
+  };
+  const { error } = await sb.from('tetapan').update(payload).eq('id', 1);
+  if (error) return toast('Gagal simpan alamat pengambilan: ' + error.message, 'err');
+  toast('Alamat pengambilan disimpan');
 }
 
 async function saveTetapanDiskaun() {

@@ -16,6 +16,7 @@ CREATE TABLE stok (
   kategori text DEFAULT 'Minuman',
   tarikh_luput date,
   gambar_url text,
+  berat float DEFAULT 0.5,
   created_at timestamptz DEFAULT now()
 );
 
@@ -129,6 +130,13 @@ CREATE TABLE tetapan (
   diskaun_peratus float DEFAULT 5,
   qr_bank_url text,
   butiran_bank text,
+  pengirim_nama text DEFAULT 'Wafi Tijarah Trading',
+  pengirim_telefon text,
+  pengirim_email text,
+  pengirim_alamat text,
+  pengirim_poskod text,
+  pengirim_bandar text,
+  pengirim_negeri text,
   CONSTRAINT satu_baris_sahaja CHECK (id = 1)
 );
 INSERT INTO tetapan (id) VALUES (1);
@@ -429,10 +437,11 @@ ALTER TABLE stok ADD COLUMN IF NOT EXISTS gambar_urls jsonb DEFAULT '[]';
 
 DROP FUNCTION IF EXISTS senarai_produk_awam();
 CREATE FUNCTION senarai_produk_awam()
-RETURNS TABLE(id text, nama text, unit text, harga_jual float, kategori text, gambar_url text, gambar_urls jsonb, jumlah_terjual bigint)
+RETURNS TABLE(id text, nama text, unit text, harga_jual float, kategori text, gambar_url text, gambar_urls jsonb, jumlah_terjual bigint, berat float)
 LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
   SELECT s.id, s.nama, s.unit, s.harga_jual, s.kategori, s.gambar_url, s.gambar_urls,
-    COALESCE((SELECT SUM((item->>'qty')::int) FROM transaksi t, jsonb_array_elements(t.items) item WHERE item->>'stokId' = s.id), 0) AS jumlah_terjual
+    COALESCE((SELECT SUM((item->>'qty')::int) FROM transaksi t, jsonb_array_elements(t.items) item WHERE item->>'stokId' = s.id), 0) AS jumlah_terjual,
+    s.berat
   FROM stok s ORDER BY nama;
 $$;
 GRANT EXECUTE ON FUNCTION senarai_produk_awam() TO anon, authenticated;
@@ -556,6 +565,8 @@ CREATE TABLE IF NOT EXISTS pesanan_edagang (
   zon_penghantaran text REFERENCES zon_penghantaran(id),
   nama_kurier text,
   no_tracking text,
+  kurier_service_id text,
+  easyparcel_status text,
   kaedah_bayaran text DEFAULT 'transfer',
   status_bayaran text DEFAULT 'menunggu',
   status_pesanan text DEFAULT 'baru',
