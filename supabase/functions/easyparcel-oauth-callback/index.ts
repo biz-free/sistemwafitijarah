@@ -43,12 +43,19 @@ Deno.serve(async (req) => {
       }),
     });
 
+    const tokenBodyText = await tokenRes.text();
+    console.log("EasyParcel token endpoint status:", tokenRes.status, "body:", tokenBodyText);
+
     if (!tokenRes.ok) {
-      console.error("EasyParcel token exchange failed:", await tokenRes.text());
+      console.error("EasyParcel token exchange failed:", tokenBodyText);
       return Response.redirect(REDIRECT_BALIK_GAGAL, 302);
     }
 
-    const tokenData = await tokenRes.json();
+    const tokenData = JSON.parse(tokenBodyText);
+    if (!tokenData.access_token) {
+      console.error("EasyParcel response tiada access_token:", tokenBodyText);
+      return Response.redirect(REDIRECT_BALIK_GAGAL, 302);
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
