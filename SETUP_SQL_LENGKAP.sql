@@ -505,3 +505,16 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'akti
 
 DROP POLICY IF EXISTS "pemilik padam profil pekerja" ON profiles;
 CREATE POLICY "pemilik padam profil pekerja" ON profiles FOR DELETE USING (is_pemilik());
+
+-- ═══ Baiki: padam kedai gagal (409) jika ada sejarah transaksi/pre-order ═══
+ALTER TABLE transaksi DROP CONSTRAINT IF EXISTS transaksi_kedai_id_fkey;
+ALTER TABLE transaksi ADD CONSTRAINT transaksi_kedai_id_fkey
+  FOREIGN KEY (kedai_id) REFERENCES kedai(id) ON DELETE SET NULL;
+
+ALTER TABLE pre_order DROP CONSTRAINT IF EXISTS pre_order_kedai_id_fkey;
+ALTER TABLE pre_order ADD CONSTRAINT pre_order_kedai_id_fkey
+  FOREIGN KEY (kedai_id) REFERENCES kedai(id) ON DELETE SET NULL;
+
+-- ═══ Diskaun dua peringkat: COD/Tunai + Online Transfer, & had Consignment (RM) ═══
+ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS diskaun_cod_peratus float DEFAULT 5;
+ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS consignment_limit float DEFAULT 300;

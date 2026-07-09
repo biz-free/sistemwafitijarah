@@ -116,9 +116,18 @@
         <div class="bayar-opt" id="opt-transfer" onclick="setBayarMetod('transfer')">🏦 Online Transfer</div>
         <div class="bayar-opt" id="opt-consignment" onclick="setBayarMetod('consignment')">🤝 Consignment</div>
       </div>
+      <div id="cod-diskaun-info" style="display:none;margin-top:12px">
+        <div class="diskaun-banner" style="margin-bottom:0">
+          <div class="tajuk">🎉 Anda layak diskaun <span id="dk-cod-peratus">5</span>%!</div>
+          <div style="font-size:12px;color:var(--muted)">Diskaun automatik untuk pesanan tunai (COD) melebihi minima.</div>
+        </div>
+      </div>
+      <div id="consignment-limit-notis" style="display:none;margin-top:12px;font-size:12px;color:var(--red);background:#FDEEEE;border:1px solid var(--red);border-radius:10px;padding:12px">
+        ⚠️ Consignment hanya untuk pesanan bawah <strong id="cl-had">RM 300.00</strong>. Sila kurangkan barang atau pilih kaedah bayaran lain.
+      </div>
       <div id="diskaun-info" style="display:none;margin-top:12px">
         <div class="diskaun-banner" style="margin-bottom:0">
-          <div class="tajuk">🎉 Anda layak diskaun <span id="dk-peratus">5</span>%!</div>
+          <div class="tajuk">🎉 Anda layak diskaun <span id="dk-peratus">10</span>%!</div>
           <div style="font-size:12px;color:var(--muted)">Bayar terus via Online Transfer untuk elak hutang & dapat diskaun serta-merta.</div>
           <div id="bank-info" style="margin-top:10px">
             <div style="text-align:center">
@@ -281,7 +290,7 @@ function toast(msg, type='ok') {
 }
 
 let PRODUK = [];
-let TETAPAN = { minima_transfer: 500, diskaun_peratus: 5, qr_bank_url: null, butiran_bank: '' };
+let TETAPAN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5, consignment_limit: 300, qr_bank_url: null, butiran_bank: '' };
 let cart = {}; // { stokId: qty }
 let bayarMetod = 'cod';
 const kedaiIdDariQR = new URLSearchParams(location.search).get('kedai');
@@ -293,10 +302,11 @@ async function initHalaman() {
   ]);
   if (e1) toast('Gagal muat senarai produk — sila cuba lagi kemudian','err');
   PRODUK = (produk || []).sort((a,b)=>(b.jumlah_terjual||0)-(a.jumlah_terjual||0)); // paling laris dulu
-  if (!e2 && tetapan) TETAPAN = tetapan;
+  if (!e2 && tetapan) TETAPAN = { ...TETAPAN, ...tetapan };
   document.getElementById('dk-peratus').textContent = TETAPAN.diskaun_peratus;
-  document.getElementById('kiraan-diskaun-peratus').textContent = TETAPAN.diskaun_peratus;
-  document.getElementById('promo-track').textContent = `PROMOSI POTONGAN ${TETAPAN.diskaun_peratus}%, JIKA ANDA BELI MINIMA ${fmt(TETAPAN.minima_transfer)} DARI SISTEM INI (INSTANT TRANSFER/QR)`;
+  document.getElementById('dk-cod-peratus').textContent = TETAPAN.diskaun_cod_peratus;
+  document.getElementById('cl-had').textContent = fmt(TETAPAN.consignment_limit);
+  document.getElementById('promo-track').textContent = `PROMOSI POTONGAN ${TETAPAN.diskaun_cod_peratus}% (TUNAI/COD) ATAU ${TETAPAN.diskaun_peratus}% (INSTANT TRANSFER/QR), JIKA ANDA BELI MINIMA ${fmt(TETAPAN.minima_transfer)} DARI SISTEM INI`;
   renderProdukGrid();
   initPoMap();
 
@@ -370,8 +380,18 @@ function subtotal() {
   return Object.entries(cart).reduce((a,[id,qty])=>{ const p=PRODUK.find(p=>p.id===id); return a+(p?p.harga_jual*qty:0); },0);
 }
 
+// Peratus diskaun yang terpakai ikut kaedah bayaran semasa (0 jika consignment atau bawah minima)
+function peratusDiskaunSemasa() {
+  if (subtotal() < TETAPAN.minima_transfer) return 0;
+  if (bayarMetod === 'cod') return TETAPAN.diskaun_cod_peratus || 0;
+  if (bayarMetod === 'transfer') return TETAPAN.diskaun_peratus || 0;
+  return 0;
+}
 function layakDiskaunSemasa() {
-  return bayarMetod === 'transfer' && subtotal() >= TETAPAN.minima_transfer;
+  return peratusDiskaunSemasa() > 0;
+}
+function melebihiHadConsignment() {
+  return subtotal() >= (TETAPAN.consignment_limit || 300);
 }
 
 function kemaskiniTotal() {
@@ -381,18 +401,29 @@ function kemaskiniTotal() {
   document.getElementById('cart-total').textContent = fmt(tot);
   document.getElementById('cart-bar').className = count ? 'show' : '';
 
-  const layak = layakDiskaunSemasa();
-  const diskaunNilai = layak ? tot * TETAPAN.diskaun_peratus/100 : 0;
+  const peratus = peratusDiskaunSemasa();
+  const layak = peratus > 0;
+  const diskaunNilai = layak ? tot * peratus/100 : 0;
   document.getElementById('kiraan-subtotal').textContent = fmt(tot);
+  document.getElementById('kiraan-diskaun-peratus').textContent = peratus;
   document.getElementById('kiraan-diskaun-row').style.display = layak ? 'flex' : 'none';
   document.getElementById('kiraan-diskaun-nilai').textContent = '-'+fmt(diskaunNilai);
   document.getElementById('grand-total').textContent = fmt(tot - diskaunNilai);
 
+  document.getElementById('cod-diskaun-info').style.display = (bayarMetod==='cod' && layak) ? 'block' : 'none';
   const tajukEl = document.querySelector('#diskaun-info .tajuk');
-  if (tajukEl) tajukEl.style.opacity = layak ? '1' : '0.4';
+  if (tajukEl) tajukEl.style.opacity = (bayarMetod==='transfer' && layak) ? '1' : '0.4';
+
+  // Consignment tak dibenarkan lepas had — tukar automatik ke COD jika sudah dipilih
+  const melebihiHad = melebihiHadConsignment();
+  document.getElementById('opt-consignment').style.opacity = melebihiHad ? '0.4' : '1';
+  document.getElementById('opt-consignment').style.pointerEvents = melebihiHad ? 'none' : '';
+  document.getElementById('consignment-limit-notis').style.display = (bayarMetod==='consignment' && melebihiHad) ? 'block' : 'none';
+  if (bayarMetod==='consignment' && melebihiHad) setBayarMetod('cod');
 }
 
 function setBayarMetod(m) {
+  if (m==='consignment' && melebihiHadConsignment()) { toast(`Consignment hanya untuk pesanan bawah ${fmt(TETAPAN.consignment_limit||300)}`,'err'); return; }
   bayarMetod = m;
   document.getElementById('opt-cod').className = 'bayar-opt' + (m==='cod'?' aktif':'');
   document.getElementById('opt-transfer').className = 'bayar-opt' + (m==='transfer'?' aktif':'');
@@ -414,10 +445,10 @@ async function hantarPesanan() {
   if (!nama || !tel) return toast('Sila isi nama kedai dan no. telefon','err');
   const entries = Object.entries(cart);
   if (!entries.length) return toast('Sila pilih sekurang-kurangnya satu barang','err');
+  if (bayarMetod==='consignment' && melebihiHadConsignment()) return toast(`Consignment hanya untuk pesanan bawah ${fmt(TETAPAN.consignment_limit||300)}`,'err');
 
   const jumlahAsal = subtotal();
-  const layakDiskaun = jumlahAsal >= TETAPAN.minima_transfer && bayarMetod === 'transfer';
-  const diskaunPeratus = layakDiskaun ? TETAPAN.diskaun_peratus : 0;
+  const diskaunPeratus = peratusDiskaunSemasa();
   const jumlahSelepas = jumlahAsal * (1 - diskaunPeratus/100);
 
   let bayarTarikh = null, bayarMasa = null, buktiUrl = null;

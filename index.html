@@ -481,13 +481,18 @@
   <div id="page-tempahan" class="page">
     <div class="section-title">📋 Tempahan</div>
     <div class="section-sub" id="tp-jumlah">Senarai penuh semua tempahan pre-order</div>
+    <div style="display:flex;gap:0;background:var(--border);border-radius:10px;padding:3px;margin-bottom:14px">
+      <button id="tptab-tempahan" onclick="setTempahanTab('tempahan')" style="flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;background:var(--navy);color:#fff">📋 Tempahan</button>
+      <button id="tptab-transaksi" onclick="setTempahanTab('transaksi')" style="flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;background:transparent;color:var(--muted)">🧾 Transaksi Kedai</button>
+    </div>
     <div class="card">
       <div class="form-row" style="align-items:flex-end">
-        <div class="form-group"><label class="form-label">Tapis Ikut Bulan</label><input type="month" class="form-input" id="tp-bulan" onchange="renderTempahanList()" /></div>
-        <button class="btn btn-secondary" style="flex-shrink:0" onclick="document.getElementById('tp-bulan').value='';renderTempahanList()">Papar Semua</button>
+        <div class="form-group"><label class="form-label">Tapis Ikut Bulan</label><input type="month" class="form-input" id="tp-bulan" onchange="renderTempahanAktif()" /></div>
+        <button class="btn btn-secondary" style="flex-shrink:0" onclick="document.getElementById('tp-bulan').value='';renderTempahanAktif()">Papar Semua</button>
       </div>
     </div>
-    <div id="tempahan-list"></div>
+    <div id="tp-tempahan-wrap"><div id="tempahan-list"></div></div>
+    <div id="tp-transaksi-wrap" style="display:none"><div id="transaksi-kedai-list"></div></div>
   </div>
 
   <!-- ── LEBIH ── -->
@@ -614,11 +619,13 @@
     <!-- Tetapan Pre-Order & Diskaun Online Transfer (pemilik sahaja) -->
     <div class="card" id="tetapan-diskaun-card">
       <div class="card-title">💳 Tetapan Pre-Order & Diskaun</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Kedai yang bayar Online Transfer (elak hutang) untuk pesanan melebihi minima akan dapat diskaun automatik di borang pre-order.</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Kedai yang bayar tunai (COD) atau Online Transfer (elak hutang) untuk pesanan melebihi minima akan dapat diskaun automatik di borang pre-order.</div>
+      <div class="form-group"><label class="form-label">Minima Pesanan (RM)</label><input type="number" class="form-input" id="set-minima-transfer" step="10" min="0" /></div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Minima Pesanan (RM)</label><input type="number" class="form-input" id="set-minima-transfer" step="10" min="0" /></div>
-        <div class="form-group"><label class="form-label">Diskaun (%)</label><input type="number" class="form-input" id="set-diskaun-peratus" step="0.5" min="0" max="100" /></div>
+        <div class="form-group"><label class="form-label">Diskaun COD/Tunai (%)</label><input type="number" class="form-input" id="set-diskaun-cod-peratus" step="0.5" min="0" max="100" /></div>
+        <div class="form-group"><label class="form-label">Diskaun Online Transfer (%)</label><input type="number" class="form-input" id="set-diskaun-peratus" step="0.5" min="0" max="100" /></div>
       </div>
+      <div class="form-group"><label class="form-label">Had Consignment (RM) — hanya pesanan bawah nilai ini dibenarkan consignment</label><input type="number" class="form-input" id="set-consignment-limit" step="10" min="0" /></div>
       <div class="form-group">
         <label class="form-label">Gambar QR Bank</label>
         <img id="qr-bank-preview" style="display:none;width:100%;max-width:200px;border-radius:9px;margin-bottom:8px" />
@@ -1133,7 +1140,7 @@ async function setPage(p) {
   }
   if (p==='tempahan') {
     if (!document.getElementById('tp-bulan').value) document.getElementById('tp-bulan').value = new Date().toISOString().slice(0,7);
-    renderTempahanList();
+    renderTempahanAktif();
   }
   if (p==='analisis' && currentRole==='pemilik') {
     if (!document.getElementById('an-dari').value) {
@@ -2235,6 +2242,60 @@ async function padamTempahan(id) {
   toast('Tempahan dipadam');
 }
 
+let tempahanTab = 'tempahan';
+function setTempahanTab(t) {
+  tempahanTab = t;
+  ['tempahan','transaksi'].forEach(tab=>{
+    document.getElementById('tptab-'+tab).style.background = t===tab?'var(--navy)':'transparent';
+    document.getElementById('tptab-'+tab).style.color = t===tab?'#fff':'var(--muted)';
+  });
+  document.getElementById('tp-tempahan-wrap').style.display = t==='tempahan'?'':'none';
+  document.getElementById('tp-transaksi-wrap').style.display = t==='transaksi'?'':'none';
+  renderTempahanAktif();
+}
+
+function renderTempahanAktif() {
+  if (tempahanTab==='tempahan') renderTempahanList(); else renderTransaksiKedaiList();
+}
+
+async function renderTransaksiKedaiList() {
+  const el = document.getElementById('transaksi-kedai-list');
+  const bulan = document.getElementById('tp-bulan').value;
+  const list = [...DATA.transaksi]
+    .filter(t=>!bulan || (t.tarikh_masa||'').slice(0,7)===bulan)
+    .sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
+  document.getElementById('tp-jumlah').textContent = `${list.length} transaksi${bulan?' pada '+bulan:' (semua)'}`;
+
+  el.innerHTML = list.map(t=>{
+    const k = t.kedai_id ? DATA.kedai.find(k=>k.id===t.kedai_id) : null;
+    const itemsStr = t.items.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `${s.nama} ×${it.qty}`; }).join(' · ');
+    return `<div class="trx-card ${t.status==='hutang'?'hutang':''}">
+      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="padamTransaksiKedai('${t.id}')" title="Padam transaksi">✕</button>`:''}
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
+        <div>
+          <div style="font-weight:800;font-size:13px">${esc(namaDestinasiTrx(t))}</div>
+          <div style="font-size:10px;color:var(--muted)">${k?.telefon?'📞 '+esc(k.telefon)+' · ':''}${fmtDT(t.tarikh_masa)} · ${esc(t.resit||'')}</div>
+          ${k?.alamat?`<div style="font-size:10px;color:var(--muted)">📍 ${esc(k.alamat)}</div>`:''}
+        </div>
+        <span class="badge ${t.status==='selesai'?'badge-green':'badge-red'}" style="flex-shrink:0">${t.status==='selesai'?'✓ Selesai':'⏳ Hutang'}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
+      ${t.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(t.nota)}</div>`:''}
+      <div style="font-size:12px;font-weight:700;margin-top:6px">${fmt(t.jumlah)}</div>
+      ${k?.lat&&k?.lng?`<a class="btn btn-secondary btn-sm" style="text-decoration:none;margin-top:8px;display:inline-block" href="https://www.google.com/maps/search/?api=1&query=${k.lat},${k.lng}" target="_blank" rel="noopener">🗺️ Lihat di Google Maps</a>`:''}
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Tiada transaksi dalam julat ini</div></div>';
+}
+
+async function padamTransaksiKedai(id) {
+  if (!confirm('Padam rekod transaksi ini secara kekal? Tindakan ini tidak boleh diundur.')) return;
+  const { error } = await sb.from('transaksi').delete().eq('id', id);
+  if (error) return toast('Gagal padam: '+error.message,'err');
+  await loadData();
+  renderTransaksiKedaiList();
+  toast('Transaksi dipadam');
+}
+
 async function tugaskanPreorder(id, pekerjaId) {
   const { error } = await sb.rpc('tugaskan_preorder', { p_id:id, p_pekerja_id: pekerjaId||null });
   if (error) return toast('Gagal tugaskan: '+error.message,'err');
@@ -2571,6 +2632,8 @@ async function loadTetapanDiskaun() {
   if (error || !data) return;
   document.getElementById('set-minima-transfer').value = data.minima_transfer;
   document.getElementById('set-diskaun-peratus').value = data.diskaun_peratus;
+  document.getElementById('set-diskaun-cod-peratus').value = data.diskaun_cod_peratus ?? 5;
+  document.getElementById('set-consignment-limit').value = data.consignment_limit ?? 300;
   document.getElementById('set-butiran-bank').value = data.butiran_bank || '';
   qrBankUrlSedia = data.qr_bank_url || null;
   const prev = document.getElementById('qr-bank-preview');
@@ -2598,6 +2661,8 @@ async function saveTetapanDiskaun() {
   const { error } = await sb.from('tetapan').update({
     minima_transfer: +document.getElementById('set-minima-transfer').value || 0,
     diskaun_peratus: +document.getElementById('set-diskaun-peratus').value || 0,
+    diskaun_cod_peratus: +document.getElementById('set-diskaun-cod-peratus').value || 0,
+    consignment_limit: +document.getElementById('set-consignment-limit').value || 0,
     butiran_bank: document.getElementById('set-butiran-bank').value,
     qr_bank_url: qrUrl,
   }).eq('id', 1);
@@ -2637,18 +2702,32 @@ async function renderUpahSaya() {
   const bulan = document.getElementById('upah-saya-bulan').value;
   const fil = DATA.transaksi.filter(t => t.tarikh_masa?.startsWith(bulan) && (t.created_by===DATA.currentUser?.id || t.created_by===DATA.currentUser?.email));
   const jumlahStok = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
-  const { totalKm: jumlahKm } = await kiraJarakKehadiranJulat(bulan+'-01T00:00:00', akhirBulanISO(bulan), DATA.currentUser.id);
-  const hariKerja = new Set(fil.map(t=>(t.tarikh_masa||'').slice(0,10))).size;
+  const { totalKm: jumlahKm, kmIkutHari } = await kiraJarakKehadiranJulat(bulan+'-01T00:00:00', akhirBulanISO(bulan), DATA.currentUser.id);
+  const hariList = [...new Set(fil.map(t=>(t.tarikh_masa||'').slice(0,10)))].sort();
+  const hariKerja = hariList.length;
   const kosUpah = fil.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
   const kosMinyak = jumlahKm*SETTINGS.minyak;
   const kosMakan = hariKerja*SETTINGS.makan;
   const jumlahUpah = kosUpah+kosMinyak+kosMakan;
+
+  // Pecahan dibayar mengikut hari — setiap hari kerja dikira berasingan (upah + minyak + makan hari itu)
+  const pecahanHarian = hariList.map(tarikh => {
+    const filHari = fil.filter(t=>(t.tarikh_masa||'').slice(0,10)===tarikh);
+    const upahHari = filHari.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
+    const kmHari = kmIkutHari[`${DATA.currentUser.id}|${tarikh}`] || 0;
+    const jumlahHari = upahHari + kmHari*SETTINGS.minyak + SETTINGS.makan;
+    return { tarikh, bil: filHari.length, jumlahHari };
+  }).sort((a,b)=>b.tarikh.localeCompare(a.tarikh));
+
   document.getElementById('upah-saya-output').innerHTML = `
     <div class="list-item"><div class="list-item-title">Bilangan Penghantaran</div><div class="list-item-val">${fil.length}</div></div>
     <div class="list-item"><div class="list-item-title">Upah (${jumlahStok} unit dihantar)</div><div class="list-item-val">${fmt(kosUpah)}</div></div>
     <div class="list-item"><div class="list-item-title">Minyak (${jumlahKm.toFixed(1)} km × ${fmt(SETTINGS.minyak)})</div><div class="list-item-val">${fmt(kosMinyak)}</div></div>
     <div class="list-item"><div class="list-item-title">Duit Makan (${hariKerja} hari)</div><div class="list-item-val">${fmt(kosMakan)}</div></div>
-    <div class="total-box" style="margin-top:10px"><span class="total-label">JUMLAH UPAH ANDA</span><span class="total-val">${fmt(jumlahUpah)}</span></div>`;
+    <div class="total-box" style="margin-top:10px"><span class="total-label">JUMLAH UPAH ANDA</span><span class="total-val">${fmt(jumlahUpah)}</span></div>
+    <div class="divider" style="margin:14px 0"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">💰 DIBAYAR MENGIKUT HARI</div>
+    ${pecahanHarian.map(h=>`<div class="list-item"><div><div class="list-item-title">${fmtD(h.tarikh)}</div><div class="list-item-sub">${h.bil} penghantaran</div></div><div class="list-item-val">${fmt(h.jumlahHari)}</div></div>`).join('') || '<div class="empty"><div class="empty-text">Tiada hari kerja dalam bulan ini</div></div>'}`;
 }
 
 // ════════════════════════════════════════════════════
@@ -2693,14 +2772,25 @@ async function renderSenaraiCutiSemua() {
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
   el.innerHTML = (data||[]).map(c=>`
     <div class="list-item">
-      <div>
+      <button class="btn-delete-icon" onclick="padamCuti('${c.id}')" title="Padam permohonan">✕</button>
+      <div style="width:100%;padding-right:26px">
         <div class="list-item-title">${esc(namaPekerja(c.pekerja_id))} — ${CUTI_JENIS_LABEL[c.jenis]||c.jenis}</div>
         <div class="list-item-sub">${fmtD(c.tarikh_mula)} – ${fmtD(c.tarikh_tamat)}${c.nota?' · '+esc(c.nota):''}</div>
-        ${c.status==='menunggu'
-          ?`<div style="display:flex;gap:6px;margin-top:6px"><button class="btn btn-primary btn-sm" style="margin-top:0;background:var(--green)" onclick="luluskanCuti('${c.id}','diluluskan')">✓ Lulus</button><button class="btn btn-danger btn-sm" onclick="luluskanCuti('${c.id}','ditolak')">✕ Tolak</button></div>`
-          :`<span class="badge ${c.status==='diluluskan'?'badge-green':'badge-red'}">${c.status==='diluluskan'?'Diluluskan':'Ditolak'}</span>`}
+        <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px;margin-top:6px" onchange="luluskanCuti('${c.id}',this.value)">
+          <option value="menunggu" ${c.status==='menunggu'?'selected':''}>⏳ Menunggu</option>
+          <option value="diluluskan" ${c.status==='diluluskan'?'selected':''}>✓ Diluluskan</option>
+          <option value="ditolak" ${c.status==='ditolak'?'selected':''}>✕ Ditolak</option>
+        </select>
       </div>
     </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada permohonan lagi</div></div>';
+}
+
+async function padamCuti(id) {
+  if (!confirm('Padam permohonan cuti ini secara kekal?')) return;
+  const { error } = await sb.from('permohonan_cuti').delete().eq('id', id);
+  if (error) return toast('Gagal padam: '+error.message,'err');
+  renderSenaraiCutiSemua();
+  toast('Permohonan cuti dipadam');
 }
 
 // ── Status Live Pekerja: thumb in/out, cuti/mc/off, lokasi terkini ──
@@ -3080,7 +3170,7 @@ function akhirBulanISO(bulanYYYYMM) {
 // satu jumlah pekerja tersebut (bukan didarab 2x). Pulangkan jumlah keseluruhan dan
 // pecahan ikut pekerja (dikunci ikut created_by supaya sepadan dengan data transaksi).
 async function kiraJarakKehadiranJulat(dariISO, hinggaISO, pekerjaId=null) {
-  if (!useCloud) return { totalKm:0, kmIkutPekerja:{} };
+  if (!useCloud) return { totalKm:0, kmIkutPekerja:{}, kmIkutHari:{} };
   let q = sb.from('kehadiran').select('*').gte('thumb_in_masa', dariISO).lte('thumb_in_masa', hinggaISO);
   if (pekerjaId) q = q.eq('pekerja_id', pekerjaId);
   const { data: sesiSemua } = await q;
@@ -3089,6 +3179,7 @@ async function kiraJarakKehadiranJulat(dariISO, hinggaISO, pekerjaId=null) {
   // submit_penghantaran), jadi ia sepadan terus dengan kehadiran.pekerja_id.
   let totalKm = 0;
   const kmIkutPekerja = {};
+  const kmIkutHari = {}; // key: `${pekerja_id}|${tarikh}` — untuk pecahan harian upah
   (sesiSemua||[]).forEach(sesi => {
     const tarikhSesi = (sesi.thumb_in_masa||'').slice(0,10);
     const penghantaranSesi = DATA.transaksi.filter(t=>{
@@ -3099,8 +3190,10 @@ async function kiraJarakKehadiranJulat(dariISO, hinggaISO, pekerjaId=null) {
     const km = jarakSesiKehadiran(sesi, penghantaranSesi);
     totalKm += km;
     kmIkutPekerja[sesi.pekerja_id] = (kmIkutPekerja[sesi.pekerja_id]||0) + km;
+    const hariKey = `${sesi.pekerja_id}|${tarikhSesi}`;
+    kmIkutHari[hariKey] = (kmIkutHari[hariKey]||0) + km;
   });
-  return { totalKm, kmIkutPekerja };
+  return { totalKm, kmIkutPekerja, kmIkutHari };
 }
 
 async function renderLaporanKehadiran() {
