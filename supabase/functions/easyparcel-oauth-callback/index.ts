@@ -12,6 +12,11 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const REDIRECT_BALIK_BERJAYA = "https://www.wafitijarahtrading.com/pengurusan.html?easyparcel=berjaya";
 const REDIRECT_BALIK_GAGAL = "https://www.wafitijarahtrading.com/pengurusan.html?easyparcel=gagal";
+// MESTI sama persis (character-for-character) dengan Redirect URI didaftar di
+// developer.easyparcel.com DAN yang dihantar semasa mula authorize (pengurusan.html).
+// Dikodkan tetap di sini (bukan dari req.url) sebab platform serverless kadang
+// tunjuk URL routing dalaman, bukan URL awam sebenar yang EasyParcel nampak.
+const EASYPARCEL_REDIRECT_URI = "https://smepriytkoxkmpvjvvzq.supabase.co/functions/v1/easyparcel-oauth-callback";
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
@@ -27,10 +32,8 @@ Deno.serve(async (req) => {
   try {
     const clientId = Deno.env.get("EASYPARCEL_CLIENT_ID")!;
     const clientSecret = Deno.env.get("EASYPARCEL_CLIENT_SECRET")!;
-    // redirect_uri dihantar semula MESTI sama persis dengan yang didaftar/digunakan
-    // semasa mula authorize — guna origin+pathname permintaan semasa (URL Edge Function ini sendiri).
-    const redirectUri = `${url.origin}${url.pathname}`;
     const basicAuth = btoa(`${clientId}:${clientSecret}`);
+    console.log("EasyParcel token exchange — client_id:", clientId, "| redirect_uri dihantar:", EASYPARCEL_REDIRECT_URI, "| client_secret panjang:", clientSecret?.length || 0);
 
     const tokenRes = await fetch("https://api.easyparcel.com/oauth/token", {
       method: "POST",
@@ -40,7 +43,7 @@ Deno.serve(async (req) => {
       },
       body: new URLSearchParams({
         grant_type: "authorization_code",
-        redirect_uri: redirectUri,
+        redirect_uri: EASYPARCEL_REDIRECT_URI,
         code,
       }),
     });
@@ -48,14 +51,11 @@ Deno.serve(async (req) => {
     const tokenBodyText = await tokenRes.text();
     console.log("EasyParcel token endpoint status:", tokenRes.status, "body:", tokenBodyText);
 
-    if (!tokenRes.ok) {
-      console.error("EasyParcel token exchange failed:", tokenBodyText);
-      return Response.redirect(REDIRECT_BALIK_GAGAL, 302);
-    }
+    let tokenData;
+    try { tokenData = JSON.parse(tokenBodyText); } catch { tokenData = {}; }
 
-    const tokenData = JSON.parse(tokenBodyText);
-    if (!tokenData.access_token) {
-      console.error("EasyParcel response tiada access_token:", tokenBodyText);
+    if (!tokenRes.ok || (tokenData.status_code && tokenData.status_code !== 200) || !tokenData.access_token) {
+      console.error("EasyParcel token exchange gagal:", tokenBodyText);
       return Response.redirect(REDIRECT_BALIK_GAGAL, 302);
     }
 
