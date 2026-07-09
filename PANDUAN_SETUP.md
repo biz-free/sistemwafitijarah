@@ -28,7 +28,7 @@ Sistem kini guna **Google Maps** untuk peta pilih lokasi kedai, peta servis, dan
 2. Aktifkan **Billing** (perlu kad kredit — Google beri free tier ~$200/bulan percuma, cukup untuk perniagaan kecil)
 3. Pergi **APIs & Services → Library** → aktifkan **"Maps JavaScript API"** dan **"Geocoding API"**
 4. Pergi **APIs & Services → Credentials** → **Create Credentials → API Key**
-5. (Disyorkan) Sekat key tersebut kepada domain `biz-free.github.io/*` sahaja (API Key → Application restrictions → HTTP referrers)
+5. (Disyorkan) Sekat key tersebut kepada domain `www.wafitijarahtrading.com/*` sahaja (API Key → Application restrictions → HTTP referrers) — tambah `biz-free.github.io/*` sekali sepanjang tempoh peralihan domain
 6. Buka fail `index.html`, cari `const GOOGLE_MAPS_API_KEY = 'YOUR_GOOGLE_MAPS_API_KEY';`, ganti dengan key sebenar anda
 7. Upload semula ke GitHub
 
@@ -138,7 +138,7 @@ Pemilik boleh daftar akaun pekerja baru terus dari **Lagi → Urus Pekerja** (na
 > ⚠️ Jika akaun pekerja baru tak boleh log masuk serta-merta ("Email not confirmed"), pergi ke Supabase → **Authentication → Providers → Email** dan matikan "Confirm email" — supaya akaun terus aktif sebaik didaftarkan tanpa perlu sahkan e-mel.
 
 ### 🔗 Link & QR Pre-Order untuk Kedai (Repeat Order)
-Satu link awam **`pesan.html`** (cth: `https://biz-free.github.io/sistemwafitijarah/pesan.html`) boleh dikongsi terus dengan mana-mana kedai — borang ini kini **interaktif & bergambar**: kedai layari katalog produk (gambar, harga, unit) dan guna butang +/− untuk tambah ke troli, TANPA perlu log masuk. Pesanan masuk terus ke tab **Hantar → Pre-Order** dalam apps (nampak oleh pemilik & pekerja) untuk diproses jadi penghantaran sebenar.
+Satu link awam **`pesan.html`** (cth: `https://www.wafitijarahtrading.com/pesan.html`) boleh dikongsi terus dengan mana-mana kedai — borang ini kini **interaktif & bergambar**: kedai layari katalog produk (gambar, harga, unit) dan guna butang +/− untuk tambah ke troli, TANPA perlu log masuk. Pesanan masuk terus ke tab **Hantar → Pre-Order** dalam apps (nampak oleh pemilik & pekerja) untuk diproses jadi penghantaran sebenar.
 
 Setiap resit turut jana **kod QR unik** yang terus bawa kedai tersebut ke `pesan.html?kedai=<id kedai>` — bila diimbas, nama & no. telefon kedai automatik terisi (kedai tak perlu taip semula), memudahkan repeat order terus dari resit lama.
 
