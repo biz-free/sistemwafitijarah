@@ -569,6 +569,7 @@ CREATE TABLE IF NOT EXISTS pesanan_edagang (
   easyparcel_status text,
   easyparcel_awb_url text,
   easyparcel_tracking_url text,
+  billplz_bill_id text,
   kaedah_bayaran text DEFAULT 'transfer',
   status_bayaran text DEFAULT 'menunggu',
   status_pesanan text DEFAULT 'baru',
@@ -648,3 +649,12 @@ LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
   SELECT (access_token IS NOT NULL), connected_at, expires_at FROM easyparcel_auth WHERE id = 1;
 $$;
 GRANT EXECUTE ON FUNCTION easyparcel_status() TO authenticated;
+
+-- ═══ Fungsi awam — semak status bayaran pesanan (guest checkout Billplz guna ini
+--     selepas redirect balik; sengaja tak pulangkan alamat/telefon/emel) ═══
+CREATE OR REPLACE FUNCTION semak_status_pesanan(p_id text)
+RETURNS TABLE(status_bayaran text, status_pesanan text, jumlah float)
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  SELECT status_bayaran, status_pesanan, jumlah FROM pesanan_edagang WHERE id = p_id;
+$$;
+GRANT EXECUTE ON FUNCTION semak_status_pesanan(text) TO anon, authenticated;

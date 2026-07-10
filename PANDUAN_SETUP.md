@@ -24,6 +24,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 13. `SQL_TAMBAHAN_13.sql` — Sambungan OAuth EasyParcel (Fasa 3a) — lihat bahagian "🚚 Sambung EasyParcel" di bawah untuk setup Edge Function
 > 14. `SQL_TAMBAHAN_14.sql` — Kadar penghantaran sebenar & label EasyParcel (Fasa 3b) — perlu deploy 2 Edge Function baru, lihat bahagian "🚚 Kadar Sebenar & Label EasyParcel" di bawah
 > 15. `SQL_TAMBAHAN_15.sql` — **Wajib** selepas #14: simpan pautan cetak label & jejak tracking selepas label EasyParcel dijana — perlu redeploy `easyparcel-book-shipment` (baiki bug URL endpoint salah)
+> 16. `SQL_TAMBAHAN_16.sql` — Bayaran Online Billplz (Fasa 2) — perlu deploy 2 Edge Function baru, lihat bahagian "💳 Bayaran Online (Billplz)" di bawah untuk setup akaun & secrets
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -203,6 +204,33 @@ Selepas EasyParcel disambung (Fasa 3a di atas) dan `SQL_TAMBAHAN_14.sql` dijalan
    ```
    (Tiada `--no-verify-jwt` untuk mana-mana ini — berbeza dengan `easyparcel-oauth-callback` — sebab kesemuanya dipanggil dari dalam apps dengan token log masuk yang sah.)
 4. Selesai. Di laman e-dagang, lepas pelanggan isi poskod & negeri, senarai kurier & harga sebenar akan terpapar untuk dipilih (jatuh balik senyap ke kadar flat jika EasyParcel tak dapat dihubungi — checkout tetap berfungsi). Di **Tempahan → 🛒 E-Dagang**, pesanan yang ada kurier dipilih akan papar butang **"📦 Buat Label EasyParcel"** — tekan untuk jana AWB terus lepas bayaran disahkan. Baki wallet EasyParcel semasa dipaparkan terus di kad **Profile → EasyParcel** (papar amaran jika baki di bawah RM10).
+
+### 💳 Bayaran Online (Billplz) — Fasa 2
+Laman e-dagang kini ada 2 kaedah bayar: **"💳 Bayar Online"** (Billplz — FPX/kad, disahkan automatik) dan **"🏦 Transfer Manual"** (kaedah asal, perlu upload bukti). Bayar Online dipilih secara lalai.
+
+**1. Daftar akaun Billplz Sandbox (percuma, serta-merta):**
+1. Pergi ke [billplz-sandbox.com](https://www.billplz-sandbox.com) dan daftar akaun.
+2. Di dashboard, pergi ke **Settings → API Keys** — salin **Secret Key** dan **X Signature Key**.
+3. Pergi ke **Collections → Create Collection**, beri nama (cth: "Wafi Tijarah Trading") — salin **Collection ID** (contoh: `yhx5t1pp`).
+
+> ℹ️ Ini akaun **Sandbox** (ujian, tiada duit sebenar). Apabila sedia untuk terima bayaran sebenar, daftar akaun Production di [billplz.com](https://www.billplz.com), ulang langkah yang sama untuk dapatkan Secret Key/X Signature Key/Collection ID **Production**, kemudian kemaskini secrets (langkah 3 di bawah) — tiada perubahan kod diperlukan, hanya tukar secrets & `BILLPLZ_BASE_URL`.
+
+**2. Jalankan `SQL_TAMBAHAN_16.sql`** di Supabase SQL Editor.
+
+**3. Tetapkan secrets & deploy 2 Edge Function baru** (dari folder `wafi-app`):
+```
+npx supabase secrets set BILLPLZ_SECRET_KEY=<Secret Key dari dashboard Billplz>
+npx supabase secrets set BILLPLZ_X_SIGNATURE_KEY=<X Signature Key dari dashboard Billplz>
+npx supabase secrets set BILLPLZ_COLLECTION_ID=<Collection ID dari dashboard Billplz>
+npx supabase secrets set BILLPLZ_BASE_URL=https://www.billplz-sandbox.com
+npx supabase functions deploy billplz-create-bill
+npx supabase functions deploy billplz-webhook --no-verify-jwt
+```
+> ⚠️ `billplz-webhook` **MESTI** guna `--no-verify-jwt` — Billplz hantar POST terus dari server mereka (bukan panggilan dari app dengan token log masuk), sama seperti `easyparcel-oauth-callback`. Keselamatan callback ini dikawal oleh pengesahan **X-Signature** (HMAC-SHA256) dalam kod, bukan oleh token Supabase.
+
+**4. Selesai.** Test dengan checkout sebenar di laman e-dagang, pilih "Bayar Online" — anda akan dibawa ke halaman Billplz Sandbox untuk simulasi bayaran (FPX simulator disediakan Billplz untuk sandbox, tiada bank sebenar diperlukan). Selepas bayar, anda dibawa balik ke laman dengan status pengesahan **sebenar** (bukan sekadar parameter URL yang boleh dipalsukan) — status disahkan oleh webhook `billplz-webhook` terus dalam pangkalan data.
+
+Bila sedia untuk Production: daftar akaun sebenar, ulang langkah 3 dengan Secret Key/X Signature Key/Collection ID Production dan `BILLPLZ_BASE_URL=https://www.billplz.com`, redeploy kedua-dua fungsi.
 
 ### 🖼️ Gambar Produk & Diskaun Online Transfer
 - **Gambar produk**: Bila tambah/edit produk di **Stok**, pemilik boleh muat naik gambar (dipaparkan di borang pre-order supaya kedai nampak produk sebelum order).

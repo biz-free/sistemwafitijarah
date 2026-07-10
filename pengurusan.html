@@ -2385,7 +2385,7 @@ async function renderEdagangList() {
       </div>
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
       ${o.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(o.nota)}</div>`:''}
-      <div style="font-size:12px;font-weight:700;margin-top:6px">Subjumlah: ${fmt(o.subjumlah)} + Penghantaran: ${fmt(o.kos_penghantaran)} = ${fmt(o.jumlah)}</div>
+      <div style="font-size:12px;font-weight:700;margin-top:6px">Subjumlah: ${fmt(o.subjumlah)} + Penghantaran: ${fmt(o.kos_penghantaran)} = ${fmt(o.jumlah)} <span style="font-weight:500;color:var(--muted)">${o.kaedah_bayaran==='billplz'?'· 💳 Billplz (automatik)':'· 🏦 Transfer Manual'}</span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">
         <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="kemaskiniEdagang('${o.id}','status_pesanan',this.value)">
           <option value="baru" ${o.status_pesanan==='baru'?'selected':''}>🆕 Baru</option>
