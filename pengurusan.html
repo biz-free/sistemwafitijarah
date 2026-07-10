@@ -628,6 +628,7 @@
         <div class="form-group"><label class="form-label">Diskaun Online Transfer (%)</label><input type="number" class="form-input" id="set-diskaun-peratus" step="0.5" min="0" max="100" /></div>
       </div>
       <div class="form-group"><label class="form-label">Had Consignment (RM) — hanya pesanan bawah nilai ini dibenarkan consignment</label><input type="number" class="form-input" id="set-consignment-limit" step="10" min="0" /></div>
+      <div class="form-group"><label class="form-label">Minima Penghantaran Percuma (RM) — Perlis/Kedah/P.Pinang/Perak</label><input type="number" class="form-input" id="set-minima-penghantaran-percuma" step="10" min="0" /></div>
       <div class="form-group">
         <label class="form-label">Gambar QR Bank</label>
         <img id="qr-bank-preview" style="display:none;width:100%;max-width:200px;border-radius:9px;margin-bottom:8px" />
@@ -635,6 +636,17 @@
       </div>
       <div class="form-group"><label class="form-label">Butiran Akaun Bank</label><textarea class="form-input" id="set-butiran-bank" placeholder="cth: Maybank 1234567890&#10;Wafi Tijarah Trading"></textarea></div>
       <button class="btn btn-primary" onclick="saveTetapanDiskaun()">💾 Simpan Tetapan</button>
+    </div>
+
+    <!-- Permohonan Ejen & Penghantar (pemilik sahaja) -->
+    <div class="card" id="pemohon-program-card">
+      <div class="card-title">🤝 Permohonan Ejen & Penghantar</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button id="pp-tab-semua" onclick="setTabPemohon('semua')" class="btn btn-sm" style="width:auto;background:var(--navy);color:#fff">Semua</button>
+        <button id="pp-tab-ejen" onclick="setTabPemohon('ejen')" class="btn btn-sm" style="width:auto;background:transparent;color:var(--muted);border:1.5px solid var(--border)">🤝 Ejen</button>
+        <button id="pp-tab-penghantar" onclick="setTabPemohon('penghantar')" class="btn btn-sm" style="width:auto;background:transparent;color:var(--muted);border:1.5px solid var(--border)">🛵 Penghantar</button>
+      </div>
+      <div id="senarai-pemohon"></div>
     </div>
 
     <!-- EasyParcel (pemilik sahaja) -->
@@ -1154,7 +1166,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['laporan-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card'];
+  const pemilikOnly = ['laporan-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -1216,6 +1228,7 @@ async function setPage(p) {
       renderSenaraiCutiSemua();
       renderStatusLive();
       semakStatusEasyParcel();
+      renderSenaraiPemohon();
     }
   }
 }
@@ -2788,6 +2801,7 @@ async function loadTetapanDiskaun() {
   document.getElementById('set-diskaun-peratus').value = data.diskaun_peratus;
   document.getElementById('set-diskaun-cod-peratus').value = data.diskaun_cod_peratus ?? 5;
   document.getElementById('set-consignment-limit').value = data.consignment_limit ?? 300;
+  document.getElementById('set-minima-penghantaran-percuma').value = data.minima_penghantaran_percuma ?? 100;
   document.getElementById('set-butiran-bank').value = data.butiran_bank || '';
   qrBankUrlSedia = data.qr_bank_url || null;
   const prev = document.getElementById('qr-bank-preview');
@@ -2900,12 +2914,65 @@ async function saveTetapanDiskaun() {
     diskaun_peratus: +document.getElementById('set-diskaun-peratus').value || 0,
     diskaun_cod_peratus: +document.getElementById('set-diskaun-cod-peratus').value || 0,
     consignment_limit: +document.getElementById('set-consignment-limit').value || 0,
+    minima_penghantaran_percuma: +document.getElementById('set-minima-penghantaran-percuma').value || 0,
     butiran_bank: document.getElementById('set-butiran-bank').value,
     qr_bank_url: qrUrl,
   }).eq('id', 1);
   if (error) return toast('Gagal simpan tetapan: '+error.message,'err');
   qrBankUrlSedia = qrUrl; qrBankFilePilihan = null;
   toast('Tetapan pre-order & diskaun dikemaskini');
+}
+
+// ════════════════════════════════════════════════════
+//  PERMOHONAN EJEN & PENGHANTAR (pesan.html — "Sertai Ejen" / "Sertai Kami")
+// ════════════════════════════════════════════════════
+let tabPemohonSemasa = 'semua';
+const PEMOHON_STATUS_TXT = { baru:'🆕 Baru', dihubungi:'📞 Dihubungi', diterima:'✅ Diterima', ditolak:'✕ Ditolak' };
+function setTabPemohon(jenis) {
+  tabPemohonSemasa = jenis;
+  ['semua','ejen','penghantar'].forEach(j => {
+    const btn = document.getElementById(`pp-tab-${j}`);
+    btn.style.background = j===jenis ? 'var(--navy)' : 'transparent';
+    btn.style.color = j===jenis ? '#fff' : 'var(--muted)';
+    btn.style.border = j===jenis ? 'none' : '1.5px solid var(--border)';
+  });
+  renderSenaraiPemohon();
+}
+async function renderSenaraiPemohon() {
+  const el = document.getElementById('senarai-pemohon');
+  if (!el || !useCloud) return;
+  let q = sb.from('pemohon_program').select('*').order('created_at',{ascending:false});
+  if (tabPemohonSemasa !== 'semua') q = q.eq('jenis', tabPemohonSemasa);
+  const { data, error } = await q;
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  el.innerHTML = (data||[]).map(p => `
+    <div class="trx-card">
+      <button class="btn-delete-icon" onclick="padamPemohon('${p.id}')" title="Padam permohonan">✕</button>
+      <div style="font-weight:800;font-size:13px">${p.jenis==='ejen'?'🤝':'🛵'} ${esc(p.nama)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">📞 ${esc(p.telefon)}${p.kawasan?' · 📍 '+esc(p.kawasan):''} · ${fmtDT(p.created_at)}</div>
+      ${p.jenis==='penghantar'?`<div style="font-size:11px;margin-top:4px">🏍️ Ada kenderaan: ${p.ada_kenderaan?'Ya':'Tidak'}</div>`:''}
+      ${p.nota?`<div style="font-size:11px;color:var(--muted);margin-top:4px">📝 ${esc(p.nota)}</div>`:''}
+      <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px;margin-top:8px" onchange="kemaskiniPemohon('${p.id}',this.value)">
+        <option value="baru" ${p.status==='baru'?'selected':''}>🆕 Baru</option>
+        <option value="dihubungi" ${p.status==='dihubungi'?'selected':''}>📞 Dihubungi</option>
+        <option value="diterima" ${p.status==='diterima'?'selected':''}>✅ Diterima</option>
+        <option value="ditolak" ${p.status==='ditolak'?'selected':''}>✕ Ditolak</option>
+      </select>
+    </div>
+  `).join('') || '<div class="empty"><div class="empty-icon">🤝</div><div class="empty-text">Tiada permohonan lagi</div></div>';
+}
+async function kemaskiniPemohon(id, status) {
+  const { error } = await sb.from('pemohon_program').update({ status }).eq('id', id);
+  if (error) return toast('Gagal kemaskini: '+error.message,'err');
+  toast('Status dikemaskini');
+  renderSenaraiPemohon();
+}
+async function padamPemohon(id) {
+  if (!confirm('Padam permohonan ini secara kekal?')) return;
+  const { error } = await sb.from('pemohon_program').delete().eq('id', id);
+  if (error) return toast('Gagal padam: '+error.message,'err');
+  toast('Permohonan dipadam');
+  renderSenaraiPemohon();
 }
 
 // ════════════════════════════════════════════════════

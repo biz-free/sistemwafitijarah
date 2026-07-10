@@ -28,6 +28,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 17. `SQL_TAMBAHAN_17.sql` — 🚨 **KESELAMATAN, WAJIB SEGERA**: baiki celah di mana sesiapa boleh hantar harga produk/status bayaran palsu terus ke pangkalan data (lihat bahagian "🚨 Keselamatan" di bawah)
 > 18. `SQL_TAMBAHAN_18.sql` — 🚨 **KESELAMATAN**: celah yang sama untuk borang repeat-order kedai (`pesan.html`) — kira semula jumlah & had consignment daripada tetapan sebenar
 > 19. `SQL_TAMBAHAN_19.sql` — Simpan bandar (city) pelanggan, diisi automatik daripada poskod semasa checkout — perlu redeploy `easyparcel-book-shipment` (guna bandar sebenar untuk label, bukan nama negeri)
+> 20. `SQL_TAMBAHAN_20.sql` — Penghantaran percuma `pesan.html` (minima RM100, boleh ubah) + jadual permohonan Ejen & Penghantar Part-Time
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -243,6 +244,15 @@ npx supabase functions deploy billplz-webhook --no-verify-jwt
 **4. Selesai.** Test dengan checkout sebenar di laman e-dagang, pilih "Bayar Online" — anda akan dibawa ke halaman Billplz Sandbox untuk simulasi bayaran (FPX simulator disediakan Billplz untuk sandbox, tiada bank sebenar diperlukan). Selepas bayar, anda dibawa balik ke laman dengan status pengesahan **sebenar** (bukan sekadar parameter URL yang boleh dipalsukan) — status disahkan oleh webhook `billplz-webhook` terus dalam pangkalan data.
 
 Bila sedia untuk Production: daftar akaun sebenar, ulang langkah 3 dengan Secret Key/X Signature Key/Collection ID Production dan `BILLPLZ_BASE_URL=https://www.billplz.com`, redeploy kedua-dua fungsi.
+
+### 🚚 Penghantaran Percuma & Permohonan Ejen/Penghantar (pesan.html)
+Laman `pesan.html` (borang repeat-order kedai runcit) kini ada banner hijau di atas mengumumkan penghantaran percuma ke **Perlis, Kedah, Pulau Pinang & Perak** untuk pesanan bernilai minima tertentu (lalai RM100, boleh ubah di **Lebih → Tetapan Pre-Order & Diskaun → "Minima Penghantaran Percuma"**). Ini sekadar **mesej makluman** — sistem tidak mengenakan sebarang bayaran penghantaran tambahan untuk pesanan bawah minima; ia sekadar memaklumkan kedai untuk hubungi terus jika di bawah nilai tersebut.
+
+Di bahagian bawah laman, 2 pautan baru:
+- **🤝 Sertai Ejen** — borang permohonan ringkas (nama, telefon, kawasan, nota) untuk individu berminat jadi ejen jualan.
+- **🛵 Sertai Kami — Kerja Kosong** — borang permohonan penghantar part-time (nama, telefon, kawasan, ada kenderaan sendiri, nota).
+
+Kedua-dua permohonan boleh diurus di **pengurusan.html → Lebih → 🤝 Permohonan Ejen & Penghantar** (pemilik sahaja) — tapis ikut jenis, kemaskini status (Baru/Dihubungi/Diterima/Ditolak), atau padam. Ini sengaja dibina sebagai **borang tangkap-lead sahaja** — pihak kami tidak membina sistem komisen/operasi ejen automatik memandangkan syarat tersebut (kadar komisen, struktur bayaran, dll) perlu ditentukan oleh pemilik terlebih dahulu; staf akan hubungi pemohon secara manual untuk perbincangan lanjut.
 
 ### 🖼️ Gambar Produk & Diskaun Online Transfer
 - **Gambar produk**: Bila tambah/edit produk di **Stok**, pemilik boleh muat naik gambar (dipaparkan di borang pre-order supaya kedai nampak produk sebelum order).

@@ -581,6 +581,29 @@ ALTER TABLE pre_order ADD CONSTRAINT pre_order_kedai_id_fkey
 ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS diskaun_cod_peratus float DEFAULT 5;
 ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS consignment_limit float DEFAULT 300;
 
+-- ═══ Minima pesanan untuk penghantaran percuma (pesan.html) ═══
+ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS minima_penghantaran_percuma float DEFAULT 100;
+
+-- ═══ Permohonan Ejen & Penghantar Part-Time (pesan.html) ═══
+CREATE TABLE IF NOT EXISTS pemohon_program (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  jenis text NOT NULL CHECK (jenis IN ('ejen','penghantar')),
+  nama text NOT NULL,
+  telefon text NOT NULL,
+  kawasan text,
+  ada_kenderaan boolean,
+  nota text,
+  status text DEFAULT 'baru',
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE pemohon_program ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "sesiapa boleh mohon" ON pemohon_program FOR INSERT WITH CHECK (true);
+CREATE POLICY "staff boleh baca permohonan" ON pemohon_program FOR SELECT
+  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()));
+CREATE POLICY "staff boleh kemaskini permohonan" ON pemohon_program FOR UPDATE
+  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()));
+CREATE POLICY "pemilik boleh padam permohonan" ON pemohon_program FOR DELETE USING (is_pemilik());
+
 -- ═══ Fasa 1 Laman E-Dagang (index.html): zon penghantaran & pesanan e-dagang ═══
 CREATE TABLE IF NOT EXISTS zon_penghantaran (
   id text PRIMARY KEY,
