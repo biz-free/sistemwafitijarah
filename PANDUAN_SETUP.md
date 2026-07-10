@@ -25,8 +25,16 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 14. `SQL_TAMBAHAN_14.sql` — Kadar penghantaran sebenar & label EasyParcel (Fasa 3b) — perlu deploy 2 Edge Function baru, lihat bahagian "🚚 Kadar Sebenar & Label EasyParcel" di bawah
 > 15. `SQL_TAMBAHAN_15.sql` — **Wajib** selepas #14: simpan pautan cetak label & jejak tracking selepas label EasyParcel dijana — perlu redeploy `easyparcel-book-shipment` (baiki bug URL endpoint salah)
 > 16. `SQL_TAMBAHAN_16.sql` — Bayaran Online Billplz (Fasa 2) — perlu deploy 2 Edge Function baru, lihat bahagian "💳 Bayaran Online (Billplz)" di bawah untuk setup akaun & secrets
+> 17. `SQL_TAMBAHAN_17.sql` — 🚨 **KESELAMATAN, WAJIB SEGERA**: baiki celah di mana sesiapa boleh hantar harga produk/status bayaran palsu terus ke pangkalan data (lihat bahagian "🚨 Keselamatan" di bawah)
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
+
+### 🚨 Keselamatan — jalankan SQL_TAMBAHAN_17.sql SEGERA
+Semasa semakan sistem, ditemui celah pada laman e-dagang (`index.html`): dasar RLS untuk `pesanan_edagang` sengaja dibuka (`WITH CHECK (true)`) supaya *guest checkout* boleh insert pesanan tanpa akaun — tapi ini bermakna sesiapa yang tahu `anon key` (kunci awam, memang terdedah dalam kod laman — bukan rahsia) boleh hantar permintaan terus ke Supabase (tanpa perlu guna borang checkout langsung) dengan:
+- **Harga produk apa sahaja** (cth: RM1000 barang ditetapkan sebagai RM0.01)
+- **`status_bayaran` terus kepada `'disahkan'`** — pesanan nampak "sudah bayar" tanpa bayar langsung
+
+`SQL_TAMBAHAN_17.sql` tambah *trigger* yang kira semula harga setiap item daripada jadual `stok` sebenar (abaikan apa sahaja client hantar) dan paksa `status_bayaran` sentiasa `'menunggu'` bila pesanan dicipta — pengesahan sebenar hanya boleh berlaku melalui staff log masuk atau webhook Billplz yang disahkan. Checkout normal (borang di laman) **tidak terjejas langsung** — trigger ini hanya mengira semula nilai yang sepatutnya sama dengan apa borang dah hantar.
 
 ### 🗺️ Google Maps (menggantikan OpenStreetMap)
 

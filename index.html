@@ -685,15 +685,16 @@ async function hantarPesanan() {
   const entries = Object.entries(cart);
   if (!entries.length) return toast('Sila pilih sekurang-kurangnya satu barang','err');
 
+  const id = 'ED' + Date.now().toString().slice(-8);
+
   let buktiPath = null, bayarTarikh = null, bayarMasa = null;
   if (kaedahBayaranDipilih === 'transfer') {
     bayarTarikh = document.getElementById('c-bayar-tarikh').value;
     bayarMasa = document.getElementById('c-bayar-masa').value;
     const fail = document.getElementById('c-bukti-bayaran').files[0];
     if (!bayarTarikh || !bayarMasa || !fail) return toast('Sila isi tarikh, masa & muat naik bukti pindahan','err');
-    const id0 = 'ED' + Date.now().toString().slice(-8);
     const ext = fail.name.split('.').pop();
-    buktiPath = `${id0}-${Date.now()}.${ext}`;
+    buktiPath = `${id}-${Date.now()}.${ext}`;
     const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(buktiPath, fail);
     if (upErr) return toast('Gagal muat naik bukti bayaran: '+upErr.message,'err');
   }
@@ -701,7 +702,6 @@ async function hantarPesanan() {
   const zonId = zonUntukNegeri(negeri);
   const kosHantar = kosPenghantaranSemasa();
   const sub = subtotal();
-  const id = 'ED' + Date.now().toString().slice(-8);
 
   const payload = {
     id,

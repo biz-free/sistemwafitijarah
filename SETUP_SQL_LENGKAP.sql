@@ -597,6 +597,59 @@ CREATE POLICY "staff boleh kemaskini pesanan" ON pesanan_edagang FOR UPDATE
 DROP POLICY IF EXISTS "pemilik boleh padam pesanan" ON pesanan_edagang;
 CREATE POLICY "pemilik boleh padam pesanan" ON pesanan_edagang FOR DELETE USING (is_pemilik());
 
+-- KESELAMATAN: RLS insert di atas sengaja WITH CHECK(true) supaya guest checkout
+-- boleh insert — tapi ini bermakna client boleh hantar harga/status_bayaran apa
+-- sahaja terus melalui REST API. Trigger ini kira SEMULA harga setiap item
+-- daripada `stok` sebenar dan paksa status_bayaran='menunggu' pada penciptaan,
+-- tanpa mengira apa client hantar.
+CREATE OR REPLACE FUNCTION validasi_harga_pesanan_edagang()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  item jsonb;
+  item_baru jsonb := '[]'::jsonb;
+  harga_sebenar float;
+  sub float := 0;
+  kos_min float := 0;
+BEGIN
+  FOR item IN SELECT * FROM jsonb_array_elements(COALESCE(NEW.items, '[]'::jsonb)) LOOP
+    SELECT harga_jual INTO harga_sebenar FROM stok WHERE id = item->>'stokId';
+    IF harga_sebenar IS NULL THEN
+      RAISE EXCEPTION 'Produk % tidak wujud atau telah dipadam', item->>'stokId';
+    END IF;
+    item_baru := item_baru || jsonb_build_object(
+      'stokId', item->>'stokId',
+      'nama', item->>'nama',
+      'unit', item->>'unit',
+      'harga', harga_sebenar,
+      'qty', (item->>'qty')::int
+    );
+    sub := sub + harga_sebenar * (item->>'qty')::int;
+  END LOOP;
+
+  NEW.items := item_baru;
+  NEW.subjumlah := sub;
+
+  SELECT MIN(kadar_asas) INTO kos_min FROM zon_penghantaran;
+  IF NEW.kos_penghantaran IS NULL OR NEW.kos_penghantaran < COALESCE(kos_min, 0) THEN
+    NEW.kos_penghantaran := COALESCE(kos_min, 0);
+  END IF;
+
+  NEW.jumlah := sub + NEW.kos_penghantaran - COALESCE(NEW.diskaun, 0);
+  NEW.status_bayaran := 'menunggu';
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_validasi_harga_pesanan_edagang ON pesanan_edagang;
+CREATE TRIGGER trg_validasi_harga_pesanan_edagang
+  BEFORE INSERT ON pesanan_edagang
+  FOR EACH ROW EXECUTE FUNCTION validasi_harga_pesanan_edagang();
+
 CREATE TABLE IF NOT EXISTS alamat_pelanggan (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   auth_uid uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
