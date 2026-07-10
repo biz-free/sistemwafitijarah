@@ -245,12 +245,13 @@ npx supabase functions deploy billplz-webhook --no-verify-jwt
 
 Bila sedia untuk Production: daftar akaun sebenar, ulang langkah 3 dengan Secret Key/X Signature Key/Collection ID Production dan `BILLPLZ_BASE_URL=https://www.billplz.com`, redeploy kedua-dua fungsi.
 
-### 🚚 Penghantaran Percuma & Permohonan Ejen/Penghantar (pesan.html)
-Laman `pesan.html` (borang repeat-order kedai runcit) kini ada banner hijau di atas mengumumkan penghantaran percuma ke **Perlis, Kedah, Pulau Pinang & Perak** untuk pesanan bernilai minima tertentu (lalai RM100, boleh ubah di **Lebih → Tetapan Pre-Order & Diskaun → "Minima Penghantaran Percuma"**). Ini sekadar **mesej makluman** — sistem tidak mengenakan sebarang bayaran penghantaran tambahan untuk pesanan bawah minima; ia sekadar memaklumkan kedai untuk hubungi terus jika di bawah nilai tersebut.
+### 🚚 Penghantaran Percuma (pesan.html) & Permohonan Ejen/Penghantar (index.html)
+Laman `pesan.html` (borang repeat-order kedai runcit) ada banner hijau di atas mengumumkan penghantaran percuma ke **Perlis, Kedah, Pulau Pinang & Perak** untuk pesanan bernilai minima tertentu (lalai RM100, boleh ubah di **Lebih → Tetapan Pre-Order & Diskaun → "Minima Penghantaran Percuma"**). Ini sekadar **mesej makluman** — sistem tidak mengenakan sebarang bayaran penghantaran tambahan untuk pesanan bawah minima; ia sekadar memaklumkan kedai untuk hubungi terus jika di bawah nilai tersebut.
 
-Di bahagian bawah laman, 2 pautan baru:
-- **🤝 Sertai Ejen** — borang permohonan ringkas (nama, telefon, kawasan, nota) untuk individu berminat jadi ejen jualan.
-- **🛵 Sertai Kami — Kerja Kosong** — borang permohonan penghantar part-time (nama, telefon, kawasan, ada kenderaan sendiri, nota).
+Pautan **🤝 Sertai Ejen** dan **🛵 Sertai Kami — Kerja Kosong** berada di footer **`index.html`** (laman e-dagang utama), di bawah "Tentang Kami" — bukan di `pesan.html`.
+- **Sertai Ejen**: borang permohonan ringkas (nama, telefon, kawasan, nota) untuk individu berminat jadi ejen jualan.
+- **Sertai Kami — Kerja Kosong**: borang permohonan penghantar part-time (nama, telefon, kawasan, ada kenderaan sendiri, nota).
+- Kedua-dua borang paparkan syarat: komisen/upah dikira ikut kadar sama seperti kadar penghantar barang sedia ada, bayaran melalui transfer bank/QR.
 
 Kedua-dua permohonan boleh diurus di **pengurusan.html → Lebih → 🤝 Permohonan Ejen & Penghantar** (pemilik sahaja) — tapis ikut jenis, kemaskini status (Baru/Dihubungi/Diterima/Ditolak), atau padam. Ini sengaja dibina sebagai **borang tangkap-lead sahaja** — pihak kami tidak membina sistem komisen/operasi ejen automatik memandangkan syarat tersebut (kadar komisen, struktur bayaran, dll) perlu ditentukan oleh pemilik terlebih dahulu; staf akan hubungi pemohon secara manual untuk perbincangan lanjut.
 

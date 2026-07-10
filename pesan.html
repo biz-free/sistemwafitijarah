@@ -88,19 +88,6 @@
     #lightbox .lb-close { position:absolute;top:16px;right:16px;background:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:16px;font-weight:800;cursor:pointer; }
     #lightbox .lb-nav { display:flex;gap:16px;margin-top:16px; }
     #lightbox .lb-nav button { background:#fff;border:none;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer; }
-
-    /* ── FOOTER ── */
-    #site-footer { background:var(--navy);text-align:center;padding:20px 16px;margin-top:8px; }
-    #site-footer button, #site-footer a { display:block;width:100%;background:none;border:none;color:#B9C6D4;font-size:12.5px;text-decoration:none;padding:9px 0;cursor:pointer;border-top:1px solid rgba(255,255,255,0.1); }
-    #site-footer button:first-child, #site-footer a:first-child { border-top:none; }
-    #site-footer button:hover, #site-footer a:hover { color:var(--gold); }
-    #site-footer .footer-copy { color:#7C93A8;font-size:10px;margin-top:12px; }
-
-    /* ── MODAL RINGKAS ── */
-    .modal-overlay { position:fixed;inset:0;background:rgba(13,33,55,0.6);z-index:9000;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto; }
-    .modal-overlay.show { display:flex; }
-    .modal-box { background:#fff;border-radius:14px;padding:20px;max-width:440px;width:100%;position:relative; }
-    .modal-close { position:absolute;top:14px;right:14px;background:var(--border);border:none;border-radius:50%;width:28px;height:28px;font-size:13px;font-weight:800;cursor:pointer; }
   </style>
 </head>
 <body>
@@ -210,58 +197,6 @@
     <div class="icon">✅</div>
     <h2>Pesanan Diterima!</h2>
     <p>Terima kasih. Pihak kami akan hubungi anda tidak lama lagi untuk sahkan penghantaran.</p>
-  </div>
-</div>
-
-<footer id="site-footer">
-  <button onclick="bukaModal('tentang-modal')">Tentang Kami</button>
-  <button onclick="bukaModal('ejen-modal')">🤝 Sertai Ejen</button>
-  <button onclick="bukaModal('kerja-modal')">🛵 Sertai Kami — Kerja Kosong</button>
-  <div class="footer-copy">© 2026 Wafi Tijarah Trading. Hak cipta terpelihara.</div>
-</footer>
-
-<div class="modal-overlay" id="tentang-modal">
-  <div class="modal-box">
-    <button class="modal-close" onclick="tutupModal('tentang-modal')">✕</button>
-    <div class="section-title">🕌 Tentang Kami</div>
-    <div style="font-size:13px;color:var(--text);line-height:1.7">
-      <p style="margin-bottom:10px"><strong>Wafi Tijarah Trading</strong> ialah peniaga produk halal berkualiti, membekalkan barangan kesihatan, kecantikan & keperluan harian kepada kedai runcit di seluruh Kedah, Perlis, Pulau Pinang & Perak.</p>
-      <p style="margin-bottom:10px">🏢 <strong>No. Pendaftaran Syarikat:</strong> AS0462205-D</p>
-      <p>📞 014-636 3831 &nbsp;·&nbsp; ✉️ wafitijarahtrading@gmail.com</p>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="ejen-modal">
-  <div class="modal-box">
-    <button class="modal-close" onclick="tutupModal('ejen-modal')">✕</button>
-    <div class="section-title">🤝 Sertai Sebagai Ejen</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Berminat menjadi ejen jualan Wafi Tijarah Trading di kawasan anda? Isi borang ini & pihak kami akan hubungi anda untuk perbincangan lanjut.</div>
-    <div style="font-size:11px;background:#F5F0FF;border:1px solid #6B4EAF;border-radius:10px;padding:10px;margin-bottom:14px">💰 <strong>Komisen:</strong> dikira ikut kadar sama seperti penghantar barang kami (per produk berjaya dihantar/dijual). <strong>Bayaran:</strong> melalui transfer bank/QR.</div>
-    <div class="form-group"><label class="form-label">Nama Penuh</label><input type="text" class="form-input" id="ej-nama" /></div>
-    <div class="form-group"><label class="form-label">No. Telefon</label><input type="tel" class="form-input" id="ej-tel" placeholder="01x-xxxxxxx" /></div>
-    <div class="form-group"><label class="form-label">Kawasan/Lokasi</label><input type="text" class="form-input" id="ej-kawasan" placeholder="cth: Alor Setar, Kedah" /></div>
-    <div class="form-group"><label class="form-label">Nota (Optional)</label><textarea class="form-input" id="ej-nota" placeholder="Ceritakan sedikit kenapa anda berminat..."></textarea></div>
-    <button class="btn btn-primary" onclick="hantarPermohonan('ejen')">Hantar Permohonan</button>
-  </div>
-</div>
-
-<div class="modal-overlay" id="kerja-modal">
-  <div class="modal-box">
-    <button class="modal-close" onclick="tutupModal('kerja-modal')">✕</button>
-    <div class="section-title">🛵 Sertai Kami — Penghantar Part-Time</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Kami sedang mencari penghantar part-time. Isi borang ini & pihak kami akan hubungi anda untuk temuduga ringkas.</div>
-    <div style="font-size:11px;background:#F5F0FF;border:1px solid #6B4EAF;border-radius:10px;padding:10px;margin-bottom:14px">💰 <strong>Upah:</strong> dikira per produk dihantar (sama seperti kadar pekerja penghantaran sedia ada). <strong>Bayaran:</strong> melalui transfer bank/QR.</div>
-    <div class="form-group"><label class="form-label">Nama Penuh</label><input type="text" class="form-input" id="kj-nama" /></div>
-    <div class="form-group"><label class="form-label">No. Telefon</label><input type="tel" class="form-input" id="kj-tel" placeholder="01x-xxxxxxx" /></div>
-    <div class="form-group"><label class="form-label">Kawasan/Lokasi</label><input type="text" class="form-input" id="kj-kawasan" placeholder="cth: Sungai Petani, Kedah" /></div>
-    <div class="form-group">
-      <label style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer">
-        <input type="checkbox" id="kj-kenderaan" style="width:auto" /> Saya ada kenderaan sendiri (motosikal/kereta)
-      </label>
-    </div>
-    <div class="form-group"><label class="form-label">Nota (Optional)</label><textarea class="form-input" id="kj-nota" placeholder="cth: waktu boleh bekerja, pengalaman menghantar, dll"></textarea></div>
-    <button class="btn btn-primary" onclick="hantarPermohonan('penghantar')">Hantar Permohonan</button>
   </div>
 </div>
 
@@ -439,32 +374,6 @@ function gambarSeterusnya(delta) {
 }
 function tutupLightbox() {
   document.getElementById('lightbox').classList.remove('show');
-}
-
-function bukaModal(id) { document.getElementById(id).classList.add('show'); }
-function tutupModal(id) { document.getElementById(id).classList.remove('show'); }
-
-async function hantarPermohonan(jenis) {
-  const prefix = jenis === 'ejen' ? 'ej' : 'kj';
-  const nama = document.getElementById(`${prefix}-nama`).value.trim();
-  const tel = document.getElementById(`${prefix}-tel`).value.trim();
-  const kawasan = document.getElementById(`${prefix}-kawasan`).value.trim();
-  const nota = document.getElementById(`${prefix}-nota`).value.trim();
-  if (!nama || !tel) return toast('Sila isi nama dan no. telefon','err');
-
-  const payload = { jenis, nama, telefon: tel, kawasan: kawasan || null, nota: nota || null };
-  if (jenis === 'penghantar') payload.ada_kenderaan = document.getElementById('kj-kenderaan').checked;
-
-  const { error } = await sb.from('pemohon_program').insert(payload);
-  if (error) return toast('Gagal hantar permohonan: '+error.message,'err');
-
-  tutupModal(jenis === 'ejen' ? 'ejen-modal' : 'kerja-modal');
-  toast('Permohonan diterima! Pihak kami akan hubungi anda tidak lama lagi.');
-  document.getElementById(`${prefix}-nama`).value = '';
-  document.getElementById(`${prefix}-tel`).value = '';
-  document.getElementById(`${prefix}-kawasan`).value = '';
-  document.getElementById(`${prefix}-nota`).value = '';
-  if (jenis === 'penghantar') document.getElementById('kj-kenderaan').checked = false;
 }
 
 function ubahQty(id, delta) {
