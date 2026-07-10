@@ -199,6 +199,7 @@
     .bayar-opt.active-transfer { border-color:var(--teal);color:var(--teal);background:#0E7C8614; }
     .bayar-opt.active-hutang { border-color:var(--red);color:var(--red);background:#C0392B14; }
     .bayar-opt.active-jenis { border-color:var(--teal);color:var(--teal);background:#0E7C8614; }
+    .bayar-opt.active-rosak { border-color:var(--red);color:var(--red);background:#C0392B14; }
 
     /* ── RESIT ── */
     .resit-box { background:#fff;border:2px solid var(--navy);border-radius:12px;padding:24px;font-family:'Courier New',monospace;font-size:12px; }
@@ -486,9 +487,10 @@
       <div class="card" style="border-left:4px solid var(--teal)">
         <div class="form-group">
           <label class="form-label">Jenis Rekod</label>
-          <div class="bayar-toggle" style="margin-bottom:0">
+          <div class="bayar-toggle" style="margin-bottom:0;grid-template-columns:repeat(3,1fr)">
             <div class="bayar-opt active-jenis" id="opt-jenis-kedai" onclick="setHJenis('kedai')">🏪 Kedai Destinasi</div>
             <div class="bayar-opt" id="opt-jenis-peribadi" onclick="setHJenis('peribadi')">🙋 Belian Peribadi</div>
+            <div class="bayar-opt" id="opt-jenis-rosak" onclick="setHJenis('rosak')">🗑️ Rosak/Expired</div>
           </div>
         </div>
         <div class="form-group" id="h-kedai-wrap">
@@ -499,19 +501,28 @@
           <label class="form-label">Nama Pembeli (Optional)</label>
           <input type="text" class="form-input" id="h-nama-pembeli" placeholder="cth: Pak Ali" />
         </div>
+        <div class="form-group" id="h-sebab-wrap" style="display:none">
+          <label class="form-label">Sebab Pelupusan</label>
+          <select class="form-input" id="h-sebab">
+            <option value="rosak">💔 Rosak</option>
+            <option value="expired">⏰ Tamat Tempoh (Expired)</option>
+            <option value="hilang">❓ Hilang</option>
+            <option value="lain">📝 Lain-lain</option>
+          </select>
+        </div>
         <div class="form-group">
-          <label class="form-label">Barang Dihantar</label>
+          <label class="form-label" id="h-items-label">Barang Dihantar</label>
           <div id="h-items"></div>
           <button class="btn btn-outline" onclick="addHItem()">+ Tambah Item</button>
         </div>
 
         <div class="total-box">
-          <span class="total-label">JUMLAH BAYARAN</span>
+          <span class="total-label" id="h-total-label">JUMLAH BAYARAN</span>
           <span class="total-val" id="h-total">RM 0.00</span>
         </div>
         <div id="h-diskaun-info" style="display:none;font-size:11px;color:var(--green);text-align:right;margin-top:-8px;margin-bottom:8px;font-weight:700"></div>
 
-        <div class="form-group">
+        <div class="form-group" id="h-bayar-wrap">
           <label class="form-label">Kaedah Bayaran</label>
           <div class="bayar-toggle" style="grid-template-columns:repeat(3,1fr)">
             <div class="bayar-opt active-terus" id="opt-terus" onclick="setBayar('terus')">💵 Tunai</div>
@@ -525,7 +536,7 @@
           <textarea class="form-input" id="h-nota" placeholder="Nota tambahan..."></textarea>
         </div>
 
-        <button class="btn btn-primary" onclick="submitHantar()">🚚 Sahkan & Rekod Penghantaran</button>
+        <button class="btn btn-primary" id="h-submit-btn" onclick="submitHantar()">🚚 Sahkan & Rekod Penghantaran</button>
       </div>
     </div>
 
@@ -2144,6 +2155,12 @@ function updHItem(i,f,v) { hItems[i][f]=v; renderHItems(); }
 function addHItem() { hItems.push({stokId:'',qty:1}); renderHItems(); }
 function remHItem(i) { hItems.splice(i,1); renderHItems(); }
 function calcTotal() {
+  if (hJenis==='rosak') {
+    const kerugian=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_beli*(+it.qty||0):0); },0);
+    document.getElementById('h-total').textContent=fmt(kerugian);
+    document.getElementById('h-diskaun-info').style.display='none';
+    return;
+  }
   const sub=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty||0):0); },0);
   const peratus = kiraDiskaunHantarPeratus(sub);
   const jumlahAkhir = sub - (sub*peratus/100);
@@ -2169,8 +2186,15 @@ function setHJenis(v) {
   hJenis=v;
   document.getElementById('opt-jenis-kedai').className='bayar-opt'+(v==='kedai'?' active-jenis':'');
   document.getElementById('opt-jenis-peribadi').className='bayar-opt'+(v==='peribadi'?' active-jenis':'');
+  document.getElementById('opt-jenis-rosak').className='bayar-opt'+(v==='rosak'?' active-rosak':'');
   document.getElementById('h-kedai-wrap').style.display = v==='kedai'?'':'none';
   document.getElementById('h-pembeli-wrap').style.display = v==='peribadi'?'':'none';
+  document.getElementById('h-sebab-wrap').style.display = v==='rosak'?'':'none';
+  document.getElementById('h-bayar-wrap').style.display = v==='rosak'?'none':'';
+  document.getElementById('h-items-label').textContent = v==='rosak'?'Barang Dilupuskan':'Barang Dihantar';
+  document.getElementById('h-total-label').textContent = v==='rosak'?'ANGGARAN KERUGIAN (MODAL)':'JUMLAH BAYARAN';
+  document.getElementById('h-submit-btn').textContent = v==='rosak'?'🗑️ Sahkan Pelupusan Stok':'🚚 Sahkan & Rekod Penghantaran';
+  calcTotal();
 }
 function setHantarTab(t) {
   ['baru','preorder','sejarah'].forEach(tab=>{
@@ -2184,6 +2208,7 @@ function setHantarTab(t) {
 }
 
 async function submitHantar() {
+  if (hJenis==='rosak') return submitPelupusan();
   const peribadi = hJenis==='peribadi';
   let kedaiId = peribadi ? null : document.getElementById('h-kedai').value;
   const namaPembeli = peribadi ? document.getElementById('h-nama-pembeli').value.trim() : null;
@@ -2272,15 +2297,66 @@ async function submitHantar() {
   document.getElementById('resit-preview').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
+// ── Pelupusan stok bawaan (rosak/expired/hilang) — tiada jualan, potong stok bawaan sahaja ──
+async function submitPelupusan() {
+  if (hItems.some(it=>!it.stokId||+it.qty<1)) return toast('Sila isi semua item','err');
+  for (const it of hItems) {
+    const s = DATA.stok.find(s=>s.id===it.stokId);
+    if (!s || bakiUntukHantar(s)<+it.qty) return toast(`Stok ${s?.nama||'?'} tidak mencukupi (baki bawaan: ${s?bakiUntukHantar(s):0})`,'err');
+  }
+  const sebab = document.getElementById('h-sebab').value;
+  const nota = document.getElementById('h-nota').value;
+  const items = hItems.map(it=>({ stokId: it.stokId, qty: +it.qty }));
+  const kerugian = items.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_beli*it.qty:0); },0);
+
+  if (useCloud) {
+    const { error } = await sb.rpc('lupus_stok_pekerja', { p_items: items, p_sebab: sebab, p_nota: nota });
+    if (error) return toast('Gagal rekod pelupusan: '+error.message,'err');
+    await loadData();
+    await loadStokBawaan();
+  } else {
+    DATA.stok = DATA.stok.map(s=>{ const it=hItems.find(i=>i.stokId===s.id); return it?{...s,stok:s.stok-(+it.qty)}:s; });
+    saveData();
+  }
+  toast(`🗑️ Pelupusan direkod · ${items.reduce((a,it)=>a+it.qty,0)} unit · Kerugian ${fmt(kerugian)}`);
+  hItems=[{stokId:'',qty:1}]; setHJenis('kedai');
+  document.getElementById('h-nota').value='';
+  renderHItems();
+  await setHantarTab('sejarah');
+}
+
 // Nama destinasi paparan untuk 1 transaksi — kedai berdaftar, atau "Belian Peribadi" jika tiada kedai
 function namaDestinasiTrx(t) {
   if (t.kedai_id) return DATA.kedai.find(k=>k.id===t.kedai_id)?.nama || '?';
   return t.nama_pembeli ? `🙋 Belian Peribadi: ${t.nama_pembeli}` : '🙋 Belian Peribadi';
 }
 
-function renderSejarah(kedaiId='') {
-  const list=[...DATA.transaksi].filter(t=>kedaiId?t.kedai_id===kedaiId:true).sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
-  document.getElementById('sejarah-list').innerHTML = list.map(t=>{
+const LABEL_SEBAB_LUPUS = { rosak:'💔 Rosak', expired:'⏰ Expired', hilang:'❓ Hilang', lain:'📝 Lain-lain' };
+
+async function renderSejarah(kedaiId='') {
+  const listTrx = [...DATA.transaksi].filter(t=>kedaiId?t.kedai_id===kedaiId:true).map(t=>({ ...t, _jenis:'trx', _masa:t.tarikh_masa }));
+
+  let listLupus = [];
+  if (useCloud && !kedaiId) {
+    const { data } = await sb.from('pelupusan_stok').select('*').order('created_at',{ascending:false}).limit(100);
+    listLupus = (data||[]).map(p=>({ ...p, _jenis:'lupus', _masa:p.created_at }));
+  }
+
+  const gabungan = [...listTrx, ...listLupus].sort((a,b)=>new Date(b._masa)-new Date(a._masa));
+
+  document.getElementById('sejarah-list').innerHTML = gabungan.map(t=>{
+    if (t._jenis==='lupus') {
+      const s = DATA.stok.find(s=>s.id===t.stok_id);
+      const namaPekerja = currentRole==='pemilik' ? (PROFIL_NAMA_CACHE[t.pekerja_id]||'?') : null;
+      return `<div class="trx-card" style="border-left:4px solid var(--red)">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <div><div style="font-weight:800;font-size:13px">🗑️ Pelupusan Stok${namaPekerja?` · ${esc(namaPekerja)}`:''}</div><div style="font-size:10px;color:var(--muted)">${fmtDT(t.created_at)}</div></div>
+          <div style="text-align:right"><div style="font-weight:800;font-size:14px;color:var(--red)">−${fmt(t.kos||0)}</div><span class="badge badge-red">${LABEL_SEBAB_LUPUS[t.sebab]||esc(t.sebab)}</span></div>
+        </div>
+        <div style="font-size:11px;color:var(--muted)">${esc(s?.nama||t.stok_id)} ×${t.kuantiti}</div>
+        ${t.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(t.nota)}</div>`:''}
+      </div>`;
+    }
     const namaDestinasi = namaDestinasiTrx(t);
     const itemsStr=t.items.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `${s.nama} ×${it.qty}`; }).join(' · ');
     return `<div class="trx-card ${t.status==='hutang'?'hutang':''}">

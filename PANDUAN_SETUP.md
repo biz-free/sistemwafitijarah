@@ -31,6 +31,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 20. `SQL_TAMBAHAN_20.sql` — Penghantaran percuma `pesan.html` (minima RM100, boleh ubah) + jadual permohonan Ejen & Penghantar Part-Time
 > 21. `SQL_TAMBAHAN_21.sql` — Kunci peranti GPS semasa Thumb In (elak 2 peranti hantar GPS serentak) + kaedah bayaran "Online Transfer" & diskaun % di Rekod Baru — lihat bahagian "📡 Kunci Peranti GPS" & "💳 Kaedah Bayaran di Rekod Baru" di bawah
 > 22. `SQL_TAMBAHAN_22.sql` — Rekod siapa daftarkan setiap kedai (untuk bonus "Kedai Baru" & paparan di Senarai Kedai) — lihat bahagian "🏪 Bonus Kedai Baru" di bawah
+> 23. `SQL_TAMBAHAN_23.sql` — Pelupusan Stok (rosak/expired/hilang) direkod terus dari tab Penghantaran — lihat bahagian "🗑️ Pelupusan Stok" di bawah
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -269,6 +270,16 @@ Setiap kali pekerja mendaftarkan kedai baru (borang manual **Kedai → Daftar Ke
 - **Pekerja hanya boleh daftar kedai baru selepas Thumb In** — ini mengelakkan pendaftaran kedai (dan tuntutan bonus) semasa tidak bertugas. Pemilik tidak tertakluk sekatan ini.
 
 Kedai yang didaftarkan juga dipaparkan nama pekerja pendaftarnya di **Senarai Kedai** (kelihatan untuk akaun pemilik sahaja).
+
+### 🗑️ Pelupusan Stok (Rosak/Expired)
+Borang **Rekod Baru** (Penghantaran → Rekod Baru) kini ada pilihan Jenis Rekod ke-3: **🗑️ Rosak/Expired**, khusus untuk pekerja rekod stok bawaan (yang dah diambil dari gudang) yang rosak, tamat tempoh, atau hilang semasa di lapangan.
+
+- Pilih produk & kuantiti seperti biasa, pilih **Sebab** (Rosak / Expired / Hilang / Lain-lain), tiada kedai destinasi atau kaedah bayaran perlu diisi.
+- Jumlah dipaparkan sebagai **"Anggaran Kerugian (Modal)"** — dikira ikut harga beli (kos), bukan harga jual, kerana ini kerugian bukan jualan.
+- Selepas disahkan, stok bawaan pekerja terus dipotong (tidak dipulangkan ke gudang — barang dianggap musnah).
+- Rekod pelupusan dipaparkan sekali dalam **Sejarah** (sub-tab Penghantaran), digabung mengikut tarikh dengan rekod jualan biasa — kad berwarna merah dengan label sebab. Pemilik nampak semua rekod pelupusan semua pekerja (dengan nama pekerja); pekerja hanya nampak rekod sendiri.
+
+Tiada tetapan tambahan diperlukan — ciri ini automatik selepas `SQL_TAMBAHAN_23.sql` dijalankan.
 
 ### 🚚 Penghantaran Percuma (pesan.html) & Permohonan Ejen/Penghantar (index.html)
 Laman `pesan.html` (borang repeat-order kedai runcit) ada banner hijau di atas mengumumkan penghantaran percuma ke **Perlis, Kedah, Pulau Pinang & Perak** untuk pesanan bernilai minima tertentu (lalai RM100, boleh ubah di **Lebih → Tetapan Pre-Order & Diskaun → "Minima Penghantaran Percuma"**). Ini sekadar **mesej makluman** — sistem tidak mengenakan sebarang bayaran penghantaran tambahan untuk pesanan bawah minima; ia sekadar memaklumkan kedai untuk hubungi terus jika di bawah nilai tersebut.
