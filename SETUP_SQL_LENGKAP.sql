@@ -667,6 +667,7 @@ CREATE TABLE IF NOT EXISTS pesanan_edagang (
   bayar_tarikh date,
   bayar_masa time,
   nota text,
+  assigned_pekerja_id uuid REFERENCES auth.users(id),
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -676,14 +677,17 @@ DROP POLICY IF EXISTS "sesiapa boleh buat pesanan" ON pesanan_edagang;
 CREATE POLICY "sesiapa boleh buat pesanan" ON pesanan_edagang FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "staff boleh baca pesanan" ON pesanan_edagang;
 DROP POLICY IF EXISTS "staff boleh baca semua pesanan" ON pesanan_edagang;
-CREATE POLICY "staff boleh baca semua pesanan" ON pesanan_edagang FOR SELECT
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()));
+-- Pemilik nampak semua pesanan; pekerja hanya nampak pesanan yang DITUGASKAN kepada
+-- mereka — jika pemilik tak pilih pekerja itu, pekerja tak nampak pesanan langsung.
+CREATE POLICY "pemilik baca semua pesanan edagang" ON pesanan_edagang FOR SELECT USING (is_pemilik());
+CREATE POLICY "pekerja baca pesanan edagang ditugaskan" ON pesanan_edagang FOR SELECT USING (assigned_pekerja_id = auth.uid());
 DROP POLICY IF EXISTS "pelanggan boleh baca pesanan sendiri" ON pesanan_edagang;
 CREATE POLICY "pelanggan boleh baca pesanan sendiri" ON pesanan_edagang FOR SELECT
   USING (auth.uid() IS NOT NULL AND auth.uid() = auth_uid);
 DROP POLICY IF EXISTS "staff boleh kemaskini pesanan" ON pesanan_edagang;
-CREATE POLICY "staff boleh kemaskini pesanan" ON pesanan_edagang FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()));
+CREATE POLICY "pemilik kemaskini semua pesanan edagang" ON pesanan_edagang FOR UPDATE USING (is_pemilik());
+CREATE POLICY "pekerja kemaskini pesanan edagang ditugaskan" ON pesanan_edagang FOR UPDATE
+  USING (assigned_pekerja_id = auth.uid()) WITH CHECK (assigned_pekerja_id = auth.uid());
 DROP POLICY IF EXISTS "pemilik boleh padam pesanan" ON pesanan_edagang;
 CREATE POLICY "pemilik boleh padam pesanan" ON pesanan_edagang FOR DELETE USING (is_pemilik());
 

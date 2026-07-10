@@ -2601,7 +2601,10 @@ const EDAGANG_BAYAR_TXT = { menunggu:'⏳ Menunggu Sahkan', disahkan:'✓ Disahk
 async function renderEdagangList() {
   const el = document.getElementById('edagang-list');
   const bulan = document.getElementById('tp-bulan').value;
-  const { data, error } = await sb.from('pesanan_edagang').select('*').order('created_at',{ascending:false});
+  const [{ data, error }, { data: pekerjaList }] = await Promise.all([
+    sb.from('pesanan_edagang').select('*').order('created_at',{ascending:false}),
+    currentRole==='pemilik' ? sb.from('profiles').select('id,nama').eq('role','pekerja') : Promise.resolve({ data: [] }),
+  ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   const list = bulan ? (data||[]).filter(o=>(o.created_at||'').slice(0,7)===bulan) : (data||[]);
   document.getElementById('tp-jumlah').textContent = `${list.length} pesanan e-dagang${bulan?' pada '+bulan:' (semua)'}`;
@@ -2609,6 +2612,11 @@ async function renderEdagangList() {
 
   el.innerHTML = list.map(o=>{
     const itemsStr = (o.items||[]).map(it=>`${it.nama} ×${it.qty}`).join(' · ');
+    const pilihPekerjaSelect = currentRole==='pemilik' ? `
+      <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="kemaskiniEdagang('${o.id}','assigned_pekerja_id',this.value||null)">
+        <option value="">🙋 Belum ditugaskan</option>
+        ${(pekerjaList||[]).map(p=>`<option value="${p.id}" ${o.assigned_pekerja_id===p.id?'selected':''}>${esc(p.nama)}</option>`).join('')}
+      </select>` : '';
     return `<div class="trx-card">
       ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="padamEdagang('${o.id}')" title="Padam pesanan">✕</button>`:''}
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
@@ -2622,6 +2630,7 @@ async function renderEdagangList() {
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
       ${o.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(o.nota)}</div>`:''}
       <div style="font-size:12px;font-weight:700;margin-top:6px">Subjumlah: ${fmt(o.subjumlah)} + Penghantaran: ${fmt(o.kos_penghantaran)} = ${fmt(o.jumlah)} <span style="font-weight:500;color:var(--muted)">${o.kaedah_bayaran==='billplz'?'· 💳 Billplz (automatik)':'· 🏦 Transfer Manual'}</span></div>
+      <div style="margin-top:6px">${currentRole==='pemilik'?pilihPekerjaSelect:`<span style="font-size:11px;color:var(--muted)">👤 Ditugaskan: <strong>${o.assigned_pekerja_id===DATA.currentUser.id?'Saya':'—'}</strong></span>`}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">
         <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="kemaskiniEdagang('${o.id}','status_pesanan',this.value)">
           <option value="baru" ${o.status_pesanan==='baru'?'selected':''}>🆕 Baru</option>
@@ -2877,12 +2886,22 @@ async function renderLaporan() {
   const kosMakan = hariKerja*SETTINGS.makan;
   const kedaiBulanIni = DATA.kedai.filter(k=>(k.created_at||'').slice(0,7)===bulan);
   const kosKedaiBaru = kedaiBulanIni.length*SETTINGS.upahKedaiBaru;
-  const kosOperasi = kosUpah+kosMinyak+kosMakan+kosKedaiBaru;
+
+  // Pesanan e-dagang yang ditugaskan & dah dihantar/selesai — upah dikira sama macam
+  // penghantaran biasa (ikut upah_pekerja per produk), bukan lump-sum berasingan.
+  let edagangLayakUpah = [];
+  if (useCloud) {
+    const { data } = await sb.from('pesanan_edagang').select('*');
+    edagangLayakUpah = (data||[]).filter(o=>(o.created_at||'').slice(0,7)===bulan && o.assigned_pekerja_id && ['dihantar','selesai'].includes(o.status_pesanan));
+  }
+  const kosUpahEdagang = edagangLayakUpah.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
+  const kosOperasi = kosUpah+kosMinyak+kosMakan+kosKedaiBaru+kosUpahEdagang;
   const untungBersih = untung-kosOperasi;
 
   // Pecahan upah ikut pekerja — setiap pekerja beza jumlahnya ikut penghantaran sendiri.
-  // Sertakan juga pekerja yang HANYA daftar kedai baru (tiada penghantaran) supaya bonus dia tak hilang.
-  const pekerjaIds = [...new Set([...fil.map(t=>t.created_by), ...kedaiBulanIni.map(k=>k.didaftarkan_oleh)].filter(Boolean))];
+  // Sertakan juga pekerja yang HANYA daftar kedai baru atau HANYA urus e-dagang (tiada
+  // penghantaran) supaya upah/bonus dia tak hilang.
+  const pekerjaIds = [...new Set([...fil.map(t=>t.created_by), ...kedaiBulanIni.map(k=>k.didaftarkan_oleh), ...edagangLayakUpah.map(o=>o.assigned_pekerja_id)].filter(Boolean))];
   let profilMap = {};
   if (useCloud && pekerjaIds.length) {
     const { data } = await sb.from('profiles').select('id,nama');
@@ -2895,8 +2914,10 @@ async function renderLaporan() {
     const hariPekerja = new Set(filPekerja.map(t=>(t.tarikh_masa||'').slice(0,10))).size;
     const kedaiPekerja = kedaiBulanIni.filter(k=>k.didaftarkan_oleh===pid).length;
     const bonusKedaiPekerja = kedaiPekerja*SETTINGS.upahKedaiBaru;
-    const jumlahPekerja = upahPekerja + kmPekerja*SETTINGS.minyak + hariPekerja*SETTINGS.makan + bonusKedaiPekerja;
-    return { nama: profilMap[pid]||pid, bilangan: filPekerja.length, kedaiPekerja, jumlah: jumlahPekerja };
+    const edagangPekerja = edagangLayakUpah.filter(o=>o.assigned_pekerja_id===pid);
+    const upahEdagangPekerja = edagangPekerja.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
+    const jumlahPekerja = upahPekerja + kmPekerja*SETTINGS.minyak + hariPekerja*SETTINGS.makan + bonusKedaiPekerja + upahEdagangPekerja;
+    return { nama: profilMap[pid]||pid, bilangan: filPekerja.length, kedaiPekerja, edagangBil: edagangPekerja.length, jumlah: jumlahPekerja };
   }).sort((a,b)=>b.jumlah-a.jumlah);
 
   document.getElementById('laporan-output').innerHTML=`
@@ -2912,12 +2933,13 @@ async function renderLaporan() {
     <div class="list-item"><div class="list-item-title">Minyak Kenderaan (${jumlahKm} km)</div><div class="list-item-val">${fmt(kosMinyak)}</div></div>
     <div class="list-item"><div class="list-item-title">Duit Makan (${hariKerja} hari-kerja)</div><div class="list-item-val">${fmt(kosMakan)}</div></div>
     ${kedaiBulanIni.length?`<div class="list-item"><div class="list-item-title">Bonus Kedai Baru (${kedaiBulanIni.length} kedai)</div><div class="list-item-val">${fmt(kosKedaiBaru)}</div></div>`:''}
+    ${edagangLayakUpah.length?`<div class="list-item"><div class="list-item-title">Upah E-Dagang (${edagangLayakUpah.length} pesanan)</div><div class="list-item-val">${fmt(kosUpahEdagang)}</div></div>`:''}
     <div class="total-box" style="margin-top:10px">
       <span class="total-label">UNTUNG BERSIH</span>
       <span class="total-val" style="color:${untungBersih>=0?'var(--green)':'var(--red)'}">${fmt(untungBersih)}</span>
     </div>
-    ${pecahanPekerja.length?`<div class="divider"></div><div class="card-title" style="font-size:13px">👥 Pecahan Upah Ikut Pekerja</div>${pecahanPekerja.map(p=>`<div class="list-item"><div><div class="list-item-title">${esc(p.nama)}</div><div class="list-item-sub">${p.bilangan} penghantaran${p.kedaiPekerja?` · ${p.kedaiPekerja} kedai baru`:''}</div></div><div class="list-item-val">${fmt(p.jumlah)}</div></div>`).join('')}`:''}
-    ${fil.length===0&&kedaiBulanIni.length===0?`<div class="empty"><div class="empty-text">Tiada transaksi pada bulan ini</div></div>`:''}`;
+    ${pecahanPekerja.length?`<div class="divider"></div><div class="card-title" style="font-size:13px">👥 Pecahan Upah Ikut Pekerja</div>${pecahanPekerja.map(p=>`<div class="list-item"><div><div class="list-item-title">${esc(p.nama)}</div><div class="list-item-sub">${p.bilangan} penghantaran${p.kedaiPekerja?` · ${p.kedaiPekerja} kedai baru`:''}${p.edagangBil?` · ${p.edagangBil} e-dagang`:''}</div></div><div class="list-item-val">${fmt(p.jumlah)}</div></div>`).join('')}`:''}
+    ${fil.length===0&&kedaiBulanIni.length===0&&edagangLayakUpah.length===0?`<div class="empty"><div class="empty-text">Tiada transaksi pada bulan ini</div></div>`:''}`;
 }
 
 // ════════════════════════════════════════════════════
@@ -3245,24 +3267,30 @@ async function renderUpahSaya() {
   const jumlahStok = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
   const { totalKm: jumlahKm, kmIkutHari } = await kiraJarakKehadiranJulat(bulan+'-01T00:00:00', akhirBulanISO(bulan), DATA.currentUser.id);
   const kedaiSaya = DATA.kedai.filter(k=>k.didaftarkan_oleh===DATA.currentUser?.id && (k.created_at||'').slice(0,7)===bulan);
-  // Sertakan hari kedai baru didaftarkan juga — walaupun tiada penghantaran hari tu,
-  // supaya bonusnya tak hilang dari pecahan harian.
-  const hariList = [...new Set([...fil.map(t=>(t.tarikh_masa||'').slice(0,10)), ...kedaiSaya.map(k=>(k.created_at||'').slice(0,10))])].sort();
+  // RLS hadkan query ni kepada pesanan yang ditugaskan kepada saya sahaja.
+  const { data: edagangData } = await sb.from('pesanan_edagang').select('*');
+  const edagangSaya = (edagangData||[]).filter(o=>(o.created_at||'').slice(0,7)===bulan && ['dihantar','selesai'].includes(o.status_pesanan));
+  // Sertakan hari kedai baru didaftarkan & hari pesanan e-dagang diselesaikan juga — walaupun
+  // tiada penghantaran hari tu, supaya bonus/upah dia tak hilang dari pecahan harian.
+  const hariList = [...new Set([...fil.map(t=>(t.tarikh_masa||'').slice(0,10)), ...kedaiSaya.map(k=>(k.created_at||'').slice(0,10)), ...edagangSaya.map(o=>(o.updated_at||o.created_at||'').slice(0,10))])].sort();
   const hariKerja = hariList.length;
   const kosUpah = fil.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
   const kosMinyak = jumlahKm*SETTINGS.minyak;
   const kosMakan = hariKerja*SETTINGS.makan;
   const kosKedaiBaru = kedaiSaya.length*SETTINGS.upahKedaiBaru;
-  const jumlahUpah = kosUpah+kosMinyak+kosMakan+kosKedaiBaru;
+  const kosUpahEdagang = edagangSaya.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
+  const jumlahUpah = kosUpah+kosMinyak+kosMakan+kosKedaiBaru+kosUpahEdagang;
 
-  // Pecahan dibayar mengikut hari — setiap hari kerja dikira berasingan (upah + minyak + makan + bonus kedai hari itu)
+  // Pecahan dibayar mengikut hari — setiap hari kerja dikira berasingan (upah + minyak + makan + bonus kedai + upah e-dagang hari itu)
   const pecahanHarian = hariList.map(tarikh => {
     const filHari = fil.filter(t=>(t.tarikh_masa||'').slice(0,10)===tarikh);
     const upahHari = filHari.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
     const kmHari = kmIkutHari[`${DATA.currentUser.id}|${tarikh}`] || 0;
     const kedaiHari = kedaiSaya.filter(k=>(k.created_at||'').slice(0,10)===tarikh).length;
-    const jumlahHari = upahHari + kmHari*SETTINGS.minyak + SETTINGS.makan + kedaiHari*SETTINGS.upahKedaiBaru;
-    return { tarikh, bil: filHari.length, kedaiHari, jumlahHari };
+    const edagangHari = edagangSaya.filter(o=>(o.updated_at||o.created_at||'').slice(0,10)===tarikh);
+    const upahEdagangHari = edagangHari.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
+    const jumlahHari = upahHari + kmHari*SETTINGS.minyak + SETTINGS.makan + kedaiHari*SETTINGS.upahKedaiBaru + upahEdagangHari;
+    return { tarikh, bil: filHari.length, kedaiHari, edagangBil: edagangHari.length, jumlahHari };
   }).sort((a,b)=>b.tarikh.localeCompare(a.tarikh));
 
   document.getElementById('upah-saya-output').innerHTML = `
@@ -3271,10 +3299,11 @@ async function renderUpahSaya() {
     <div class="list-item"><div class="list-item-title">Minyak (${jumlahKm.toFixed(1)} km × ${fmt(SETTINGS.minyak)})</div><div class="list-item-val">${fmt(kosMinyak)}</div></div>
     <div class="list-item"><div class="list-item-title">Duit Makan (${hariKerja} hari)</div><div class="list-item-val">${fmt(kosMakan)}</div></div>
     ${kedaiSaya.length?`<div class="list-item"><div class="list-item-title">Bonus Kedai Baru (${kedaiSaya.length} kedai)</div><div class="list-item-val">${fmt(kosKedaiBaru)}</div></div>`:''}
+    ${edagangSaya.length?`<div class="list-item"><div class="list-item-title">Upah E-Dagang (${edagangSaya.length} pesanan)</div><div class="list-item-val">${fmt(kosUpahEdagang)}</div></div>`:''}
     <div class="total-box" style="margin-top:10px"><span class="total-label">JUMLAH UPAH ANDA</span><span class="total-val">${fmt(jumlahUpah)}</span></div>
     <div class="divider" style="margin:14px 0"></div>
     <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">💰 DIBAYAR MENGIKUT HARI</div>
-    ${pecahanHarian.map(h=>`<div class="list-item"><div><div class="list-item-title">${fmtD(h.tarikh)}</div><div class="list-item-sub">${h.bil} penghantaran${h.kedaiHari?` · ${h.kedaiHari} kedai baru`:''}</div></div><div class="list-item-val">${fmt(h.jumlahHari)}</div></div>`).join('') || '<div class="empty"><div class="empty-text">Tiada hari kerja dalam bulan ini</div></div>'}`;
+    ${pecahanHarian.map(h=>`<div class="list-item"><div><div class="list-item-title">${fmtD(h.tarikh)}</div><div class="list-item-sub">${h.bil} penghantaran${h.kedaiHari?` · ${h.kedaiHari} kedai baru`:''}${h.edagangBil?` · ${h.edagangBil} e-dagang`:''}</div></div><div class="list-item-val">${fmt(h.jumlahHari)}</div></div>`).join('') || '<div class="empty"><div class="empty-text">Tiada hari kerja dalam bulan ini</div></div>'}`;
 }
 
 // ════════════════════════════════════════════════════

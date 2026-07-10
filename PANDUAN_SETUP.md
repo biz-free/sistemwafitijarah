@@ -32,6 +32,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 21. `SQL_TAMBAHAN_21.sql` — Kunci peranti GPS semasa Thumb In (elak 2 peranti hantar GPS serentak) + kaedah bayaran "Online Transfer" & diskaun % di Rekod Baru — lihat bahagian "📡 Kunci Peranti GPS" & "💳 Kaedah Bayaran di Rekod Baru" di bawah
 > 22. `SQL_TAMBAHAN_22.sql` — Rekod siapa daftarkan setiap kedai (untuk bonus "Kedai Baru" & paparan di Senarai Kedai) — lihat bahagian "🏪 Bonus Kedai Baru" di bawah
 > 23. `SQL_TAMBAHAN_23.sql` — Pelupusan Stok (rosak/expired/hilang) direkod terus dari tab Penghantaran — lihat bahagian "🗑️ Pelupusan Stok" di bawah
+> 24. `SQL_TAMBAHAN_24.sql` — Pemilik tugaskan pekerja untuk urus setiap pesanan e-dagang; pekerja tak ditugaskan tak nampak pesanan itu langsung — lihat bahagian "🛒 Tugasan Pesanan E-Dagang" di bawah
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -280,6 +281,16 @@ Borang **Rekod Baru** (Penghantaran → Rekod Baru) kini ada pilihan Jenis Rekod
 - Rekod pelupusan dipaparkan sekali dalam **Sejarah** (sub-tab Penghantaran), digabung mengikut tarikh dengan rekod jualan biasa — kad berwarna merah dengan label sebab. Pemilik nampak semua rekod pelupusan semua pekerja (dengan nama pekerja); pekerja hanya nampak rekod sendiri.
 
 Tiada tetapan tambahan diperlukan — ciri ini automatik selepas `SQL_TAMBAHAN_23.sql` dijalankan.
+
+### 🛒 Tugasan Pesanan E-Dagang
+Pesanan dari laman e-dagang (`index.html`) kini perlu **ditugaskan kepada pekerja tertentu** oleh pemilik sebelum pekerja itu boleh nampak pesanan tersebut.
+
+- Di **Tempahan → E-Dagang** (pemilik sahaja), setiap kad pesanan ada dropdown **"Belum ditugaskan"** — pilih nama pekerja untuk tugaskan.
+- **Jika pemilik tak pilih sesiapa, pesanan itu langsung tak kelihatan** kepada mana-mana pekerja (bukan sekadar tak boleh diambil) — dikuatkuasakan di peringkat pangkalan data (RLS), bukan sekadar disembunyikan di skrin.
+- Pekerja yang ditugaskan boleh urus pesanan itu sepenuhnya (kemaskini status, tracking, buat label EasyParcel) sama seperti pemilik, tetapi tak boleh tugaskan semula kepada pekerja lain atau lihat pesanan yang bukan ditugaskan kepada mereka.
+- **Upah** dikira automatik sama seperti penghantaran biasa — ikut upah per-produk (medan "Upah Pekerja" pada setiap Stok), dikira sebaik status pesanan bertukar ke **🚚 Dihantar** atau **✓ Selesai**. Dipaparkan dalam Laporan (pemilik) dan Kiraan Upah Saya (pekerja) sebagai baris "Upah E-Dagang", termasuk dalam pecahan harian.
+
+Tiada tetapan tambahan diperlukan — ciri ini automatik selepas `SQL_TAMBAHAN_24.sql` dijalankan.
 
 ### 🚚 Penghantaran Percuma (pesan.html) & Permohonan Ejen/Penghantar (index.html)
 Laman `pesan.html` (borang repeat-order kedai runcit) ada banner hijau di atas mengumumkan penghantaran percuma ke **Perlis, Kedah, Pulau Pinang & Perak** untuk pesanan bernilai minima tertentu (lalai RM100, boleh ubah di **Lebih → Tetapan Pre-Order & Diskaun → "Minima Penghantaran Percuma"**). Ini sekadar **mesej makluman** — sistem tidak mengenakan sebarang bayaran penghantaran tambahan untuk pesanan bawah minima; ia sekadar memaklumkan kedai untuk hubungi terus jika di bawah nilai tersebut.
