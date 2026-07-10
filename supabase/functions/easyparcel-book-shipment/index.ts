@@ -179,7 +179,9 @@ Deno.serve(async (req) => {
     const shipmentHasil = submitData?.data?.[0]?.shipments?.[0];
     if (!submitRes.ok || shipmentHasil?.status !== "success") {
       await adminClient.from("pesanan_edagang").update({ easyparcel_status: "gagal" }).eq("id", orderId);
-      return new Response(JSON.stringify({ error: "Gagal jana label EasyParcel", detail: submitBodyText }), { status: 502, headers: corsHeaders });
+      // errors ialah array-dalam-array ikut format EasyParcel — ambil mesej pertama yang sedia untuk staff faham sebab sebenar gagal
+      const mesejSebenar = shipmentHasil?.errors?.flat?.()?.[0]?.message;
+      return new Response(JSON.stringify({ error: mesejSebenar ? `EasyParcel: ${mesejSebenar}` : "Gagal jana label EasyParcel", detail: submitBodyText }), { status: 502, headers: corsHeaders });
     }
     const awb = shipmentHasil.awb_number || shipmentHasil.shipment_number;
 

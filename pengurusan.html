@@ -2427,7 +2427,11 @@ async function buatLabelEasyParcel(id, btnEl) {
   btnEl.textContent = '⏳ Menjana label...';
   const { data, error } = await sb.functions.invoke('easyparcel-book-shipment', { body: { orderId: id } });
   if (error || data?.error) {
-    toast('Gagal jana label: ' + (data?.error || error.message), 'err');
+    let mesej = data?.error || error.message;
+    if (error?.context) {
+      try { const body = await error.context.json(); if (body?.error) mesej = body.error; } catch { /* biar mesej asal */ }
+    }
+    toast('Gagal jana label: ' + mesej, 'err');
     btnEl.disabled = false;
     btnEl.textContent = '📦 Buat Label EasyParcel';
     renderEdagangList();
