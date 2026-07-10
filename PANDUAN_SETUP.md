@@ -30,6 +30,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 19. `SQL_TAMBAHAN_19.sql` — Simpan bandar (city) pelanggan, diisi automatik daripada poskod semasa checkout — perlu redeploy `easyparcel-book-shipment` (guna bandar sebenar untuk label, bukan nama negeri)
 > 20. `SQL_TAMBAHAN_20.sql` — Penghantaran percuma `pesan.html` (minima RM100, boleh ubah) + jadual permohonan Ejen & Penghantar Part-Time
 > 21. `SQL_TAMBAHAN_21.sql` — Kunci peranti GPS semasa Thumb In (elak 2 peranti hantar GPS serentak) + kaedah bayaran "Online Transfer" & diskaun % di Rekod Baru — lihat bahagian "📡 Kunci Peranti GPS" & "💳 Kaedah Bayaran di Rekod Baru" di bawah
+> 22. `SQL_TAMBAHAN_22.sql` — Rekod siapa daftarkan setiap kedai (untuk bonus "Kedai Baru" & paparan di Senarai Kedai) — lihat bahagian "🏪 Bonus Kedai Baru" di bawah
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 

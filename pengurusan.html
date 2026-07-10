@@ -680,6 +680,7 @@
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Kadar ini digunakan untuk kira untung bersih sebenar dalam Laporan Bulanan. Upah pekerja kini ditetapkan per-produk (lihat Edit Produk di tab Stok).</div>
       <div class="form-group"><label class="form-label">Minyak Kenderaan (RM per km)</label><input type="number" class="form-input" id="set-minyak" step="0.10" min="0" onchange="saveSettings()" /></div>
       <div class="form-group"><label class="form-label">Duit Makan (RM sehari seorang pekerja)</label><input type="number" class="form-input" id="set-makan" step="0.50" min="0" onchange="saveSettings()" /></div>
+      <div class="form-group"><label class="form-label">Bonus Kedai Baru (RM setiap kedai didaftarkan)</label><input type="number" class="form-input" id="set-upah-kedai-baru" step="1" min="0" onchange="saveSettings()" /></div>
     </div>
 
     <!-- Tetapan Pre-Order & Diskaun Online Transfer (pemilik sahaja) -->
@@ -1139,6 +1140,16 @@ function toast(msg, type='ok') {
 // ════════════════════════════════════════════════════
 let currentRole = null;
 
+// Cache nama pekerja (id → nama) — dimuatkan sekali semasa login, dipakai untuk paparan
+// segerak (bukan async) seperti Senarai Kedai supaya tak perlu query Supabase setiap render.
+let PROFIL_NAMA_CACHE = {};
+async function muatProfilNamaCache() {
+  if (!useCloud) return;
+  const { data } = await sb.from('profiles').select('id,nama');
+  PROFIL_NAMA_CACHE = {};
+  (data||[]).forEach(p=>PROFIL_NAMA_CACHE[p.id]=p.nama);
+}
+
 function togglLoginPassLihat() {
   const inp = document.getElementById('login-pass');
   const jenisBaru = inp.type === 'password' ? 'text' : 'password';
@@ -1270,6 +1281,7 @@ async function showApp() {
   loadSettings();
   await loadData();
   muatTetapanDiskaunUntukHantar();
+  if (currentRole==='pemilik') await muatProfilNamaCache();
   initAll();
   setPage('dashboard');
 }
@@ -1775,6 +1787,7 @@ function renderKedai(q='') {
         ${lama?`<span class="badge badge-gold">${daysSince(k.last_visit)} hari tak lawat</span>`:''}
         ${k.last_visit?`<span class="badge badge-muted">Terakhir: ${fmtD(k.last_visit)}</span>`:''}
       </div>
+      ${currentRole==='pemilik'&&k.didaftarkan_oleh?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">🧑‍💼 Didaftarkan oleh: ${esc(PROFIL_NAMA_CACHE[k.didaftarkan_oleh]||'?')}</div>`:''}
       <div style="display:flex;gap:6px">
         ${k.lat&&k.lng?`<a class="btn btn-secondary btn-sm" style="text-decoration:none" href="https://www.google.com/maps/search/?api=1&query=${k.lat},${k.lng}" target="_blank" rel="noopener">🗺️ Lihat di Google Maps</a>`:''}
         ${currentRole==='pemilik'?`<button class="btn btn-secondary btn-sm" onclick="editKedai('${k.id}')">✏️ Edit</button>`:''}
@@ -1930,6 +1943,7 @@ async function saveKedai() {
   const alamat=document.getElementById('f-kedai-alamat').value.trim();
   if(!nama||!alamat) return toast('Nama dan alamat wajib diisi','err');
   const id=document.getElementById('edit-kedai-id').value;
+  const adalahBaru = !id;
   const obj={
     id:id||genId('K'),nama,alamat,
     negeri:document.getElementById('f-kedai-negeri').value,
@@ -1940,6 +1954,9 @@ async function saveKedai() {
     nota:document.getElementById('f-kedai-nota').value,
     status:'aktif',hutang:id?DATA.kedai.find(k=>k.id===id)?.hutang||0:0,
     last_visit:id?DATA.kedai.find(k=>k.id===id)?.last_visit||null:null,
+    // Simpan siapa daftarkan kedai ni — untuk bonus "kedai baru" dalam Kiraan Upah.
+    // Bila EDIT (bukan daftar baru), kekalkan rekod asal, jangan tulis ganti.
+    didaftarkan_oleh: adalahBaru ? DATA.currentUser.id : DATA.kedai.find(k=>k.id===id)?.didaftarkan_oleh||null,
   };
   if (useCloud) {
     const { error } = await sb.from('kedai').upsert(obj);
@@ -1951,7 +1968,7 @@ async function saveKedai() {
   closeModal('modal-tambah-kedai'); renderKedai();
   document.getElementById('edit-kedai-id').value='';
   document.getElementById('kedai-modal-title').textContent='Daftar Kedai Baru';
-  toast(id?'Kedai dikemaskini':'Kedai baru didaftarkan');
+  toast(adalahBaru?`Kedai baru didaftarkan — bonus ${fmt(SETTINGS.upahKedaiBaru)} akan masuk Kiraan Upah anda`:'Kedai dikemaskini');
 }
 
 async function rekodBayaran() {
@@ -2181,12 +2198,13 @@ async function submitHantar() {
       negeri: '', daerah: '', telefon: po.kedai_telefon || '',
       lat: po.lat || null, lng: po.lng || null,
       nota: 'Didaftarkan automatik dari Pre-Order', status: 'aktif', hutang: 0, last_visit: null,
+      didaftarkan_oleh: DATA.currentUser?.id || null,
     };
     const { error: kErr } = await sb.from('kedai').insert(kedaiObj);
     if (kErr) return toast('Gagal daftar kedai dari pre-order: '+kErr.message,'err');
     await loadData();
     kedaiId = kedaiObj.id;
-    toast(`Kedai "${po.kedai_nama}" berjaya didaftarkan automatik`);
+    toast(`Kedai "${po.kedai_nama}" berjaya didaftarkan automatik — bonus ${fmt(SETTINGS.upahKedaiBaru)} akan masuk Kiraan Upah anda`);
   }
   for(const it of hItems){
     const s=DATA.stok.find(s=>s.id===it.stokId);
@@ -2780,11 +2798,14 @@ async function renderLaporan() {
   const kosUpah = fil.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
   const kosMinyak = jumlahKm*SETTINGS.minyak;
   const kosMakan = hariKerja*SETTINGS.makan;
-  const kosOperasi = kosUpah+kosMinyak+kosMakan;
+  const kedaiBulanIni = DATA.kedai.filter(k=>(k.created_at||'').slice(0,7)===bulan);
+  const kosKedaiBaru = kedaiBulanIni.length*SETTINGS.upahKedaiBaru;
+  const kosOperasi = kosUpah+kosMinyak+kosMakan+kosKedaiBaru;
   const untungBersih = untung-kosOperasi;
 
-  // Pecahan upah ikut pekerja — setiap pekerja beza jumlahnya ikut penghantaran sendiri
-  const pekerjaIds = [...new Set(fil.map(t=>t.created_by).filter(Boolean))];
+  // Pecahan upah ikut pekerja — setiap pekerja beza jumlahnya ikut penghantaran sendiri.
+  // Sertakan juga pekerja yang HANYA daftar kedai baru (tiada penghantaran) supaya bonus dia tak hilang.
+  const pekerjaIds = [...new Set([...fil.map(t=>t.created_by), ...kedaiBulanIni.map(k=>k.didaftarkan_oleh)].filter(Boolean))];
   let profilMap = {};
   if (useCloud && pekerjaIds.length) {
     const { data } = await sb.from('profiles').select('id,nama');
@@ -2795,8 +2816,10 @@ async function renderLaporan() {
     const upahPekerja = filPekerja.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
     const kmPekerja = kmIkutPekerja[pid] || 0;
     const hariPekerja = new Set(filPekerja.map(t=>(t.tarikh_masa||'').slice(0,10))).size;
-    const jumlahPekerja = upahPekerja + kmPekerja*SETTINGS.minyak + hariPekerja*SETTINGS.makan;
-    return { nama: profilMap[pid]||pid, bilangan: filPekerja.length, jumlah: jumlahPekerja };
+    const kedaiPekerja = kedaiBulanIni.filter(k=>k.didaftarkan_oleh===pid).length;
+    const bonusKedaiPekerja = kedaiPekerja*SETTINGS.upahKedaiBaru;
+    const jumlahPekerja = upahPekerja + kmPekerja*SETTINGS.minyak + hariPekerja*SETTINGS.makan + bonusKedaiPekerja;
+    return { nama: profilMap[pid]||pid, bilangan: filPekerja.length, kedaiPekerja, jumlah: jumlahPekerja };
   }).sort((a,b)=>b.jumlah-a.jumlah);
 
   document.getElementById('laporan-output').innerHTML=`
@@ -2811,12 +2834,13 @@ async function renderLaporan() {
     <div class="list-item"><div class="list-item-title">Upah Pekerja</div><div class="list-item-val">${fmt(kosUpah)}</div></div>
     <div class="list-item"><div class="list-item-title">Minyak Kenderaan (${jumlahKm} km)</div><div class="list-item-val">${fmt(kosMinyak)}</div></div>
     <div class="list-item"><div class="list-item-title">Duit Makan (${hariKerja} hari-kerja)</div><div class="list-item-val">${fmt(kosMakan)}</div></div>
+    ${kedaiBulanIni.length?`<div class="list-item"><div class="list-item-title">Bonus Kedai Baru (${kedaiBulanIni.length} kedai)</div><div class="list-item-val">${fmt(kosKedaiBaru)}</div></div>`:''}
     <div class="total-box" style="margin-top:10px">
       <span class="total-label">UNTUNG BERSIH</span>
       <span class="total-val" style="color:${untungBersih>=0?'var(--green)':'var(--red)'}">${fmt(untungBersih)}</span>
     </div>
-    ${pecahanPekerja.length?`<div class="divider"></div><div class="card-title" style="font-size:13px">👥 Pecahan Upah Ikut Pekerja</div>${pecahanPekerja.map(p=>`<div class="list-item"><div><div class="list-item-title">${esc(p.nama)}</div><div class="list-item-sub">${p.bilangan} penghantaran</div></div><div class="list-item-val">${fmt(p.jumlah)}</div></div>`).join('')}`:''}
-    ${fil.length===0?`<div class="empty"><div class="empty-text">Tiada transaksi pada bulan ini</div></div>`:''}`;
+    ${pecahanPekerja.length?`<div class="divider"></div><div class="card-title" style="font-size:13px">👥 Pecahan Upah Ikut Pekerja</div>${pecahanPekerja.map(p=>`<div class="list-item"><div><div class="list-item-title">${esc(p.nama)}</div><div class="list-item-sub">${p.bilangan} penghantaran${p.kedaiPekerja?` · ${p.kedaiPekerja} kedai baru`:''}</div></div><div class="list-item-val">${fmt(p.jumlah)}</div></div>`).join('')}`:''}
+    ${fil.length===0&&kedaiBulanIni.length===0?`<div class="empty"><div class="empty-text">Tiada transaksi pada bulan ini</div></div>`:''}`;
 }
 
 // ════════════════════════════════════════════════════
@@ -2893,19 +2917,23 @@ function muatTurunCSV() {
 // ════════════════════════════════════════════════════
 //  TETAPAN KOS OPERASI
 // ════════════════════════════════════════════════════
-const SETTINGS_DEF = { minyak:0.50, makan:10.00 };
+const SETTINGS_DEF = { minyak:0.50, makan:10.00, upahKedaiBaru:10.00 };
 let SETTINGS = {...SETTINGS_DEF};
 
 function loadSettings() {
-  SETTINGS = JSON.parse(localStorage.getItem('wafi_settings') || 'null') || {...SETTINGS_DEF};
+  // Gabung dengan default — supaya medan BAHARU (cth: upahKedaiBaru) tetap ada
+  // nilai munasabah walaupun localStorage peranti ini simpan tetapan versi lama.
+  SETTINGS = { ...SETTINGS_DEF, ...(JSON.parse(localStorage.getItem('wafi_settings') || 'null') || {}) };
   document.getElementById('set-minyak').value = SETTINGS.minyak;
   document.getElementById('set-makan').value = SETTINGS.makan;
+  document.getElementById('set-upah-kedai-baru').value = SETTINGS.upahKedaiBaru;
 }
 
 function saveSettings() {
   SETTINGS = {
     minyak: +document.getElementById('set-minyak').value || 0,
     makan: +document.getElementById('set-makan').value || 0,
+    upahKedaiBaru: +document.getElementById('set-upah-kedai-baru').value || 0,
   };
   localStorage.setItem('wafi_settings', JSON.stringify(SETTINGS));
   renderLaporan();
@@ -3139,20 +3167,25 @@ async function renderUpahSaya() {
   const fil = DATA.transaksi.filter(t => t.tarikh_masa?.startsWith(bulan) && (t.created_by===DATA.currentUser?.id || t.created_by===DATA.currentUser?.email));
   const jumlahStok = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
   const { totalKm: jumlahKm, kmIkutHari } = await kiraJarakKehadiranJulat(bulan+'-01T00:00:00', akhirBulanISO(bulan), DATA.currentUser.id);
-  const hariList = [...new Set(fil.map(t=>(t.tarikh_masa||'').slice(0,10)))].sort();
+  const kedaiSaya = DATA.kedai.filter(k=>k.didaftarkan_oleh===DATA.currentUser?.id && (k.created_at||'').slice(0,7)===bulan);
+  // Sertakan hari kedai baru didaftarkan juga — walaupun tiada penghantaran hari tu,
+  // supaya bonusnya tak hilang dari pecahan harian.
+  const hariList = [...new Set([...fil.map(t=>(t.tarikh_masa||'').slice(0,10)), ...kedaiSaya.map(k=>(k.created_at||'').slice(0,10))])].sort();
   const hariKerja = hariList.length;
   const kosUpah = fil.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
   const kosMinyak = jumlahKm*SETTINGS.minyak;
   const kosMakan = hariKerja*SETTINGS.makan;
-  const jumlahUpah = kosUpah+kosMinyak+kosMakan;
+  const kosKedaiBaru = kedaiSaya.length*SETTINGS.upahKedaiBaru;
+  const jumlahUpah = kosUpah+kosMinyak+kosMakan+kosKedaiBaru;
 
-  // Pecahan dibayar mengikut hari — setiap hari kerja dikira berasingan (upah + minyak + makan hari itu)
+  // Pecahan dibayar mengikut hari — setiap hari kerja dikira berasingan (upah + minyak + makan + bonus kedai hari itu)
   const pecahanHarian = hariList.map(tarikh => {
     const filHari = fil.filter(t=>(t.tarikh_masa||'').slice(0,10)===tarikh);
     const upahHari = filHari.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
     const kmHari = kmIkutHari[`${DATA.currentUser.id}|${tarikh}`] || 0;
-    const jumlahHari = upahHari + kmHari*SETTINGS.minyak + SETTINGS.makan;
-    return { tarikh, bil: filHari.length, jumlahHari };
+    const kedaiHari = kedaiSaya.filter(k=>(k.created_at||'').slice(0,10)===tarikh).length;
+    const jumlahHari = upahHari + kmHari*SETTINGS.minyak + SETTINGS.makan + kedaiHari*SETTINGS.upahKedaiBaru;
+    return { tarikh, bil: filHari.length, kedaiHari, jumlahHari };
   }).sort((a,b)=>b.tarikh.localeCompare(a.tarikh));
 
   document.getElementById('upah-saya-output').innerHTML = `
@@ -3160,10 +3193,11 @@ async function renderUpahSaya() {
     <div class="list-item"><div class="list-item-title">Upah (${jumlahStok} unit dihantar)</div><div class="list-item-val">${fmt(kosUpah)}</div></div>
     <div class="list-item"><div class="list-item-title">Minyak (${jumlahKm.toFixed(1)} km × ${fmt(SETTINGS.minyak)})</div><div class="list-item-val">${fmt(kosMinyak)}</div></div>
     <div class="list-item"><div class="list-item-title">Duit Makan (${hariKerja} hari)</div><div class="list-item-val">${fmt(kosMakan)}</div></div>
+    ${kedaiSaya.length?`<div class="list-item"><div class="list-item-title">Bonus Kedai Baru (${kedaiSaya.length} kedai)</div><div class="list-item-val">${fmt(kosKedaiBaru)}</div></div>`:''}
     <div class="total-box" style="margin-top:10px"><span class="total-label">JUMLAH UPAH ANDA</span><span class="total-val">${fmt(jumlahUpah)}</span></div>
     <div class="divider" style="margin:14px 0"></div>
     <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">💰 DIBAYAR MENGIKUT HARI</div>
-    ${pecahanHarian.map(h=>`<div class="list-item"><div><div class="list-item-title">${fmtD(h.tarikh)}</div><div class="list-item-sub">${h.bil} penghantaran</div></div><div class="list-item-val">${fmt(h.jumlahHari)}</div></div>`).join('') || '<div class="empty"><div class="empty-text">Tiada hari kerja dalam bulan ini</div></div>'}`;
+    ${pecahanHarian.map(h=>`<div class="list-item"><div><div class="list-item-title">${fmtD(h.tarikh)}</div><div class="list-item-sub">${h.bil} penghantaran${h.kedaiHari?` · ${h.kedaiHari} kedai baru`:''}</div></div><div class="list-item-val">${fmt(h.jumlahHari)}</div></div>`).join('') || '<div class="empty"><div class="empty-text">Tiada hari kerja dalam bulan ini</div></div>'}`;
 }
 
 // ════════════════════════════════════════════════════

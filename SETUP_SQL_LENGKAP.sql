@@ -33,6 +33,7 @@ CREATE TABLE kedai (
   hutang float DEFAULT 0,
   nota text,
   last_visit text,
+  didaftarkan_oleh uuid REFERENCES auth.users(id),
   created_at timestamptz DEFAULT now()
 );
 
