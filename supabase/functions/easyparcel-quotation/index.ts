@@ -131,17 +131,26 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Gagal dapatkan kadar penghantaran daripada EasyParcel", detail: quoteBodyText }), { status: 502, headers: corsHeaders });
     }
 
-    const senarai = hasil.quotations
+    const KOS_PEMBUNGKUSAN = 2; // RM2 kos packaging tersembunyi — dimasukkan terus dalam kos penghantaran dipaparkan
+    let senarai = hasil.quotations
+      .filter((q: any) => q.courier?.is_dropoff === true)
       .map((q: any) => ({
         service_id: q.courier?.service_id,
         courier_name: q.courier?.courier_name,
         service_name: q.courier?.service_name,
         courier_logo: q.courier?.courier_logo || null,
-        harga: parseFloat(q.pricing?.total_amount) || 0,
+        harga: (parseFloat(q.pricing?.total_amount) || 0) + KOS_PEMBUNGKUSAN,
       }))
       .filter((q: any) => q.service_id)
-      .sort((a: any, b: any) => a.harga - b.harga)
-      .slice(0, 6);
+      .sort((a: any, b: any) => a.harga - b.harga);
+
+    // Satu pilihan sahaja setiap kurier (harga termurah bagi kurier tu)
+    const dilihat = new Set<string>();
+    senarai = senarai.filter((q: any) => {
+      if (dilihat.has(q.courier_name)) return false;
+      dilihat.add(q.courier_name);
+      return true;
+    }).slice(0, 6);
 
     return new Response(JSON.stringify({ kadar: senarai }), {
       status: 200,

@@ -627,7 +627,7 @@ function renderKurierList() {
   document.getElementById('kurier-list').innerHTML = kurierPilihan.map(k => `
     <div onclick="pilihKurier('${esc(k.service_id)}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1.5px solid ${kurierDipilih?.service_id===k.service_id?'var(--teal)':'var(--border)'};border-radius:10px;margin-bottom:8px;cursor:pointer;background:${kurierDipilih?.service_id===k.service_id?'rgba(14,124,123,0.06)':'#fff'}">
       <div>
-        <div style="font-weight:700;font-size:13px">${esc(k.courier_name||'')} ${esc(k.service_name||'')}</div>
+        <div style="font-weight:700;font-size:13px">${esc(k.courier_name||'')}</div>
       </div>
       <div style="font-weight:800;color:var(--teal)">${fmt(k.harga)}</div>
     </div>
@@ -691,7 +691,7 @@ async function hantarPesanan() {
     alamat, poskod, negeri,
     zon_penghantaran: zonId,
     kurier_service_id: kurierDipilih?.service_id || null,
-    nama_kurier: kurierDipilih ? `${kurierDipilih.courier_name||''} ${kurierDipilih.service_name||''}`.trim() : null,
+    nama_kurier: kurierDipilih?.courier_name || null,
     kaedah_bayaran: 'transfer',
     status_bayaran: 'menunggu',
     status_pesanan: 'baru',
