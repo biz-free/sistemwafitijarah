@@ -188,6 +188,59 @@ CREATE POLICY "staff boleh baca pre-order" ON pre_order FOR SELECT USING (
 );
 CREATE POLICY "staff boleh kemaskini pre-order" ON pre_order FOR UPDATE USING (auth.role() = 'authenticated');
 
+-- KESELAMATAN: sama sebab seperti pesanan_edagang di atas — RLS insert
+-- sengaja terbuka untuk borang awam pesan.html, jadi trigger ini kira
+-- semula jumlah daripada stok sebenar & tetapan diskaun/consignment
+-- sedia ada, abaikan apa client hantar.
+CREATE OR REPLACE FUNCTION validasi_harga_pre_order()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  item jsonb;
+  harga_item float;
+  sub float := 0;
+  t_minima float; t_diskaun float; t_diskaun_cod float; t_had_consignment float;
+  peratus float := 0;
+BEGIN
+  FOR item IN SELECT * FROM jsonb_array_elements(COALESCE(NEW.items, '[]'::jsonb)) LOOP
+    SELECT harga_jual INTO harga_item FROM stok WHERE id = item->>'stokId';
+    IF harga_item IS NULL THEN
+      RAISE EXCEPTION 'Produk % tidak wujud atau telah dipadam', item->>'stokId';
+    END IF;
+    sub := sub + harga_item * (item->>'qty')::int;
+  END LOOP;
+
+  SELECT minima_transfer, diskaun_peratus, diskaun_cod_peratus, consignment_limit
+    INTO t_minima, t_diskaun, t_diskaun_cod, t_had_consignment
+    FROM tetapan WHERE id = 1;
+
+  IF NEW.bayar_metod = 'consignment' AND sub >= COALESCE(t_had_consignment, 300) THEN
+    NEW.bayar_metod := 'cod';
+  END IF;
+
+  IF sub >= COALESCE(t_minima, 500) THEN
+    IF NEW.bayar_metod = 'cod' THEN peratus := COALESCE(t_diskaun_cod, 0);
+    ELSIF NEW.bayar_metod = 'transfer' THEN peratus := COALESCE(t_diskaun, 0);
+    END IF;
+  END IF;
+
+  NEW.jumlah_asal := sub;
+  NEW.diskaun_peratus := peratus;
+  NEW.jumlah_selepas_diskaun := sub * (1 - peratus/100);
+  NEW.status := 'baru';
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_validasi_harga_pre_order ON pre_order;
+CREATE TRIGGER trg_validasi_harga_pre_order
+  BEFORE INSERT ON pre_order
+  FOR EACH ROW EXECUTE FUNCTION validasi_harga_pre_order();
+
 CREATE POLICY "pekerja urus kehadiran sendiri" ON kehadiran FOR ALL USING (pekerja_id = auth.uid()) WITH CHECK (pekerja_id = auth.uid());
 CREATE POLICY "pemilik baca semua kehadiran" ON kehadiran FOR SELECT USING (is_pemilik());
 CREATE POLICY "pekerja tambah gps sendiri" ON gps_track FOR INSERT WITH CHECK (pekerja_id = auth.uid());

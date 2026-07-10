@@ -26,6 +26,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 15. `SQL_TAMBAHAN_15.sql` — **Wajib** selepas #14: simpan pautan cetak label & jejak tracking selepas label EasyParcel dijana — perlu redeploy `easyparcel-book-shipment` (baiki bug URL endpoint salah)
 > 16. `SQL_TAMBAHAN_16.sql` — Bayaran Online Billplz (Fasa 2) — perlu deploy 2 Edge Function baru, lihat bahagian "💳 Bayaran Online (Billplz)" di bawah untuk setup akaun & secrets
 > 17. `SQL_TAMBAHAN_17.sql` — 🚨 **KESELAMATAN, WAJIB SEGERA**: baiki celah di mana sesiapa boleh hantar harga produk/status bayaran palsu terus ke pangkalan data (lihat bahagian "🚨 Keselamatan" di bawah)
+> 18. `SQL_TAMBAHAN_18.sql` — 🚨 **KESELAMATAN**: celah yang sama untuk borang repeat-order kedai (`pesan.html`) — kira semula jumlah & had consignment daripada tetapan sebenar
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -35,6 +36,8 @@ Semasa semakan sistem, ditemui celah pada laman e-dagang (`index.html`): dasar R
 - **`status_bayaran` terus kepada `'disahkan'`** — pesanan nampak "sudah bayar" tanpa bayar langsung
 
 `SQL_TAMBAHAN_17.sql` tambah *trigger* yang kira semula harga setiap item daripada jadual `stok` sebenar (abaikan apa sahaja client hantar) dan paksa `status_bayaran` sentiasa `'menunggu'` bila pesanan dicipta — pengesahan sebenar hanya boleh berlaku melalui staff log masuk atau webhook Billplz yang disahkan. Checkout normal (borang di laman) **tidak terjejas langsung** — trigger ini hanya mengira semula nilai yang sepatutnya sama dengan apa borang dah hantar.
+
+Celah yang sama wujud pada borang repeat-order kedai (`pesan.html`) — jadual `pre_order` — dibaiki oleh `SQL_TAMBAHAN_18.sql`, yang kira semula `jumlah_asal`/`diskaun_peratus`/`jumlah_selepas_diskaun` daripada harga stok & tetapan diskaun sebenar, dan turunkan automatik `bayar_metod` daripada `consignment` ke `cod` jika jumlah melebihi had consignment yang ditetapkan pemilik.
 
 ### 🗺️ Google Maps (menggantikan OpenStreetMap)
 
