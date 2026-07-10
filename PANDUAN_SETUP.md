@@ -23,6 +23,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 12. `SQL_TAMBAHAN_12.sql` — **Wajib** untuk checkout e-dagang berfungsi: baiki bukti bayaran & tarikh/masa transfer yang belum disimpan
 > 13. `SQL_TAMBAHAN_13.sql` — Sambungan OAuth EasyParcel (Fasa 3a) — lihat bahagian "🚚 Sambung EasyParcel" di bawah untuk setup Edge Function
 > 14. `SQL_TAMBAHAN_14.sql` — Kadar penghantaran sebenar & label EasyParcel (Fasa 3b) — perlu deploy 2 Edge Function baru, lihat bahagian "🚚 Kadar Sebenar & Label EasyParcel" di bawah
+> 15. `SQL_TAMBAHAN_15.sql` — **Wajib** selepas #14: simpan pautan cetak label & jejak tracking selepas label EasyParcel dijana — perlu redeploy `easyparcel-book-shipment` (baiki bug URL endpoint salah)
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 

@@ -163,24 +163,31 @@ Deno.serve(async (req) => {
       }],
     };
 
-    const submitRes = await fetch("https://api.easyparcel.com/open_api/2026-06/shipment/submit", {
+    const submitRes = await fetch("https://api.easyparcel.com/open_api/2026-06/shipment/submit_orders", {
       method: "POST",
       headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify(submitPayload),
     });
     const submitBodyText = await submitRes.text();
-    console.log("EasyParcel submit status:", submitRes.status, "body:", submitBodyText);
+    console.log("EasyParcel submit_orders status:", submitRes.status, "body:", submitBodyText);
     let submitData: any = {};
     try { submitData = JSON.parse(submitBodyText); } catch { /* biar kosong */ }
 
-    const hasil = submitData?.data?.[0];
-    if (!submitRes.ok || hasil?.status !== "success" || !hasil?.awb) {
+    // Bentuk sebenar respons: data[0].shipments[0] — BUKAN data[0] terus.
+    // awb_number selalunya null sejurus lepas booking (kurier belum scan parcel);
+    // guna shipment_number sebagai rujukan sementara dalam kes tu.
+    const shipmentHasil = submitData?.data?.[0]?.shipments?.[0];
+    if (!submitRes.ok || shipmentHasil?.status !== "success") {
       await adminClient.from("pesanan_edagang").update({ easyparcel_status: "gagal" }).eq("id", orderId);
       return new Response(JSON.stringify({ error: "Gagal jana label EasyParcel", detail: submitBodyText }), { status: 502, headers: corsHeaders });
     }
+    const awb = shipmentHasil.awb_number || shipmentHasil.shipment_number;
 
     const { error: updErr } = await adminClient.from("pesanan_edagang").update({
-      no_tracking: hasil.awb,
+      no_tracking: awb,
+      nama_kurier: shipmentHasil.courier || order.nama_kurier,
+      easyparcel_awb_url: shipmentHasil.awb_url || null,
+      easyparcel_tracking_url: shipmentHasil.tracking_url || null,
       easyparcel_status: "ditempah",
       updated_at: new Date().toISOString(),
     }).eq("id", orderId);
@@ -188,7 +195,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Label dijana tapi gagal simpan ke pesanan: " + updErr.message }), { status: 500, headers: corsHeaders });
     }
 
-    return new Response(JSON.stringify({ success: true, awb: hasil.awb }), {
+    return new Response(JSON.stringify({ success: true, awb }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

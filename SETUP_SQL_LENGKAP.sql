@@ -567,6 +567,8 @@ CREATE TABLE IF NOT EXISTS pesanan_edagang (
   no_tracking text,
   kurier_service_id text,
   easyparcel_status text,
+  easyparcel_awb_url text,
+  easyparcel_tracking_url text,
   kaedah_bayaran text DEFAULT 'transfer',
   status_bayaran text DEFAULT 'menunggu',
   status_pesanan text DEFAULT 'baru',

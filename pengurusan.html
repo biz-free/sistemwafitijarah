@@ -2406,7 +2406,11 @@ async function renderEdagangList() {
       </div>
       ${o.kurier_service_id && !o.no_tracking ? `<button class="btn btn-primary btn-sm" style="margin-top:8px;width:100%" onclick="buatLabelEasyParcel('${o.id}', this)">📦 Buat Label EasyParcel</button>` : ''}
       ${o.easyparcel_status==='gagal' && !o.no_tracking ? `<div style="font-size:11px;color:var(--red);margin-top:4px">⚠️ Percubaan jana label sebelum ini gagal — cuba lagi.</div>` : ''}
-      ${o.no_tracking && o.easyparcel_status==='ditempah' ? `<div style="font-size:11px;color:var(--green);margin-top:4px">✅ Label EasyParcel dijana</div>` : ''}
+      ${o.no_tracking && o.easyparcel_status==='ditempah' ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px">
+        <span style="font-size:11px;color:var(--green)">✅ Label EasyParcel dijana</span>
+        ${o.easyparcel_awb_url?`<a href="${esc(o.easyparcel_awb_url)}" target="_blank" class="btn btn-secondary btn-sm">🖨️ Cetak Label</a>`:''}
+        ${o.easyparcel_tracking_url?`<a href="${esc(o.easyparcel_tracking_url)}" target="_blank" class="btn btn-secondary btn-sm">📍 Jejak</a>`:''}
+      </div>` : ''}
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-icon">🛒</div><div class="empty-text">Tiada pesanan e-dagang dalam julat ini</div></div>';
 }
