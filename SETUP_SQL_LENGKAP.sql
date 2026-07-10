@@ -614,6 +614,7 @@ CREATE TABLE IF NOT EXISTS pesanan_edagang (
   jumlah float DEFAULT 0,
   alamat text,
   poskod text,
+  bandar text,
   negeri text,
   zon_penghantaran text REFERENCES zon_penghantaran(id),
   nama_kurier text,

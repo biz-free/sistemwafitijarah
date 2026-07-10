@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
           email: order.pelanggan_email || "",
           address_1: order.alamat,
           postcode: order.poskod,
-          city: order.negeri || "",
+          city: order.bandar || order.negeri || "",
           subdivision_code: subdivisionPenerima,
           country_code: "MY",
         },

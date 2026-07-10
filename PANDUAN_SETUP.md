@@ -27,6 +27,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 16. `SQL_TAMBAHAN_16.sql` — Bayaran Online Billplz (Fasa 2) — perlu deploy 2 Edge Function baru, lihat bahagian "💳 Bayaran Online (Billplz)" di bawah untuk setup akaun & secrets
 > 17. `SQL_TAMBAHAN_17.sql` — 🚨 **KESELAMATAN, WAJIB SEGERA**: baiki celah di mana sesiapa boleh hantar harga produk/status bayaran palsu terus ke pangkalan data (lihat bahagian "🚨 Keselamatan" di bawah)
 > 18. `SQL_TAMBAHAN_18.sql` — 🚨 **KESELAMATAN**: celah yang sama untuk borang repeat-order kedai (`pesan.html`) — kira semula jumlah & had consignment daripada tetapan sebenar
+> 19. `SQL_TAMBAHAN_19.sql` — Simpan bandar (city) pelanggan, diisi automatik daripada poskod semasa checkout — perlu redeploy `easyparcel-book-shipment` (guna bandar sebenar untuk label, bukan nama negeri)
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 

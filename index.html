@@ -78,6 +78,7 @@
     #cart-bar .cart-info { font-size:13px; }
     #cart-bar .cart-total { font-weight:800;font-size:16px;color:var(--gold); }
     #cart-bar button { background:var(--teal);color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px; }
+    #btn-cart-checkout { background:var(--gold);color:var(--navy);border:none;width:26px;height:26px;border-radius:50%;font-size:13px;font-weight:800;padding:0;margin-left:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle; }
 
     .diskaun-banner { background:linear-gradient(135deg,#FFF8E6,#FFF0CC);border:1.5px solid var(--gold);border-radius:12px;padding:14px;margin-bottom:14px; }
     .diskaun-banner .tajuk { font-weight:800;color:var(--navy);font-size:14px;margin-bottom:4px; }
@@ -112,8 +113,8 @@
 <div id="promo-banner">✅ PRODUK HALAL BERSIJIL &nbsp;·&nbsp; 🚚 PENGHANTARAN KE SELURUH MALAYSIA</div>
 <header>
   <div class="header-actions">
-    <button id="btn-cart-icon" onclick="scrollKeCheckout()" title="Lihat troli & checkout">🛒<span id="cart-icon-badge" style="display:none">0</span></button>
-    <button id="btn-akaun" onclick="bukaAkaunModal()">👤 <span id="akaun-label">Akaun Saya</span></button>
+    <button id="btn-cart-icon" onclick="keBayaran()" title="Lihat troli & checkout">🛒<span id="cart-icon-badge" style="display:none">0</span></button>
+    <button id="btn-akaun" onclick="bukaAkaunModal()" title="Akaun Saya">👤</button>
   </div>
   <img src="logo.png" alt="Wafi Tijarah Trading" />
   <h1>Wafi Tijarah Trading</h1>
@@ -122,6 +123,7 @@
 
 <div id="main">
   <div id="form-card">
+   <div id="view-produk">
     <div class="card">
       <div class="section-title">🛍️ Katalog Produk</div>
       <div class="form-group">
@@ -138,7 +140,10 @@
       </div>
       <div id="produk-grid" class="produk-grid"></div>
     </div>
+   </div>
 
+   <div id="view-bayaran" style="display:none">
+    <button class="btn btn-outline btn-sm" style="width:auto;margin-bottom:14px" onclick="papar('produk')">← Kembali ke Produk</button>
     <div class="card" id="checkout-section">
       <div class="section-title">📋 Maklumat Penerima</div>
       <div class="form-group" id="alamat-tersimpan-wrap" style="display:none">
@@ -159,8 +164,12 @@
         <label class="form-label">Alamat Penghantaran</label>
         <textarea class="form-input" id="c-alamat" placeholder="No. rumah, jalan, taman..."></textarea>
       </div>
+      <div class="form-group">
+        <label class="form-label">Poskod</label>
+        <input type="text" class="form-input" id="c-poskod" placeholder="cth: 05000" inputmode="numeric" maxlength="5" oninput="isiAutoPoskod();semakKadarKurierDebounce()" />
+      </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Poskod</label><input type="text" class="form-input" id="c-poskod" placeholder="cth: 05000" oninput="semakKadarKurierDebounce()" /></div>
+        <div class="form-group"><label class="form-label">Bandar</label><input type="text" class="form-input" id="c-bandar" placeholder="cth: Alor Setar" /></div>
         <div class="form-group">
           <label class="form-label">Negeri</label>
           <select class="form-input" id="c-negeri" onchange="kemaskiniTotal();semakKadarKurierDebounce()">
@@ -210,7 +219,7 @@
       </div>
 
       <div id="bayar-transfer-wrap" style="display:none">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Sila muat naik bukti pindahan selepas bayar.</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Sila muat naik bukti pindahan selepas bayar. ⏳ Semakan bayaran transfer manual mengambil masa sehingga <strong>1 hari bekerja</strong> untuk disahkan oleh pihak kami.</div>
         <div class="diskaun-banner" style="margin-bottom:0">
           <div style="text-align:center">
             <img id="bank-qr-img" src="" alt="QR Bank" />
@@ -245,6 +254,7 @@
       </div>
       <button class="btn btn-primary" onclick="hantarPesanan()">📦 Buat Pesanan</button>
     </div>
+   </div>
   </div>
 
   <div class="card" id="success-box" style="display:none">
@@ -261,7 +271,7 @@
       <h4>Maklumat Kedai</h4>
       <button onclick="bukaTentangKami()">Tentang Kami</button>
       <a href="pesan.html">Borang Pesanan Kedai Runcit</a>
-      <a href="pengurusan.html">Log Masuk Pekerja/Pemilik</a>
+      <a href="pengurusan.html">Log Masuk Pengurusan</a>
     </div>
     <div class="footer-col">
       <h4>Bantuan</h4>
@@ -384,7 +394,7 @@
 </div>
 
 <div id="cart-bar">
-  <div class="cart-info">🛒 <span id="cart-count">0</span> jenis barang</div>
+  <div class="cart-info">🛒 <span id="cart-count">0</span> jenis barang <button id="btn-cart-checkout" onclick="keBayaran()" title="Teruskan ke bayaran">➜</button></div>
   <div class="cart-total" id="cart-total">RM 0.00</div>
 </div>
 
@@ -426,7 +436,42 @@ let TETAPAN = { qr_bank_url: null, butiran_bank: '' };
 let ZON = {}; // { id: {nama, kadar_asas, kadar_per_kg, anggaran_hari} }
 let cart = {}; // { stokId: qty }
 
+// Padanan nama negeri dataset poskod ke nilai sama seperti pilihan borang
+const NEGERI_POSKOD_MAP = {
+  'Johor':'Johor','Kedah':'Kedah','Kelantan':'Kelantan','Melaka':'Melaka',
+  'Negeri Sembilan':'Negeri Sembilan','Pahang':'Pahang','Perak':'Perak','Perlis':'Perlis',
+  'Pulau Pinang':'Pulau Pinang','Sabah':'Sabah','Sarawak':'Sarawak','Selangor':'Selangor',
+  'Terengganu':'Terengganu','Wp Kuala Lumpur':'W.P. Kuala Lumpur','Wp Labuan':'W.P. Labuan','Wp Putrajaya':'W.P. Putrajaya',
+};
+let POSKOD_MAP = null; // { '05000': {bandar:'Alor Setar', negeri:'Kedah'} } — dimuatkan lazy, sedia lambat jika gagal
+async function muatDataPoskod() {
+  try {
+    const res = await fetch('https://raw.githubusercontent.com/heiswayi/malaysia-postcodes/main/data/json/postcodes.json');
+    const data = await res.json();
+    const map = {};
+    (data.states||[]).forEach(negeri => {
+      const namaNegeri = NEGERI_POSKOD_MAP[negeri.name] || negeri.name;
+      (negeri.cities||[]).forEach(bandar => {
+        (bandar.postcodes||[]).forEach(kod => { if (!map[kod]) map[kod] = { bandar: bandar.name, negeri: namaNegeri }; });
+      });
+    });
+    POSKOD_MAP = map;
+  } catch (e) { /* biar POSKOD_MAP kekal null — auto-isi sekadar tidak berfungsi, isi manual tetap boleh */ }
+}
+
+function isiAutoPoskod() {
+  const kod = document.getElementById('c-poskod').value.trim();
+  if (!POSKOD_MAP || !/^\d{5}$/.test(kod) || !POSKOD_MAP[kod]) return;
+  const { bandar, negeri } = POSKOD_MAP[kod];
+  document.getElementById('c-bandar').value = bandar;
+  if ([...document.getElementById('c-negeri').options].some(o=>o.value===negeri)) {
+    document.getElementById('c-negeri').value = negeri;
+    kemaskiniTotal();
+  }
+}
+
 async function initHalaman() {
+  muatDataPoskod(); // lazy, tak perlu tunggu — auto-isi bandar/negeri sekadar bonus
   const [{ data: produk, error: e1 }, { data: tetapan }, { data: zon }] = await Promise.all([
     sb.rpc('senarai_produk_awam'),
     sb.from('tetapan').select('qr_bank_url,butiran_bank').eq('id', 1).single(),
@@ -455,7 +500,6 @@ async function muatkanStatusAkaun() {
   const { data: { session } } = await sb.auth.getSession();
   currentCustomer = session?.user || null;
   if (currentCustomer) {
-    document.getElementById('akaun-label').textContent = 'Akaun Saya';
     document.getElementById('akaun-guest').style.display = 'none';
     document.getElementById('akaun-logged').style.display = 'block';
     document.getElementById('ak-emel-paparan').textContent = currentCustomer.email;
@@ -464,7 +508,6 @@ async function muatkanStatusAkaun() {
     // Pra-isi nama/emel checkout dari akaun (masih boleh diedit)
     if (!document.getElementById('c-emel').value) document.getElementById('c-emel').value = currentCustomer.email || '';
   } else {
-    document.getElementById('akaun-label').textContent = 'Akaun Saya';
     document.getElementById('akaun-guest').style.display = 'block';
     document.getElementById('akaun-logged').style.display = 'none';
     document.getElementById('simpan-alamat-wrap').style.display = 'none';
@@ -472,9 +515,16 @@ async function muatkanStatusAkaun() {
   }
 }
 
-function scrollKeCheckout() {
+function papar(view) {
+  document.getElementById('view-produk').style.display = view==='produk' ? '' : 'none';
+  document.getElementById('view-bayaran').style.display = view==='bayaran' ? '' : 'none';
+  kemaskiniTotal();
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+function keBayaran() {
   if (!Object.keys(cart).length) return toast('Troli anda kosong — pilih produk dahulu','err');
-  document.getElementById('checkout-section').scrollIntoView({ behavior:'smooth', block:'start' });
+  papar('bayaran');
 }
 
 function bukaAkaunModal() { document.getElementById('akaun-modal').classList.add('show'); }
@@ -579,6 +629,8 @@ function isiAlamatTersimpan() {
   document.getElementById('c-alamat').value = a.alamat || '';
   document.getElementById('c-poskod').value = a.poskod || '';
   document.getElementById('c-negeri').value = a.negeri || '';
+  document.getElementById('c-bandar').value = '';
+  isiAutoPoskod();
   kemaskiniTotal();
   semakKadarKurierDebounce();
 }
@@ -768,7 +820,8 @@ function kemaskiniTotal() {
   const count = Object.keys(cart).length;
   document.getElementById('cart-count').textContent = count;
   document.getElementById('cart-total').textContent = fmt(tot);
-  document.getElementById('cart-bar').className = count ? 'show' : '';
+  const diBayaran = document.getElementById('view-bayaran').style.display !== 'none';
+  document.getElementById('cart-bar').className = (count && !diBayaran) ? 'show' : '';
   const badge = document.getElementById('cart-icon-badge');
   badge.textContent = count;
   badge.style.display = count ? 'flex' : 'none';
@@ -787,6 +840,7 @@ async function hantarPesanan() {
   const emel = document.getElementById('c-emel').value.trim();
   const alamat = document.getElementById('c-alamat').value.trim();
   const poskod = document.getElementById('c-poskod').value.trim();
+  const bandar = document.getElementById('c-bandar').value.trim();
   const negeri = document.getElementById('c-negeri').value;
   const nota = document.getElementById('c-nota').value.trim();
   if (!nama || !tel) return toast('Sila isi nama dan no. telefon','err');
@@ -823,7 +877,7 @@ async function hantarPesanan() {
     kos_penghantaran: kosHantar,
     diskaun: 0,
     jumlah: sub + kosHantar,
-    alamat, poskod, negeri,
+    alamat, poskod, bandar: bandar || null, negeri,
     zon_penghantaran: zonId,
     kurier_service_id: kurierDipilih?.service_id || null,
     nama_kurier: kurierDipilih?.courier_name || null,
