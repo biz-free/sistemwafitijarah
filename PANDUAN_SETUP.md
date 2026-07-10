@@ -262,6 +262,14 @@ Borang **Rekod Baru** (Penghantaran → Rekod Baru) kini ada 3 kaedah bayaran: *
 
 Jumlah pada resit akan papar pecahan Subjumlah/Diskaun/Jumlah Akhir bila diskaun terpakai, serta kaedah bayaran yang digunakan.
 
+### 🏪 Bonus Kedai Baru
+Setiap kali pekerja mendaftarkan kedai baru (borang manual **Kedai → Daftar Kedai Baru**, atau auto-daftar dari pre-order semasa Rekod Baru), pekerja tersebut layak menerima bonus **RM10 sekali** (boleh ubah di **Lebih → Tetapan Kos Operasi → "Bonus Kedai Baru"**). Bonus ini:
+- Dipaparkan dalam **Lebih → Kiraan Upah Saya** (pekerja) sebagai baris "Bonus Kedai Baru", termasuk dalam pecahan harian pada tarikh kedai itu didaftarkan — walaupun tiada penghantaran pada hari tersebut.
+- Dipaparkan dalam **Laporan** (pemilik) sebagai sebahagian Kos Operasi, dengan pecahan bilangan kedai baru bagi setiap pekerja.
+- **Pekerja hanya boleh daftar kedai baru selepas Thumb In** — ini mengelakkan pendaftaran kedai (dan tuntutan bonus) semasa tidak bertugas. Pemilik tidak tertakluk sekatan ini.
+
+Kedai yang didaftarkan juga dipaparkan nama pekerja pendaftarnya di **Senarai Kedai** (kelihatan untuk akaun pemilik sahaja).
+
 ### 🚚 Penghantaran Percuma (pesan.html) & Permohonan Ejen/Penghantar (index.html)
 Laman `pesan.html` (borang repeat-order kedai runcit) ada banner hijau di atas mengumumkan penghantaran percuma ke **Perlis, Kedah, Pulau Pinang & Perak** untuk pesanan bernilai minima tertentu (lalai RM100, boleh ubah di **Lebih → Tetapan Pre-Order & Diskaun → "Minima Penghantaran Percuma"**). Ini sekadar **mesej makluman** — sistem tidak mengenakan sebarang bayaran penghantaran tambahan untuk pesanan bawah minima; ia sekadar memaklumkan kedai untuk hubungi terus jika di bawah nilai tersebut.
 

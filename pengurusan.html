@@ -1893,6 +1893,7 @@ async function gunakanLokasiSemasa() {
 }
 
 async function bukaModalKedaiBaru() {
+  if (currentRole==='pekerja' && useCloud && !kehadiranAktif) return toast('Sila Thumb In dahulu sebelum daftar kedai baru','err');
   document.getElementById('kedai-modal-title').textContent='Daftar Kedai Baru';
   document.getElementById('edit-kedai-id').value='';
   document.getElementById('f-kedai-nama').value='';
