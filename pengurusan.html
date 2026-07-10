@@ -641,7 +641,8 @@
     <div class="card" id="easyparcel-card">
       <div class="card-title">🚚 EasyParcel (Penghantaran Automatik)</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Sambungkan akaun EasyParcel untuk kadar penghantaran sebenar & jana label secara automatik (akan aktif secara berperingkat).</div>
-      <div id="easyparcel-status" style="font-size:12px;font-weight:700;margin-bottom:10px">Menyemak status...</div>
+      <div id="easyparcel-status" style="font-size:12px;font-weight:700;margin-bottom:6px">Menyemak status...</div>
+      <div id="easyparcel-baki" style="font-size:12px;font-weight:700;margin-bottom:10px;display:none"></div>
       <button class="btn btn-primary" id="btn-easyparcel-connect" onclick="sambungEasyParcel()">🔗 Sambung EasyParcel</button>
 
       <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
@@ -2836,11 +2837,26 @@ async function semakStatusEasyParcel() {
   if (s.connected) {
     el.innerHTML = `<span style="color:var(--green)">✅ Disambungkan</span> — ${new Date(s.connected_at).toLocaleString('ms-MY')}`;
     btn.textContent = '🔄 Sambung Semula';
+    semakBakiEasyParcel();
   } else {
     el.innerHTML = '<span style="color:var(--muted)">⚪ Belum disambungkan</span>';
     btn.textContent = '🔗 Sambung EasyParcel';
+    document.getElementById('easyparcel-baki').style.display = 'none';
   }
   muatAlamatPengambilan();
+}
+
+async function semakBakiEasyParcel() {
+  const el = document.getElementById('easyparcel-baki');
+  el.style.display = 'block';
+  el.innerHTML = 'Menyemak baki wallet...';
+  const { data, error } = await sb.functions.invoke('easyparcel-wallet-balance');
+  if (error || data?.error) {
+    el.innerHTML = '<span style="color:var(--muted)">⚠️ Gagal semak baki wallet</span>';
+    return;
+  }
+  const rendah = data.balance < 10;
+  el.innerHTML = `💰 Baki Wallet: <span style="color:${rendah?'var(--red)':'var(--green)'}">RM ${Number(data.balance).toFixed(2)}</span>${rendah?' — rendah, sila top up':''}`;
 }
 
 async function muatAlamatPengambilan() {

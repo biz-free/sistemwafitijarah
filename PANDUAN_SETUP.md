@@ -195,13 +195,14 @@ Selepas EasyParcel disambung (Fasa 3a di atas) dan `SQL_TAMBAHAN_14.sql` dijalan
 **Langkah setup:**
 1. Di **Profile → EasyParcel**, isi & simpan **"📍 Alamat Pengambilan (Pickup)"** — ini alamat kedai/gudang yang EasyParcel akan jemput bungkusan. Wajib diisi sebelum kadar sebenar/label boleh berfungsi.
 2. (Optional tapi disarankan) Kemaskini **berat (kg)** setiap produk di **Stok** — lalai 0.5kg jika tak diisi. Berat digunakan untuk kira kos penghantaran yang tepat.
-3. Deploy 2 Edge Function baru (sekali sahaja, dari folder `wafi-app`):
+3. Deploy 3 Edge Function baru (sekali sahaja, dari folder `wafi-app`):
    ```
    npx supabase functions deploy easyparcel-quotation
    npx supabase functions deploy easyparcel-book-shipment
+   npx supabase functions deploy easyparcel-wallet-balance
    ```
-   (Tiada `--no-verify-jwt` untuk kedua-dua ini — berbeza dengan `easyparcel-oauth-callback` — sebab kedua-duanya dipanggil dari dalam apps dengan token log masuk yang sah.)
-4. Selesai. Di laman e-dagang, lepas pelanggan isi poskod & negeri, senarai kurier & harga sebenar akan terpapar untuk dipilih (jatuh balik senyap ke kadar flat jika EasyParcel tak dapat dihubungi — checkout tetap berfungsi). Di **Tempahan → 🛒 E-Dagang**, pesanan yang ada kurier dipilih akan papar butang **"📦 Buat Label EasyParcel"** — tekan untuk jana AWB terus lepas bayaran disahkan.
+   (Tiada `--no-verify-jwt` untuk mana-mana ini — berbeza dengan `easyparcel-oauth-callback` — sebab kesemuanya dipanggil dari dalam apps dengan token log masuk yang sah.)
+4. Selesai. Di laman e-dagang, lepas pelanggan isi poskod & negeri, senarai kurier & harga sebenar akan terpapar untuk dipilih (jatuh balik senyap ke kadar flat jika EasyParcel tak dapat dihubungi — checkout tetap berfungsi). Di **Tempahan → 🛒 E-Dagang**, pesanan yang ada kurier dipilih akan papar butang **"📦 Buat Label EasyParcel"** — tekan untuk jana AWB terus lepas bayaran disahkan. Baki wallet EasyParcel semasa dipaparkan terus di kad **Profile → EasyParcel** (papar amaran jika baki di bawah RM10).
 
 ### 🖼️ Gambar Produk & Diskaun Online Transfer
 - **Gambar produk**: Bila tambah/edit produk di **Stok**, pemilik boleh muat naik gambar (dipaparkan di borang pre-order supaya kedai nampak produk sebelum order).
