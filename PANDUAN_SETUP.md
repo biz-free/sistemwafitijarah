@@ -29,6 +29,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 18. `SQL_TAMBAHAN_18.sql` — 🚨 **KESELAMATAN**: celah yang sama untuk borang repeat-order kedai (`pesan.html`) — kira semula jumlah & had consignment daripada tetapan sebenar
 > 19. `SQL_TAMBAHAN_19.sql` — Simpan bandar (city) pelanggan, diisi automatik daripada poskod semasa checkout — perlu redeploy `easyparcel-book-shipment` (guna bandar sebenar untuk label, bukan nama negeri)
 > 20. `SQL_TAMBAHAN_20.sql` — Penghantaran percuma `pesan.html` (minima RM100, boleh ubah) + jadual permohonan Ejen & Penghantar Part-Time
+> 21. `SQL_TAMBAHAN_21.sql` — Kunci peranti GPS semasa Thumb In (elak 2 peranti hantar GPS serentak) + kaedah bayaran "Online Transfer" & diskaun % di Rekod Baru — lihat bahagian "📡 Kunci Peranti GPS" & "💳 Kaedah Bayaran di Rekod Baru" di bawah
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -244,6 +245,21 @@ npx supabase functions deploy billplz-webhook --no-verify-jwt
 **4. Selesai.** Test dengan checkout sebenar di laman e-dagang, pilih "Bayar Online" — anda akan dibawa ke halaman Billplz Sandbox untuk simulasi bayaran (FPX simulator disediakan Billplz untuk sandbox, tiada bank sebenar diperlukan). Selepas bayar, anda dibawa balik ke laman dengan status pengesahan **sebenar** (bukan sekadar parameter URL yang boleh dipalsukan) — status disahkan oleh webhook `billplz-webhook` terus dalam pangkalan data.
 
 Bila sedia untuk Production: daftar akaun sebenar, ulang langkah 3 dengan Secret Key/X Signature Key/Collection ID Production dan `BILLPLZ_BASE_URL=https://www.billplz.com`, redeploy kedua-dua fungsi.
+
+### 📡 Kunci Peranti GPS semasa Thumb In
+Sebelum ini, jika pekerja buka apps di 2 peranti (cth: telefon utama + telefon simpanan) semasa masih Thumb In, kedua-dua peranti akan sangka mereka belum Thumb In lagi (kerana status disimpan tempatan di setiap peranti) — bila ditekan Thumb In di peranti kedua, ia cipta sesi kehadiran BAHARU, dan kedua-dua peranti hantar titik GPS serentak secara berasingan, mengelirukan jejak/jarak.
+
+Ini telah dibaiki:
+- Semakan "adakah saya sudah Thumb In" kini semak terus pada Supabase (bukan storan tempatan peranti sahaja) — peranti kedua akan kesan sesi sedia ada dan sertai sesi yang sama, bukan cipta yang baharu.
+- **Hanya SATU peranti** menjadi sumber GPS pada satu-satu masa — peranti yang PERTAMA hantar ping selepas Thumb In. Peranti kedua senyap sahaja (tak hantar GPS) selagi peranti pertama masih aktif.
+- Jika peranti pertama berhenti hantar ping selama **lebih 3 minit** (bateri habis, apps ditutup, dsb.), peranti kedua automatik ambil alih sebagai sumber GPS seterusnya.
+
+Tiada tetapan tambahan diperlukan — ciri ini automatik selepas `SQL_TAMBAHAN_21.sql` dijalankan.
+
+### 💳 Kaedah Bayaran di Rekod Baru
+Borang **Rekod Baru** (Penghantaran → Rekod Baru) kini ada 3 kaedah bayaran: **💵 Tunai**, **🏦 Transfer** (Online Transfer/QR Instant Transfer), dan **📋 Hutang**. Diskaun % automatik terpakai untuk Tunai & Transfer — menggunakan kadar yang **sama** dengan sistem diskaun pre-order sedia ada (Lebih → Tetapan Pre-Order & Diskaun: "Diskaun COD/Tunai %", "Diskaun Online Transfer %", "Minima Pesanan"), supaya hanya satu tempat perlu diubah jika kadar berubah. Hutang sentiasa 0% diskaun.
+
+Jumlah pada resit akan papar pecahan Subjumlah/Diskaun/Jumlah Akhir bila diskaun terpakai, serta kaedah bayaran yang digunakan.
 
 ### 🚚 Penghantaran Percuma (pesan.html) & Permohonan Ejen/Penghantar (index.html)
 Laman `pesan.html` (borang repeat-order kedai runcit) ada banner hijau di atas mengumumkan penghantaran percuma ke **Perlis, Kedah, Pulau Pinang & Perak** untuk pesanan bernilai minima tertentu (lalai RM100, boleh ubah di **Lebih → Tetapan Pre-Order & Diskaun → "Minima Penghantaran Percuma"**). Ini sekadar **mesej makluman** — sistem tidak mengenakan sebarang bayaran penghantaran tambahan untuk pesanan bawah minima; ia sekadar memaklumkan kedai untuk hubungi terus jika di bawah nilai tersebut.

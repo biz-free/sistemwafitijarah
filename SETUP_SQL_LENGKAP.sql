@@ -40,8 +40,12 @@ CREATE TABLE transaksi (
   id text PRIMARY KEY,
   tarikh_masa timestamptz DEFAULT now(),
   kedai_id text REFERENCES kedai(id),
+  nama_pembeli text,
   items jsonb DEFAULT '[]',
   jumlah float DEFAULT 0,
+  jumlah_asal float,
+  diskaun_peratus float DEFAULT 0,
+  kaedah_bayaran text DEFAULT 'tunai',
   status text DEFAULT 'selesai',
   nota text,
   resit text,
@@ -91,6 +95,8 @@ CREATE TABLE kehadiran (
   thumb_out_lat float,
   thumb_out_lng float,
   status text DEFAULT 'aktif',
+  gps_device_id text,
+  gps_last_ping timestamptz,
   created_at timestamptz DEFAULT now()
 );
 CREATE TABLE gps_track (
@@ -529,10 +535,16 @@ ALTER TABLE pre_order ADD COLUMN IF NOT EXISTS lng float8;
 -- ═══ Rekod Baru: Belian Peribadi (tiada kedai destinasi) ═══
 ALTER TABLE transaksi ADD COLUMN IF NOT EXISTS nama_pembeli text;
 
+-- ═══ Rekod Baru: Kaedah Bayaran (Tunai/Online Transfer/Hutang) & diskaun % ═══
+ALTER TABLE transaksi ADD COLUMN IF NOT EXISTS kaedah_bayaran text DEFAULT 'tunai';
+ALTER TABLE transaksi ADD COLUMN IF NOT EXISTS jumlah_asal float;
+ALTER TABLE transaksi ADD COLUMN IF NOT EXISTS diskaun_peratus float DEFAULT 0;
+
 CREATE OR REPLACE FUNCTION submit_penghantaran(
   p_id text, p_kedai_id text, p_items jsonb, p_jumlah float,
   p_status text, p_nota text, p_resit text, p_jarak_km float DEFAULT 0,
-  p_nama_pembeli text DEFAULT NULL
+  p_nama_pembeli text DEFAULT NULL,
+  p_kaedah_bayaran text DEFAULT 'tunai', p_jumlah_asal float DEFAULT NULL, p_diskaun_peratus float DEFAULT 0
 ) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE item jsonb;
@@ -549,8 +561,8 @@ BEGIN
     END IF;
   END LOOP;
 
-  INSERT INTO transaksi (id, kedai_id, nama_pembeli, items, jumlah, status, nota, resit, jarak_km, created_by)
-  VALUES (p_id, p_kedai_id, p_nama_pembeli, p_items, p_jumlah, p_status, p_nota, p_resit, p_jarak_km, auth.uid()::text);
+  INSERT INTO transaksi (id, kedai_id, nama_pembeli, items, jumlah, status, nota, resit, jarak_km, created_by, kaedah_bayaran, jumlah_asal, diskaun_peratus)
+  VALUES (p_id, p_kedai_id, p_nama_pembeli, p_items, p_jumlah, p_status, p_nota, p_resit, p_jarak_km, auth.uid()::text, p_kaedah_bayaran, COALESCE(p_jumlah_asal, p_jumlah), p_diskaun_peratus);
 
   UPDATE kedai SET
     hutang = hutang + (CASE WHEN p_status = 'hutang' THEN p_jumlah ELSE 0 END),

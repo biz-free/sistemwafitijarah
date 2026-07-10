@@ -196,6 +196,7 @@
     .bayar-toggle { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px; }
     .bayar-opt { padding:10px;border:2px solid var(--border);border-radius:10px;cursor:pointer;font-weight:700;font-size:12px;text-align:center;transition:all 0.15s;background:#fff; }
     .bayar-opt.active-terus { border-color:var(--green);color:var(--green);background:#1D7A4A14; }
+    .bayar-opt.active-transfer { border-color:var(--teal);color:var(--teal);background:#0E7C8614; }
     .bayar-opt.active-hutang { border-color:var(--red);color:var(--red);background:#C0392B14; }
     .bayar-opt.active-jenis { border-color:var(--teal);color:var(--teal);background:#0E7C8614; }
 
@@ -508,12 +509,14 @@
           <span class="total-label">JUMLAH BAYARAN</span>
           <span class="total-val" id="h-total">RM 0.00</span>
         </div>
+        <div id="h-diskaun-info" style="display:none;font-size:11px;color:var(--green);text-align:right;margin-top:-8px;margin-bottom:8px;font-weight:700"></div>
 
         <div class="form-group">
-          <label class="form-label">Status Pembayaran</label>
-          <div class="bayar-toggle">
+          <label class="form-label">Kaedah Bayaran</label>
+          <div class="bayar-toggle" style="grid-template-columns:repeat(3,1fr)">
             <div class="bayar-opt active-terus" id="opt-terus" onclick="setBayar('terus')">💵 Tunai</div>
-            <div class="bayar-opt" id="opt-hutang" onclick="setBayar('hutang')">📋 Catat Hutang</div>
+            <div class="bayar-opt" id="opt-transfer" onclick="setBayar('transfer')">🏦 Transfer</div>
+            <div class="bayar-opt" id="opt-hutang" onclick="setBayar('hutang')">📋 Hutang</div>
           </div>
         </div>
 
@@ -1266,6 +1269,7 @@ async function showApp() {
 
   loadSettings();
   await loadData();
+  muatTetapanDiskaunUntukHantar();
   initAll();
   setPage('dashboard');
 }
@@ -1976,6 +1980,22 @@ async function rekodBayaran() {
 // ════════════════════════════════════════════════════
 let hItems=[{stokId:'',qty:1}];
 let hBayar='terus';
+
+// Kadar diskaun ikut kaedah bayaran — guna semula tetapan yang sama dengan
+// diskaun pre-order (Lebih > Tetapan Pre-Order & Diskaun), supaya satu sahaja
+// tempat untuk ubah kadar, tak kira borang mana yang guna.
+let TETAPAN_DISKAUN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5 };
+async function muatTetapanDiskaunUntukHantar() {
+  if (!useCloud) return;
+  const { data } = await sb.from('tetapan').select('minima_transfer, diskaun_peratus, diskaun_cod_peratus').eq('id', 1).single();
+  if (data) TETAPAN_DISKAUN = { ...TETAPAN_DISKAUN, ...data };
+}
+function kiraDiskaunHantarPeratus(subjumlah) {
+  if (subjumlah < (TETAPAN_DISKAUN.minima_transfer||0)) return 0;
+  if (hBayar==='terus') return TETAPAN_DISKAUN.diskaun_cod_peratus||0;
+  if (hBayar==='transfer') return TETAPAN_DISKAUN.diskaun_peratus||0;
+  return 0;
+}
 let poDestinasiCache = {}; // { '_PO_<id>': po } — pre-order kedai belum berdaftar, untuk pilihan destinasi Hantar
 
 async function renderHantarSelects() {
@@ -2106,13 +2126,24 @@ function updHItem(i,f,v) { hItems[i][f]=v; renderHItems(); }
 function addHItem() { hItems.push({stokId:'',qty:1}); renderHItems(); }
 function remHItem(i) { hItems.splice(i,1); renderHItems(); }
 function calcTotal() {
-  const tot=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty||0):0); },0);
-  document.getElementById('h-total').textContent=fmt(tot);
+  const sub=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty||0):0); },0);
+  const peratus = kiraDiskaunHantarPeratus(sub);
+  const jumlahAkhir = sub - (sub*peratus/100);
+  document.getElementById('h-total').textContent=fmt(jumlahAkhir);
+  const infoEl = document.getElementById('h-diskaun-info');
+  if (peratus>0) {
+    infoEl.style.display='block';
+    infoEl.textContent = `Subjumlah ${fmt(sub)} − ${peratus}% diskaun`;
+  } else {
+    infoEl.style.display='none';
+  }
 }
 function setBayar(v) {
   hBayar=v;
   document.getElementById('opt-terus').className='bayar-opt'+(v==='terus'?' active-terus':'');
+  document.getElementById('opt-transfer').className='bayar-opt'+(v==='transfer'?' active-transfer':'');
   document.getElementById('opt-hutang').className='bayar-opt'+(v==='hutang'?' active-hutang':'');
+  calcTotal();
 }
 
 let hJenis='kedai';
@@ -2161,7 +2192,9 @@ async function submitHantar() {
     const s=DATA.stok.find(s=>s.id===it.stokId);
     if(!s||bakiUntukHantar(s)<+it.qty) return toast(`Stok ${s?.nama||'?'} tidak mencukupi (baki bawaan: ${s?bakiUntukHantar(s):0})`,'err');
   }
-  const jumlah=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty):0); },0);
+  const jumlahAsal=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty):0); },0);
+  const peratusDiskaun = kiraDiskaunHantarPeratus(jumlahAsal);
+  const jumlah = jumlahAsal - (jumlahAsal*peratusDiskaun/100);
 
   // Jarak dikira automatik dari lokasi GPS pekerja semasa ke lokasi berdaftar kedai
   // (tak relevan untuk belian peribadi — tiada kedai destinasi berdaftar)
@@ -2173,11 +2206,13 @@ async function submitHantar() {
     else toast('Gagal dapatkan GPS — jarak direkod sebagai 0km','err');
   }
 
-  const statusBayar = hBayar==='terus'?'selesai':'hutang';
+  const statusBayar = hBayar==='hutang'?'hutang':'selesai';
+  const LABEL_KAEDAH = { terus:'Tunai', transfer:'Online Transfer', hutang:'Catat Hutang' };
   const trx={
     id:genId('T'), tarikh_masa:new Date().toISOString(), kedai_id:kedaiId, nama_pembeli:namaPembeli||null,
     items:hItems.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return{stokId:it.stokId,qty:+it.qty,harga:s.harga_jual}; }),
-    jumlah, status:statusBayar,
+    jumlah, jumlah_asal: jumlahAsal, diskaun_peratus: peratusDiskaun,
+    kaedah_bayaran: hBayar==='terus'?'tunai':hBayar, status:statusBayar,
     nota:document.getElementById('h-nota').value, resit:genResit(),
     jarak_km: jarakKm,
     created_by: DATA.currentUser?.email || DATA.currentUser?.nama || null,
@@ -2188,7 +2223,8 @@ async function submitHantar() {
     const { error } = await sb.rpc('submit_penghantaran', {
       p_id:trx.id, p_kedai_id:trx.kedai_id, p_items:trx.items,
       p_jumlah:trx.jumlah, p_status:trx.status, p_nota:trx.nota, p_resit:trx.resit, p_jarak_km:trx.jarak_km,
-      p_nama_pembeli:trx.nama_pembeli,
+      p_nama_pembeli:trx.nama_pembeli, p_kaedah_bayaran:trx.kaedah_bayaran,
+      p_jumlah_asal:trx.jumlah_asal, p_diskaun_peratus:trx.diskaun_peratus,
     });
     if (error) return toast('Gagal rekod penghantaran: '+error.message,'err');
     await loadData();
@@ -2203,7 +2239,7 @@ async function submitHantar() {
     });
     saveData();
   }
-  toast(`✅ ${trx.resit} · ${fmt(jumlah)} · ${statusBayar==='selesai'?'Tunai':'Catat hutang'}`);
+  toast(`✅ ${trx.resit} · ${fmt(jumlah)}${peratusDiskaun>0?` (−${peratusDiskaun}%)`:''} · ${LABEL_KAEDAH[hBayar]}`);
   hItems=[{stokId:'',qty:1}]; hBayar='terus'; setBayar('terus'); setHJenis('kedai');
   document.getElementById('h-kedai').value='';
   document.getElementById('h-nama-pembeli').value='';
@@ -2654,7 +2690,10 @@ async function renderResit(id) {
       </div>
       ${t.items.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `<div class="resit-item-row"><span>${esc(s.nama)}</span><span style="text-align:center">${it.qty}</span><span style="text-align:right">RM${it.harga.toFixed(2)}</span><span style="text-align:right;font-weight:700">RM${(it.harga*it.qty).toFixed(2)}</span></div>`; }).join('')}
     </div>
+    ${t.diskaun_peratus>0?`<div class="resit-row"><span>SUBJUMLAH</span><span>RM ${(t.jumlah_asal??t.jumlah).toFixed(2)}</span></div>
+    <div class="resit-row" style="color:var(--green)"><span>DISKAUN (${t.diskaun_peratus}%)</span><span>−RM ${((t.jumlah_asal??t.jumlah)-t.jumlah).toFixed(2)}</span></div>`:''}
     <div class="resit-total" style="display:flex;justify-content:space-between"><span>JUMLAH:</span><span>RM ${t.jumlah.toFixed(2)}</span></div>
+    <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">KAEDAH BAYARAN</span><span>${({tunai:'💵 Tunai',transfer:'🏦 Online Transfer',hutang:'📋 Hutang'})[t.kaedah_bayaran] || (t.status==='selesai'?'💵 Tunai':'📋 Hutang')}</span></div>
     <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">STATUS</span><span style="font-weight:700;color:${t.status==='selesai'?'var(--green)':'var(--red)'}">⬤ ${t.status==='selesai'?'TELAH DIBAYAR':'BELUM DIBAYAR / HUTANG'}</span></div>
     ${t.nota?`<div style="margin-top:8px;font-size:10px;color:var(--muted)">Nota: ${esc(t.nota)}</div>`:''}
     ${pekerja?.telefon?`<div style="margin-top:10px;padding:8px;background:#F0FFF4;border:1px dashed var(--green);border-radius:6px;font-size:10px;text-align:center">🔁 Nak repeat order? Hubungi terus <strong>${esc(pekerja.nama||'penghantar')}</strong>: ${esc(pekerja.telefon)}</div>`:''}
@@ -3012,6 +3051,7 @@ async function saveTetapanDiskaun() {
   }).eq('id', 1);
   if (error) return toast('Gagal simpan tetapan: '+error.message,'err');
   qrBankUrlSedia = qrUrl; qrBankFilePilihan = null;
+  await muatTetapanDiskaunUntukHantar();
   toast('Tetapan pre-order & diskaun dikemaskini');
 }
 
@@ -3430,6 +3470,15 @@ async function sahkanWebAuthn() {
   }
 }
 
+// ID unik setiap peranti/pelayar (bukan setiap pengguna) — kekal dalam localStorage
+// peranti tersebut sahaja, digunakan untuk kunci "peranti mana sedang hantar GPS".
+function dapatkanIdPeranti() {
+  let id = localStorage.getItem('wafi_device_id');
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem('wafi_device_id', id); }
+  return id;
+}
+const ID_PERANTI_SAYA = dapatkanIdPeranti();
+
 function getGpsPosition() {
   return new Promise((resolve) => {
     if (!navigator.geolocation) return resolve(null);
@@ -3445,10 +3494,24 @@ async function thumbIn() {
   if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
   const ok = await sahkanWebAuthn();
   if (!ok) return;
+
+  // Semak SERVER dahulu — mungkin sudah Thumb In dari peranti lain. Jangan cipta sesi berganda.
+  const { data: sesiSediaAda } = await sb.from('kehadiran').select('id')
+    .eq('pekerja_id', DATA.currentUser.id).eq('status','aktif')
+    .order('created_at',{ascending:false}).limit(1).maybeSingle();
+  if (sesiSediaAda) {
+    kehadiranAktif = { id: sesiSediaAda.id, pekerja_id: DATA.currentUser.id };
+    localStorage.setItem('wafi_kehadiran_aktif', JSON.stringify(kehadiranAktif));
+    startGpsWatch();
+    toast('Anda sudah Thumb In (dari peranti lain) — sesi diteruskan pada peranti ini');
+    renderKehadiranStatus();
+    return;
+  }
+
   const pos = await getGpsPosition();
   if (!pos) toast('Amaran: gagal dapatkan lokasi GPS — sila benarkan akses lokasi. Jarak mungkin tidak tepat.','err');
   const id = genId('KH');
-  const row = { id, pekerja_id: DATA.currentUser.id, thumb_in_masa: new Date().toISOString(), thumb_in_lat: pos?.lat, thumb_in_lng: pos?.lng, status: 'aktif' };
+  const row = { id, pekerja_id: DATA.currentUser.id, thumb_in_masa: new Date().toISOString(), thumb_in_lat: pos?.lat, thumb_in_lng: pos?.lng, status: 'aktif', gps_device_id: ID_PERANTI_SAYA, gps_last_ping: new Date().toISOString() };
   const { error } = await sb.from('kehadiran').insert(row);
   if (error) return toast('Gagal rekod Thumb In: '+error.message,'err');
   kehadiranAktif = { id, pekerja_id: DATA.currentUser.id };
@@ -3477,9 +3540,16 @@ async function thumbOut() {
 // GPS "on" berterusan (watchPosition) sepanjang Thumb In hingga Thumb Out.
 // Rekod ke DB ditapis maksimum sekali seminit supaya tak banjir jadual gps_track,
 // tapi GPS peranti sendiri kekal aktif/dipantau sepanjang masa (bukan setiap 30 minit).
+//
+// KUNCI PERANTI: jika pekerja buka apps di 2 peranti serentak semasa Thumb In yang
+// sama, hanya SATU peranti (yang pertama hantar ping) jadi sumber GPS — peranti
+// kedua diam sahaja selagi peranti pertama masih "hidup" (ping dalam GPS_STALE_MS
+// terkini). Jika peranti pertama berhenti hantar ping (bateri habis, apps ditutup,
+// dll) melebihi tempoh tu, peranti kedua automatik ambil alih sebagai sumber GPS.
 let gpsWatchId = null;
 let lastGpsInsertAt = 0;
 const GPS_MIN_GAP_MS = 60 * 1000;
+const GPS_STALE_MS = 3 * 60 * 1000;
 
 function startGpsWatch() {
   stopGpsWatch();
@@ -3490,11 +3560,19 @@ function startGpsWatch() {
       if (!kehadiranAktif) return;
       const now = Date.now();
       if (now - lastGpsInsertAt < GPS_MIN_GAP_MS) return;
+
+      const { data: sesi } = await sb.from('kehadiran').select('gps_device_id, gps_last_ping').eq('id', kehadiranAktif.id).single();
+      const pingTerakhir = sesi?.gps_last_ping ? new Date(sesi.gps_last_ping).getTime() : 0;
+      const peranttiLainSudahUsang = (Date.now() - pingTerakhir) > GPS_STALE_MS;
+      const inilahPerantiSumber = sesi?.gps_device_id === ID_PERANTI_SAYA;
+      if (!inilahPerantiSumber && !peranttiLainSudahUsang) return; // peranti lain masih aktif — jangan ganggu
+
       lastGpsInsertAt = now;
       await sb.from('gps_track').insert({
         kehadiran_id: kehadiranAktif.id, pekerja_id: DATA.currentUser.id,
         lat: pos.coords.latitude, lng: pos.coords.longitude,
       });
+      await sb.from('kehadiran').update({ gps_device_id: ID_PERANTI_SAYA, gps_last_ping: new Date().toISOString() }).eq('id', kehadiranAktif.id);
     },
     () => {},
     { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
@@ -3512,11 +3590,16 @@ async function renderKehadiranStatus() {
   if (!useCloud) { statusEl.textContent = 'Ciri ini perlu Supabase disambungkan'; btnIn.style.display='none'; btnOut.style.display='none'; return; }
 
   if (!kehadiranAktif) {
-    const saved = JSON.parse(localStorage.getItem('wafi_kehadiran_aktif')||'null');
-    if (saved && saved.pekerja_id === DATA.currentUser.id) {
-      const { data } = await sb.from('kehadiran').select('*').eq('id', saved.id).eq('status','aktif').single();
-      if (data) { kehadiranAktif = saved; startGpsWatch(); }
-      else localStorage.removeItem('wafi_kehadiran_aktif');
+    // Semak SERVER untuk sesi aktif — bukan sekadar ID yang disimpan peranti ini,
+    // supaya sesi Thumb In dari peranti LAIN pun dikesan betul di sini.
+    const { data } = await sb.from('kehadiran').select('id').eq('pekerja_id', DATA.currentUser.id).eq('status','aktif')
+      .order('created_at',{ascending:false}).limit(1).maybeSingle();
+    if (data) {
+      kehadiranAktif = { id: data.id, pekerja_id: DATA.currentUser.id };
+      localStorage.setItem('wafi_kehadiran_aktif', JSON.stringify(kehadiranAktif));
+      startGpsWatch();
+    } else {
+      localStorage.removeItem('wafi_kehadiran_aktif');
     }
   }
 
