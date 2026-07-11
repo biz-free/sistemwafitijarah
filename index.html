@@ -8,6 +8,7 @@
   <link rel="icon" type="image/png" href="icon-192.png" />
   <title>Kedai Online · Wafi Tijarah Trading</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #EEF2F5; color: #182530; min-height: 100vh; padding-bottom: 90px; }
@@ -17,14 +18,42 @@
       --bg: #F2F7F4; --card: #FFFFFF; --border: #D6E5DC; --text: #16241D; --muted: #5C7A6C;
     }
     #promo-banner { background:var(--navy);color:#EFE3B8;text-align:center;padding:8px 16px;font-size:11px;font-weight:700;letter-spacing:0.3px; }
-    header { background:linear-gradient(135deg,#0B3D2E,#145A3F);padding:24px 16px;text-align:center;position:relative; }
-    header img { width:60px;height:60px;border-radius:50%;margin-bottom:10px;border:2px solid rgba(201,162,39,0.5); }
-    header h1 { color:#fff;font-size:18px;font-weight:800;letter-spacing:0.3px; }
-    header p { color:var(--gold);font-size:12px;margin-top:3px;font-weight:600; }
-    .header-actions { position:absolute;top:18px;right:16px;display:flex;gap:8px;align-items:center; }
-    #btn-akaun { background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer; }
-    #btn-cart-icon { position:relative;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.2);color:#fff;width:34px;height:34px;border-radius:8px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center; }
+
+    /* ── HERO ── */
+    header {
+      position:relative; overflow:hidden; text-align:center; padding:36px 16px 44px;
+      border-radius:0 0 2.5rem 2.5rem; border-bottom:5px solid rgba(201,162,39,0.6);
+      background-color:#0B3D2E;
+      background-image: linear-gradient(160deg,#0B3D2E 0%,#0F4A32 55%,#083F28 100%), url('hero-bg.jpg');
+      background-size:cover; background-position:center;
+      box-shadow:0 20px 50px -20px rgba(8,63,40,0.6);
+    }
+    header::before {
+      content:''; position:absolute; inset:0; pointer-events:none;
+      background:linear-gradient(to top, rgba(8,63,40,0.9) 0%, rgba(15,74,50,0.35) 45%, transparent 75%);
+    }
+    header::after {
+      content:''; position:absolute; inset:0; pointer-events:none; opacity:0.12;
+      background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="46" height="46"><g fill="none" stroke="%23C9A227" stroke-width="1"><rect x="9" y="9" width="28" height="28"/><rect x="9" y="9" width="28" height="28" transform="rotate(45 23 23)"/></g></svg>');
+    }
+    header .hero-inner { position:relative; z-index:2; }
+    header img { width:60px;height:60px;border-radius:50%;margin-bottom:10px;border:2px solid rgba(201,162,39,0.5); box-shadow:0 4px 16px rgba(0,0,0,0.3); }
+    header h1 { color:#fff;font-size:22px;font-weight:800;letter-spacing:0.3px; text-shadow:0 2px 10px rgba(0,0,0,0.35); }
+    header p { color:var(--gold);font-size:12.5px;margin-top:5px;font-weight:600; }
+    .header-actions { position:absolute;top:18px;right:16px;display:flex;gap:8px;align-items:center; z-index:3; }
+    #btn-akaun { background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;backdrop-filter:blur(4px);transition:background 0.15s; }
+    #btn-akaun:hover { background:rgba(255,255,255,0.22); }
+    #btn-cart-icon { position:relative;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.2);color:#fff;width:34px;height:34px;border-radius:8px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);transition:background 0.15s; }
+    #btn-cart-icon:hover { background:rgba(255,255,255,0.22); }
     #cart-icon-badge { position:absolute;top:-6px;right:-6px;background:var(--gold);color:var(--navy);font-size:10px;font-weight:800;border-radius:10px;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--navy); }
+    #hero-cta {
+      margin-top:16px; display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+      background:linear-gradient(135deg,#E0B12B,#C9A227); color:var(--navy); font-weight:800; font-size:13px;
+      padding:11px 24px; border:1px solid rgba(255,255,255,0.25); border-radius:999px;
+      box-shadow:0 10px 25px -8px rgba(201,162,39,0.55); transition:transform 0.15s, background 0.15s;
+    }
+    #hero-cta:hover { background:linear-gradient(135deg,#EABF3F,#B3810A); }
+    #hero-cta:active { transform:scale(0.97); }
 
     /* ── MODAL AKAUN ── */
     .modal-overlay { position:fixed;inset:0;background:rgba(13,33,55,0.6);z-index:9000;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto; }
@@ -45,25 +74,31 @@
     .form-label { font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.4px; }
     .form-input { width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;outline:none;background:#FAFCFE;color:var(--text); }
     textarea.form-input { resize:none;height:60px; }
-    .btn { padding:13px 20px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;width:100%; }
-    .btn-primary { background:linear-gradient(135deg,var(--teal),var(--teal2));color:#fff;margin-top:6px; }
+    .btn { padding:13px 20px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;width:100%;transition:transform 0.15s, box-shadow 0.15s, background 0.15s; }
+    .btn-primary { background:linear-gradient(135deg,var(--teal2),var(--teal));color:#fff;margin-top:6px;box-shadow:0 10px 25px -10px rgba(22,122,82,0.55); }
+    .btn-primary:hover { background:linear-gradient(135deg,#24B37D,#12603F); box-shadow:0 12px 28px -8px rgba(22,122,82,0.6); }
     .btn:active { transform:scale(0.98); }
     #toast { position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:12px 24px;border-radius:12px;font-size:13px;font-weight:700;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,0.25);opacity:0;transition:opacity 0.3s;pointer-events:none;max-width:320px;text-align:center; }
     #toast.show { opacity:1; }
     #toast.err { background:var(--red); }
-    #success-box { text-align:center;padding:32px 16px; }
-    #success-box .icon { font-size:48px;margin-bottom:12px; }
-    #success-box h2 { color:var(--navy);margin-bottom:8px; }
+    #success-box { position:relative;text-align:center;padding:40px 20px;overflow:hidden;border-radius:20px; }
+    #success-box::before { content:'';position:absolute;top:0;left:0;width:100%;height:6px;background:linear-gradient(90deg,var(--gold),#B3810A); }
+    #success-box .icon { font-size:34px;margin:0 auto 14px;width:76px;height:76px;border-radius:50%;background:#E4F3EA;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px -8px rgba(29,122,74,0.4); }
+    #success-box h2 { color:var(--navy);margin-bottom:8px;font-size:20px; }
     #success-box p { color:var(--muted);font-size:13px; }
 
     /* ── KATALOG PRODUK ── */
-    .kategori-pill { flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:#fff;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap; }
-    .kategori-pill.aktif { border-color:var(--teal);background:var(--teal);color:#fff; }
-    .produk-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
-    .produk-card { background:#fff;border:1.5px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color 0.15s; }
+    .kategori-pill { flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:#fff;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap;transition:all 0.15s; }
+    .kategori-pill.aktif { border-color:var(--teal);background:linear-gradient(135deg,var(--teal2),var(--teal));color:#fff;box-shadow:0 6px 16px -6px rgba(22,122,82,0.5); }
+    .produk-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+    .produk-card { background:#fff;border:1px solid var(--border);border-radius:18px;overflow:hidden;transition:transform 0.3s cubic-bezier(.25,.46,.45,.94), box-shadow 0.3s cubic-bezier(.25,.46,.45,.94), border-color 0.15s;box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+    .produk-card:hover { transform:translateY(-5px); box-shadow:0 18px 30px -12px rgba(11,61,46,0.28); }
     .produk-card.dipilih { border-color:var(--teal);box-shadow:0 0 0 2px #167A5222; }
-    .produk-img { width:100%;height:130px;object-fit:contain;background:#F0F4F7;display:flex;align-items:center;justify-content:center;font-size:32px;cursor:zoom-in; }
-    .produk-info { padding:8px 10px; }
+    .produk-img-wrap { overflow:hidden; background:#F0F4F7; }
+    .produk-img { width:100%;height:130px;object-fit:contain;background:#F0F4F7;display:flex;align-items:center;justify-content:center;font-size:32px;cursor:zoom-in;transition:transform 0.5s ease; }
+    .produk-card:hover .produk-img { transform:scale(1.08); }
+    .produk-info { padding:9px 11px; }
+    .produk-kategori { font-size:9px;font-weight:800;color:var(--teal);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px; }
     .produk-nama { font-size:12px;font-weight:700;line-height:1.3;height:31px;overflow:hidden; }
     .produk-harga { font-size:13px;font-weight:800;color:var(--teal);margin-top:4px; }
     .produk-unit { font-size:10px;color:var(--muted); }
@@ -73,16 +108,18 @@
     .qty-val { flex:1;text-align:center;font-weight:800;font-size:14px; }
 
     /* ── CART BAR ── */
-    #cart-bar { position:fixed;bottom:0;left:0;right:0;background:var(--navy);color:#fff;padding:12px 16px;display:none;align-items:center;justify-content:space-between;z-index:500;box-shadow:0 -4px 16px rgba(0,0,0,0.2); }
+    #cart-bar { position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,#0F4A32,var(--navy));color:#fff;padding:14px 18px;display:none;align-items:center;justify-content:space-between;z-index:500;box-shadow:0 -10px 30px -8px rgba(0,0,0,0.35);border-radius:20px 20px 0 0;border-top:1px solid rgba(201,162,39,0.3); }
     #cart-bar.show { display:flex; }
     #cart-bar .cart-info { font-size:13px; }
     #cart-bar .cart-total { font-weight:800;font-size:16px;color:var(--gold); }
-    #cart-bar button { background:var(--teal);color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px; }
+    #cart-bar button { background:linear-gradient(135deg,var(--teal2),var(--teal));color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;box-shadow:0 6px 16px -6px rgba(22,122,82,0.6); }
     #btn-cart-checkout { background:var(--gold);color:var(--navy);border:none;width:26px;height:26px;border-radius:50%;font-size:13px;font-weight:800;padding:0;margin-left:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle; }
 
-    .diskaun-banner { background:linear-gradient(135deg,#FFF8E6,#FFF0CC);border:1.5px solid var(--gold);border-radius:12px;padding:14px;margin-bottom:14px; }
+    .diskaun-banner { position:relative;background:linear-gradient(135deg,#FFF8E6,#FFF0CC);border:1.5px solid var(--gold);border-radius:16px;padding:16px;margin-bottom:14px;overflow:hidden; }
+    .diskaun-banner::before { content:'';position:absolute;top:0;left:0;width:100%;height:5px;background:linear-gradient(90deg,var(--gold),#B3810A); }
     .diskaun-banner .tajuk { font-weight:800;color:var(--navy);font-size:14px;margin-bottom:4px; }
     .diskaun-banner img { max-width:260px;width:100%;display:block;margin:10px auto;border-radius:10px;background:#fff;padding:10px;border:1px solid var(--border); }
+    #c-bukti-bayaran { border:2px dashed var(--gold);background:#FFFBF0;padding:14px 10px;border-radius:10px;cursor:pointer; }
     .kiraan-row { display:flex;justify-content:space-between;font-size:13px;padding:4px 0; }
     .kiraan-row.jumlah { font-weight:800;font-size:15px;border-top:1px solid var(--border);margin-top:6px;padding-top:8px; }
 
@@ -116,9 +153,12 @@
     <button id="btn-cart-icon" onclick="keBayaran()" title="Lihat troli & checkout">🛒<span id="cart-icon-badge" style="display:none">0</span></button>
     <button id="btn-akaun" onclick="bukaAkaunModal()" title="Akaun Saya">👤</button>
   </div>
-  <img src="logo.png" alt="Wafi Tijarah Trading" />
-  <h1>Wafi Tijarah Trading</h1>
-  <p>Kedai Online · Produk Halal Berkualiti</p>
+  <div class="hero-inner">
+    <img src="logo.png" alt="Wafi Tijarah Trading" />
+    <h1>Wafi Tijarah Trading</h1>
+    <p>Kedai Online · Produk Halal Berkualiti</p>
+    <div id="hero-cta" onclick="document.getElementById('view-produk').scrollIntoView({behavior:'smooth'})">🛍️ Lihat Produk</div>
+  </div>
 </header>
 
 <div id="main">
@@ -749,10 +789,13 @@ function renderProdukGrid() {
     const qty = cart[p.id] || 0;
     const gambar = gambarProduk(p);
     return `<div class="produk-card ${qty>0?'dipilih':''}">
+      <div class="produk-img-wrap">
       ${gambar.length
         ? `<img class="produk-img" src="${esc(gambar[0])}" alt="${esc(p.nama)}" onclick="bukaLightbox('${p.id}')" />`
         : `<div class="produk-img">📦</div>`}
+      </div>
       <div class="produk-info">
+        ${p.kategori ? `<div class="produk-kategori">${esc(p.kategori)}</div>` : ''}
         <div class="produk-nama">${esc(p.nama)}</div>
         <div class="produk-harga">${fmt(p.harga_jual)} <span class="produk-unit">/${esc(p.unit)}</span></div>
         <div class="qty-stepper">
