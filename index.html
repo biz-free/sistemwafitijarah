@@ -37,9 +37,22 @@
       background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="46" height="46"><g fill="none" stroke="%23C9A227" stroke-width="1"><rect x="9" y="9" width="28" height="28"/><rect x="9" y="9" width="28" height="28" transform="rotate(45 23 23)"/></g></svg>');
     }
     header .hero-inner { position:relative; z-index:2; max-width:640px;margin:0 auto; }
-    header img { width:60px;height:60px;border-radius:50%;margin-bottom:10px;border:2px solid rgba(201,162,39,0.5); box-shadow:0 4px 16px rgba(0,0,0,0.3); }
-    header h1 { color:#fff;font-size:22px;font-weight:800;letter-spacing:0.3px; text-shadow:0 2px 10px rgba(0,0,0,0.35); }
-    header p { color:var(--gold);font-size:12.5px;margin-top:5px;font-weight:600; }
+    .hero-light { position:absolute; width:340px;height:340px; background:rgba(255,255,255,0.05); border-radius:50%; filter:blur(60px); pointer-events:none; z-index:1; animation:moveLight 10s linear infinite; }
+    header img { width:60px;height:60px;border-radius:50%;margin-bottom:10px;border:2px solid rgba(201,162,39,0.5); box-shadow:0 4px 16px rgba(0,0,0,0.3); animation:heroFloat 4s ease-in-out infinite; }
+    header h1 { color:#fff;font-size:22px;font-weight:800;letter-spacing:0.3px; text-shadow:0 2px 10px rgba(0,0,0,0.35); opacity:0; transform:translateY(24px); animation:heroShowTitle 0.9s cubic-bezier(.25,.46,.45,.94) forwards; }
+    header p { color:var(--gold);font-size:12.5px;margin-top:5px;font-weight:600; opacity:0; animation:heroFade 1.4s forwards; animation-delay:0.35s; background:linear-gradient(90deg,#C9A227,#FFF4A5,#C9A227); background-size:250%; -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; animation:heroFade 1.4s forwards, heroShimmer 3.5s infinite; animation-delay:0.35s, 1.4s; }
+    #hero-cta { animation:heroPulse 2.5s infinite; }
+    .hero-scroll { position:relative; z-index:2; margin-top:18px; font-size:18px; color:rgba(255,255,255,0.6); animation:heroBounce 2s infinite; cursor:pointer; }
+    @keyframes heroFloat { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-8px);} }
+    @keyframes heroShowTitle { 100%{opacity:1;transform:translateY(0);} }
+    @keyframes heroFade { 100%{opacity:1;} }
+    @keyframes heroShimmer { 0%{background-position:-200% 0;} 100%{background-position:200% 0;} }
+    @keyframes heroPulse { 0%{box-shadow:0 10px 25px -8px rgba(201,162,39,0.55), 0 0 0 rgba(255,215,0,0);} 50%{box-shadow:0 10px 25px -8px rgba(201,162,39,0.55), 0 0 26px rgba(255,215,0,0.55);} 100%{box-shadow:0 10px 25px -8px rgba(201,162,39,0.55), 0 0 0 rgba(255,215,0,0);} }
+    @keyframes heroBounce { 0%,100%{transform:translateY(0);} 50%{transform:translateY(8px);} }
+    @keyframes moveLight { 0%{transform:translate(-120px,-60px);} 50%{transform:translate(120px,40px);} 100%{transform:translate(-120px,-60px);} }
+    @media (prefers-reduced-motion: reduce) {
+      header img, header h1, header p, #hero-cta, .hero-scroll, .hero-light { animation:none !important; opacity:1 !important; transform:none !important; }
+    }
     .header-actions { position:absolute;top:18px;right:16px;display:flex;gap:8px;align-items:center; z-index:3; }
     #btn-akaun { background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;backdrop-filter:blur(4px);transition:background 0.15s; }
     #btn-akaun:hover { background:rgba(255,255,255,0.22); }
@@ -159,6 +172,7 @@
 
 <div id="promo-banner">✅ PRODUK HALAL BERSIJIL &nbsp;·&nbsp; 🚚 PENGHANTARAN KE SELURUH MALAYSIA</div>
 <header>
+  <div class="hero-light"></div>
   <div class="header-actions">
     <button id="btn-cart-icon" onclick="keBayaran()" title="Lihat troli & checkout">🛒<span id="cart-icon-badge" style="display:none">0</span></button>
     <button id="btn-akaun" onclick="bukaAkaunModal()" title="Akaun Saya">👤</button>
@@ -169,6 +183,7 @@
     <p>Kedai Online · Produk Halal Berkualiti</p>
     <div id="hero-cta" onclick="document.getElementById('view-produk').scrollIntoView({behavior:'smooth'})">🛍️ Lihat Produk</div>
   </div>
+  <div class="hero-scroll" onclick="document.getElementById('view-produk').scrollIntoView({behavior:'smooth'})">↓</div>
 </header>
 
 <div id="main">
