@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Sitemap ini sengaja hanya senaraikan laman statik sedia ada. Produk individu
+  disimpan dinamik dalam Supabase (bukan fail statik semasa deploy), jadi tidak
+  boleh disenaraikan di sini tanpa langkah build/generate berasingan. Setiap
+  produk masih boleh dikongsi & dikenal pasti carian melalui pautan
+  ?produk=<id> (lihat kemaskiniSEOProduk() dalam index.html) dan data struktur
+  ItemList yang disuntik terus dalam index.html.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://wafitijarahtrading.com/</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://wafitijarahtrading.com/pesan.html</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+</urlset>

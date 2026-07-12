@@ -1,12 +1,24 @@
 <!DOCTYPE html>
-<html lang="ms">
+<html lang="ms-MY">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta name="theme-color" content="#0B3D2E" />
-  <meta name="description" content="Kedai Online - Wafi Tijarah Trading" />
+  <meta name="description" content="Wafi Tijarah Trading — kedai online produk halal berkualiti (kesihatan, kecantikan, minuman, kudapan) dengan penghantaran ke seluruh Malaysia, tumpuan utama Kedah, Perlis, Pulau Pinang & Perak." />
+  <meta name="keywords" content="produk halal Malaysia, kedai online halal, produk halal Kedah, produk halal Perlis, produk halal Pulau Pinang, produk halal Perak, Wafi Tijarah Trading" />
+  <link rel="canonical" href="https://wafitijarahtrading.com/" />
   <link rel="icon" type="image/png" href="icon-192.png" />
-  <title>Kedai Online · Wafi Tijarah Trading</title>
+  <title>Kedai Online · Wafi Tijarah Trading — Produk Halal Berkualiti Malaysia</title>
+
+  <!-- Open Graph / WhatsApp / Facebook / Telegram link preview -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Wafi Tijarah Trading" />
+  <meta property="og:title" content="Wafi Tijarah Trading — Kedai Online Produk Halal Berkualiti" />
+  <meta property="og:description" content="Produk halal berkualiti untuk keluarga anda — penghantaran ke seluruh Malaysia, tumpuan utama Kedah, Perlis, Pulau Pinang & Perak." />
+  <meta property="og:image" content="https://wafitijarahtrading.com/logo.png" />
+  <meta property="og:url" content="https://wafitijarahtrading.com/" />
+  <meta name="twitter:card" content="summary_large_image" />
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -116,9 +128,12 @@
     .kategori-pill { flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:#fff;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap;transition:all 0.15s; }
     .kategori-pill.aktif { border-color:var(--teal);background:linear-gradient(135deg,var(--teal2),var(--teal));color:#fff;box-shadow:0 6px 16px -6px rgba(22,122,82,0.5); }
     .produk-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
-    .produk-card { background:#fff;border:1px solid var(--border);border-radius:18px;overflow:hidden;transition:transform 0.3s cubic-bezier(.25,.46,.45,.94), box-shadow 0.3s cubic-bezier(.25,.46,.45,.94), border-color 0.15s;box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+    .produk-card { position:relative;background:#fff;border:1px solid var(--border);border-radius:18px;overflow:hidden;transition:transform 0.3s cubic-bezier(.25,.46,.45,.94), box-shadow 0.3s cubic-bezier(.25,.46,.45,.94), border-color 0.15s;box-shadow:0 1px 3px rgba(0,0,0,0.04); }
     .produk-card:hover { transform:translateY(-5px); box-shadow:0 18px 30px -12px rgba(11,61,46,0.28); }
     .produk-card.dipilih { border-color:var(--teal);box-shadow:0 0 0 2px #167A5222; }
+    .produk-card.produk-highlight { animation:produkHighlight 2.2s ease; }
+    @keyframes produkHighlight { 0%,100%{box-shadow:0 1px 3px rgba(0,0,0,0.04);} 25%{box-shadow:0 0 0 4px rgba(201,162,39,0.55);} }
+    .produk-share-btn { position:absolute;top:6px;right:6px;background:rgba(255,255,255,0.9);border:1px solid var(--border);border-radius:50%;width:26px;height:26px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2; }
     .produk-img-wrap { overflow:hidden; background:#F0F4F7; }
     .produk-img { width:100%;height:130px;object-fit:contain;background:#F0F4F7;display:flex;align-items:center;justify-content:center;font-size:32px;cursor:zoom-in;transition:transform 0.5s ease; }
     .produk-card:hover .produk-img { transform:scale(1.08); }
@@ -174,6 +189,23 @@
     #site-footer .footer-bottom { border-top:1px solid rgba(255,255,255,0.12);text-align:center;padding:16px 20px;font-size:10.5px;color:#8FAE9E; }
     #site-footer .footer-bottom strong { color:#CFE3D6; }
   </style>
+
+  <!-- Data struktur asas perniagaan (LocalBusiness) — sentiasa ada, tak bergantung produk mana dilihat -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "Wafi Tijarah Trading",
+    "image": "https://wafitijarahtrading.com/logo.png",
+    "url": "https://wafitijarahtrading.com/",
+    "telephone": "+60146363831",
+    "email": "wafitijarahtrading@gmail.com",
+    "priceRange": "RM",
+    "identifier": "AS0462205-D",
+    "areaServed": ["Kedah", "Perlis", "Pulau Pinang", "Perak", "Malaysia"],
+    "address": { "@type": "PostalAddress", "addressRegion": "Kedah", "addressCountry": "MY" }
+  }
+  </script>
 </head>
 <body>
 
@@ -588,6 +620,103 @@ function isiAutoPoskod() {
   }
 }
 
+// ════════════════════════════════════════════════════
+//  SEO: meta/OG dinamik + data struktur per produk (untuk perkongsian link & carian)
+//  Nota: Google jalankan JS sebelum indeks, jadi tajuk/meta/JSON-LD di bawah membantu carian.
+//  TAPI crawler pratonton WhatsApp/Facebook/Telegram TIDAK jalankan JS — pratonton kongsi
+//  link akan tetap papar kad umum laman, bukan gambar/harga produk spesifik. Penyelesaian
+//  sebenar perlukan server-side rendering / edge function pengesan bot (di luar skop ini).
+// ════════════════════════════════════════════════════
+function tetapkanMeta(nama, content) {
+  const isProp = nama.startsWith('og:');
+  const sel = isProp ? `meta[property="${nama}"]` : `meta[name="${nama}"]`;
+  let el = document.querySelector(sel);
+  if (!el) {
+    el = document.createElement('meta');
+    if (isProp) el.setAttribute('property', nama); else el.setAttribute('name', nama);
+    document.head.appendChild(el);
+  }
+  el.setAttribute('content', content);
+}
+
+function suntikJSONLD(id, data) {
+  let el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement('script');
+    el.type = 'application/ld+json';
+    el.id = id;
+    document.head.appendChild(el);
+  }
+  el.textContent = JSON.stringify(data);
+}
+
+function urlProduk(produkId) {
+  return location.origin + location.pathname + '?produk=' + encodeURIComponent(produkId);
+}
+
+function kemaskiniSEOProduk(produkId) {
+  const p = PRODUK.find(x=>x.id===produkId);
+  if (!p) return;
+  const gambar = gambarProduk(p);
+  const gambarUrl = gambar[0] || (location.origin + '/logo.png');
+  const tajuk = `${p.nama} — ${fmt(p.harga_jual)} | Wafi Tijarah Trading`;
+  const huraian = `${p.nama} (${p.kategori||'Produk Halal'}) — ${fmt(p.harga_jual)}/${p.unit}. Produk halal berkualiti dari Wafi Tijarah Trading, penghantaran ke seluruh Malaysia.`;
+  document.title = tajuk;
+  tetapkanMeta('description', huraian);
+  tetapkanMeta('og:title', tajuk);
+  tetapkanMeta('og:description', huraian);
+  tetapkanMeta('og:image', gambarUrl);
+  tetapkanMeta('og:url', urlProduk(p.id));
+
+  suntikJSONLD('ld-product', {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: p.nama,
+    image: gambar.length ? gambar : [gambarUrl],
+    sku: p.id,
+    category: p.kategori || 'Produk Halal',
+    brand: { '@type': 'Brand', name: 'Wafi Tijarah Trading' },
+    offers: {
+      '@type': 'Offer',
+      url: urlProduk(p.id),
+      priceCurrency: 'MYR',
+      price: p.harga_jual,
+      availability: 'https://schema.org/InStock',
+    },
+  });
+
+  // Bawa pengguna terus ke kad produk berkenaan bila buka link kongsi
+  setTimeout(() => {
+    const kad = document.querySelector(`[data-produk-id="${CSS.escape(p.id)}"]`);
+    if (!kad) return;
+    kad.scrollIntoView({ behavior:'smooth', block:'center' });
+    kad.classList.add('produk-highlight');
+    setTimeout(()=>kad.classList.remove('produk-highlight'), 2200);
+  }, 300);
+}
+
+function suntikItemListSchema() {
+  suntikJSONLD('ld-itemlist', {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    itemListElement: PRODUK.map((p,i)=>({
+      '@type': 'ListItem',
+      position: i+1,
+      url: urlProduk(p.id),
+      name: p.nama,
+    })),
+  });
+}
+
+function kongsiLinkProduk(produkId, event) {
+  if (event) event.stopPropagation();
+  const url = urlProduk(produkId);
+  if (!navigator.clipboard) return toast('Pelayar tidak menyokong salin pautan','err');
+  navigator.clipboard.writeText(url)
+    .then(()=>toast('Pautan produk disalin — kongsi terus ke WhatsApp!'))
+    .catch(()=>toast('Gagal salin pautan','err'));
+}
+
 async function initHalaman() {
   muatDataPoskod(); // lazy, tak perlu tunggu — auto-isi bandar/negeri sekadar bonus
   const [{ data: produk, error: e1 }, { data: tetapan }, { data: zon }] = await Promise.all([
@@ -604,6 +733,9 @@ async function initHalaman() {
   document.getElementById('bank-butiran').textContent = TETAPAN.butiran_bank || 'Sila hubungi kami untuk butiran akaun bank.';
   renderKategoriPills();
   renderProdukGrid();
+  suntikItemListSchema();
+  const produkParam = new URLSearchParams(location.search).get('produk');
+  if (produkParam) kemaskiniSEOProduk(produkParam);
   await muatkanStatusAkaun();
 }
 
@@ -837,7 +969,8 @@ function renderProdukGrid() {
   document.getElementById('produk-grid').innerHTML = list.map(p=>{
     const qty = cart[p.id] || 0;
     const gambar = gambarProduk(p);
-    return `<div class="produk-card ${qty>0?'dipilih':''}">
+    return `<div class="produk-card ${qty>0?'dipilih':''}" data-produk-id="${esc(p.id)}">
+      <button class="produk-share-btn" onclick="kongsiLinkProduk('${p.id}', event)" title="Salin pautan produk untuk kongsi">🔗</button>
       <div class="produk-img-wrap" ${gambar.length?`onmouseenter="bukaZoomAuto('${p.id}')" onmouseleave="tutupZoomAuto()"`:''}>
       ${gambar.length
         ? `<img class="produk-img" src="${esc(gambar[0])}" alt="${esc(p.nama)}" onclick="bukaLightbox('${p.id}')" />`

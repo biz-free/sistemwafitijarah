@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://wafitijarahtrading.com/sitemap.xml

@@ -292,6 +292,15 @@ Pesanan dari laman e-dagang (`index.html`) kini perlu **ditugaskan kepada pekerj
 
 Tiada tetapan tambahan diperlukan — ciri ini automatik selepas `SQL_TAMBAHAN_24.sql` dijalankan.
 
+### 🔍 SEO Laman E-Dagang (index.html)
+Laman e-dagang kini ada asas SEO yang lebih lengkap — tiada langkah setup diperlukan, semuanya automatik selepas fail dimuat naik semula.
+
+- **Tajuk, meta description, Open Graph & data struktur (JSON-LD)** ditambah dalam `<head>`, termasuk skema **LocalBusiness** (nama, telefon, e-mel, kawasan liputan) yang sentiasa ada.
+- **Pautan produk boleh dikongsi**: setiap kad produk ada butang 🔗 kecil di penjuru atas kanan — tekan untuk salin pautan terus ke produk itu (`?produk=<id>`). Bila pautan itu dibuka, tajuk halaman, meta description & data struktur **Product** (harga, kategori, gambar) akan bertukar automatik ikut produk berkenaan, dan halaman akan scroll terus ke kad produk itu.
+- **Data struktur ItemList** turut disuntik merangkumi semua produk dalam katalog, membantu Google fahami keseluruhan katalog daripada satu laman sahaja.
+- **`robots.txt`** dan **`sitemap.xml`** baharu ditambah di root — sitemap sengaja hanya senaraikan laman statik (`index.html`, `pesan.html`), bukan setiap produk, kerana produk disimpan dinamik dalam Supabase dan bukan fail statik semasa deploy.
+- ⚠️ **Had penting**: tajuk/meta/data struktur di atas dikemaskini melalui JavaScript selepas halaman dimuat. Google memang jalankan JS sebelum mengindeks, jadi ini membantu carian — tetapi crawler pratonton **WhatsApp/Facebook/Telegram tidak jalankan JS**, jadi bila pautan produk dikongsi ke WhatsApp, pratonton yang keluar masih kad umum laman (bukan gambar/harga produk spesifik). Penyelesaian penuh untuk pratonton WhatsApp yang tepat memerlukan server-side rendering atau edge function pengesan bot — di luar skop kerja semasa, boleh dipertimbangkan pada masa hadapan jika diperlukan.
+
 ### 🚚 Penghantaran Percuma (pesan.html) & Permohonan Ejen/Penghantar (index.html)
 Laman `pesan.html` (borang repeat-order kedai runcit) ada banner hijau di atas mengumumkan penghantaran percuma ke **Perlis, Kedah, Pulau Pinang & Perak** untuk pesanan bernilai minima tertentu (lalai RM100, boleh ubah di **Lebih → Tetapan Pre-Order & Diskaun → "Minima Penghantaran Percuma"**). Ini sekadar **mesej makluman** — sistem tidak mengenakan sebarang bayaran penghantaran tambahan untuk pesanan bawah minima; ia sekadar memaklumkan kedai untuk hubungi terus jika di bawah nilai tersebut.
 
