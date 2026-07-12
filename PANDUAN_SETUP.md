@@ -34,6 +34,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 23. `SQL_TAMBAHAN_23.sql` — Pelupusan Stok (rosak/expired/hilang) direkod terus dari tab Penghantaran — lihat bahagian "🗑️ Pelupusan Stok" di bawah
 > 24. `SQL_TAMBAHAN_24.sql` — Pemilik tugaskan pekerja untuk urus setiap pesanan e-dagang; pekerja tak ditugaskan tak nampak pesanan itu langsung — lihat bahagian "🛒 Tugasan Pesanan E-Dagang" di bawah
 > 26. `SQL_TAMBAHAN_26.sql` — Galeri gambar kedai + Baucar Bayaran (Payment Voucher) bernombor siri untuk audit LHDN — lihat bahagian "📸 Galeri Gambar Kedai" & "🧾 Baucar Bayaran" di bawah. **Perlu cipta 2 bucket Storage baharu secara manual dahulu** (`kedai-gambar` — Public ON, `baucar-resit` — Public OFF), lihat arahan dalam fail SQL.
+> 27. `SQL_TAMBAHAN_27.sql` — Tambah lajur `butiran` pada `baucar_bayaran` untuk baucar Petrol menyimpan log perjalanan harian (tarikh + km) sebagai bukti sokongan automatik — lihat bahagian "🧾 Baucar Bayaran" di bawah. Tiada bucket Storage baharu diperlukan.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -306,8 +307,9 @@ Setiap bulan, sistem sudah kira secara automatik upah, elaun minyak (petrol) & d
 - Di **Laporan Bulanan**, tekan **"🧾 Jana Baucar Bulan Ini"** — sistem akan cipta satu baucar bagi setiap pekerja bagi setiap kategori (Petrol/Upah/Duit Makan) yang jumlahnya lebih RM0 pada bulan tersebut. Jana semula pada bulan yang sama akan kemaskini jumlah baucar **draf** sedia ada (bukan cipta pendua), tetapi baucar yang sudah **Diluluskan/Dibayar** dikekalkan tanpa diubah.
 - Kad **"🧾 Baucar Bayaran"** (di bawah Laporan) memaparkan senarai baucar ikut bulan — setiap satu boleh: muat naik resit/bukti bayaran (**pilihan sahaja, bukan wajib** — baucar tanpa resit dipaparkan amaran "⚠️ Tiada resit" tetapi tetap boleh diluluskan/dibayar), tukar status (Draf → Diluluskan → Dibayar), dan **cetak** sebagai dokumen rasmi lengkap dengan ruang tandatangan "Disediakan oleh / Diluluskan oleh / Diterima oleh".
 - Nombor siri (`PV-<tahun>-<0000>`) dijana secara automatik & selamat daripada pertindihan (guna PostgreSQL sequence), walaupun beberapa baucar dicipta serentak.
+- **Baucar kategori Petrol**: bukti sokongan diambil **secara automatik** daripada log perjalanan GPS (tarikh + jarak km setiap hari dalam bulan tersebut, dikira semasa "Jana Baucar Bulan Ini") — **tiada resit manual diperlukan** untuk petrol, kerana jarak GPS itu sendiri ialah rekod objektif yang boleh disemak. Senarai baucar memaparkan "✅ Log perjalanan disertakan (N hari)" bagi baucar petrol, dan cetakan memaparkan jadual harian penuh (Tarikh | Jarak (km) | Jumlah) menggantikan amaran "Tiada resit". Kategori Upah & Duit Makan masih guna resit manual (pilihan) seperti biasa.
 
-**Setup wajib sebelum ciri ini berfungsi**: cipta bucket Storage baharu di Supabase Dashboard → Storage → New bucket → nama `baucar-resit` → **Public bucket: OFF** (data kewangan sensitif), kemudian jalankan `SQL_TAMBAHAN_26.sql`.
+**Setup wajib sebelum ciri ini berfungsi**: cipta bucket Storage baharu di Supabase Dashboard → Storage → New bucket → nama `baucar-resit` → **Public bucket: OFF** (data kewangan sensitif), kemudian jalankan `SQL_TAMBAHAN_26.sql` dan `SQL_TAMBAHAN_27.sql` (tambah lajur `butiran` untuk log perjalanan petrol — tiada bucket Storage baharu diperlukan untuk #27).
 
 ⚠️ **Nota penting**: Baucar Bayaran ini ialah dokumen dalaman untuk kemudahan audit — ia **bukan** nasihat percukaian rasmi. Sila rujuk akauntan/ejen cukai berdaftar untuk memastikan format & dokumen sokongan yang digunakan memenuhi keperluan LHDN sepenuhnya bagi perniagaan anda.
 

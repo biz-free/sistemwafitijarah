@@ -3071,8 +3071,19 @@ async function janaBaucarBulanIni() {
     for (const [kategori, jumlah] of Object.entries(kategoriJumlah)) {
       if (jumlah <= 0) continue;
       const tujuan = `${tujuanTeks[kategori]} — ${p.nama} — ${LAPORAN_BULAN_TERKINI}`;
-      const { error } = await sb.rpc('cipta_baucar_bayaran', { p_pekerja_id: p.pid, p_kategori: kategori, p_bulan: LAPORAN_BULAN_TERKINI, p_jumlah: jumlah, p_tujuan: tujuan });
-      if (error) ralat++; else bilangan++;
+      const { data: voucherId, error } = await sb.rpc('cipta_baucar_bayaran', { p_pekerja_id: p.pid, p_kategori: kategori, p_bulan: LAPORAN_BULAN_TERKINI, p_jumlah: jumlah, p_tujuan: tujuan });
+      if (error) { ralat++; continue; }
+      bilangan++;
+      // Petrol — sertakan log perjalanan harian (tarikh + jarak GPS) sebagai bukti sokongan
+      // automatik, menggantikan keperluan resit manual (jarak GPS ialah rekod objektif).
+      if (kategori === 'petrol' && voucherId) {
+        const { kmIkutHari } = await kiraJarakKehadiranJulat(LAPORAN_BULAN_TERKINI+'-01T00:00:00', akhirBulanISO(LAPORAN_BULAN_TERKINI), p.pid);
+        const butiran = Object.entries(kmIkutHari)
+          .filter(([key]) => key.startsWith(p.pid+'|'))
+          .map(([key, km]) => ({ tarikh: key.split('|')[1], km: +km.toFixed(1), jumlah: +(km*SETTINGS.minyak).toFixed(2) }))
+          .sort((a,b)=>a.tarikh.localeCompare(b.tarikh));
+        if (butiran.length) await sb.from('baucar_bayaran').update({ butiran }).eq('id', voucherId);
+      }
     }
   }
   toast(ralat ? `${bilangan} baucar dijana, ${ralat} gagal` : `${bilangan} baucar bayaran berjaya dijana`, ralat?'err':'ok');
@@ -3102,7 +3113,9 @@ async function renderBaucarList() {
       </div>
       ${v.resit_url
         ? `<div style="font-size:11px;margin-bottom:6px"><button class="btn-link" onclick="lihatResitBaucar('${esc(v.resit_url)}')">📎 Lihat Resit</button></div>`
-        : `<div style="font-size:11px;color:var(--red);margin-bottom:6px">⚠️ Tiada resit</div>`}
+        : (v.kategori==='petrol' && v.butiran && v.butiran.length)
+          ? `<div style="font-size:11px;color:var(--teal);margin-bottom:6px">✅ Log perjalanan disertakan (${v.butiran.length} hari)</div>`
+          : `<div style="font-size:11px;color:var(--red);margin-bottom:6px">⚠️ Tiada resit</div>`}
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         <input type="file" accept="image/*" style="font-size:10px;max-width:140px" onchange="muatNaikResitBaucar('${v.id}', this.files[0])" />
         <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="ubahStatusBaucar('${v.id}', this.value)">
@@ -3160,7 +3173,24 @@ async function cetakBaucar(id) {
     <div class="baucar-row"><span>DIBAYAR KEPADA</span><span>${esc(nama)}</span></div>
     ${v.tujuan?`<div class="baucar-row"><span>TUJUAN</span><span style="text-align:right;max-width:60%">${esc(v.tujuan)}</span></div>`:''}
     <div class="baucar-total"><span>JUMLAH</span><span>${fmt(v.jumlah)}</span></div>
-    ${!v.resit_url?`<div style="margin-top:10px;padding:8px;background:#FFF5F5;border:1px dashed var(--red);border-radius:6px;font-size:10px;text-align:center;color:var(--red)">⚠️ Tiada resit/bukti bayaran dilampirkan — sila lampirkan dokumen sokongan untuk tujuan audit LHDN</div>`:''}
+    ${(v.kategori==='petrol' && v.butiran && v.butiran.length) ? `
+    <div style="margin-top:10px">
+      <div style="font-size:10px;font-weight:700;margin-bottom:4px">LOG PERJALANAN HARIAN (bukti sokongan GPS)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:10px">
+        <thead><tr>
+          <th style="text-align:left;border-bottom:1px solid #000;padding:2px 4px">Tarikh</th>
+          <th style="text-align:right;border-bottom:1px solid #000;padding:2px 4px">Jarak (km)</th>
+          <th style="text-align:right;border-bottom:1px solid #000;padding:2px 4px">Jumlah</th>
+        </tr></thead>
+        <tbody>
+          ${v.butiran.map(b=>`<tr>
+            <td style="padding:2px 4px">${esc(b.tarikh)}</td>
+            <td style="text-align:right;padding:2px 4px">${b.km}</td>
+            <td style="text-align:right;padding:2px 4px">${fmt(b.jumlah)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : !v.resit_url?`<div style="margin-top:10px;padding:8px;background:#FFF5F5;border:1px dashed var(--red);border-radius:6px;font-size:10px;text-align:center;color:var(--red)">⚠️ Tiada resit/bukti bayaran dilampirkan — sila lampirkan dokumen sokongan untuk tujuan audit LHDN</div>`:''}
     <div class="baucar-tandatangan">
       <div class="garis">Disediakan oleh</div>
       <div class="garis">Diluluskan oleh</div>

@@ -865,6 +865,7 @@ CREATE TABLE IF NOT EXISTS baucar_bayaran (
   jumlah float NOT NULL DEFAULT 0,
   tujuan text,
   resit_url text,
+  butiran jsonb, -- log perjalanan harian (kategori petrol) — [{tarikh, km, jumlah}]
   status text NOT NULL DEFAULT 'draf' CHECK (status IN ('draf','diluluskan','dibayar')),
   diluluskan_oleh uuid REFERENCES auth.users(id),
   diluluskan_pada timestamptz,
