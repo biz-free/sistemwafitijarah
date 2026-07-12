@@ -210,6 +210,13 @@
     .resit-total { font-weight:900;font-size:16px;border-top:2px solid var(--navy);margin-top:8px;padding-top:8px; }
     .resit-footer { text-align:center;border-top:2px dashed var(--border);padding-top:12px;margin-top:14px;font-size:10px;color:var(--muted); }
 
+    /* ── BAUCAR BAYARAN (Payment Voucher) ── */
+    .baucar-box { background:#fff;border:2px solid var(--navy);border-radius:12px;padding:24px;font-family:'Courier New',monospace;font-size:12px;margin-top:10px; }
+    .baucar-row { display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dotted var(--border); }
+    .baucar-total { font-weight:900;font-size:16px;border-top:2px solid var(--navy);margin-top:8px;padding-top:8px;display:flex;justify-content:space-between; }
+    .baucar-tandatangan { display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:28px;text-align:center;font-size:10px; }
+    .baucar-tandatangan .garis { border-top:1px solid var(--text);margin-top:36px;padding-top:4px; }
+
     /* ── TOAST ── */
     #toast { position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:12px 24px;border-radius:12px;font-size:13px;font-weight:700;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,0.25);opacity:0;transition:opacity 0.3s;pointer-events:none;max-width:320px;text-align:center;white-space:nowrap; }
     #toast.show { opacity:1; }
@@ -262,7 +269,8 @@
       @page { size: B5; margin: 10mm; }
       #app-header, #bottom-nav, #toast, .btn-primary, .btn-logout, .btn-secondary { display:none!important; }
       #main-content { padding:0; }
-      .resit-box { border:1px solid #000; }
+      .resit-box, .baucar-box { border:1px solid #000; }
+      #baucar-list { display:none!important; }
     }
   </style>
 </head>
@@ -685,6 +693,17 @@
       <div id="laporan-output"></div>
     </div>
 
+    <!-- Baucar Bayaran (pemilik sahaja) — rekod audit rasmi bernombor siri untuk petrol/upah/makan -->
+    <div class="card" id="baucar-card">
+      <div class="card-title">🧾 Baucar Bayaran</div>
+      <div class="section-sub" style="margin-bottom:10px">Dokumen sokongan rasmi (untuk audit LHDN) bagi elaun minyak, upah & duit makan yang telah dikira dalam Laporan Bulanan.</div>
+      <div class="form-group">
+        <input type="month" class="form-input" id="baucar-bulan" onchange="renderBaucarList()" />
+      </div>
+      <div id="baucar-list"></div>
+      <div id="baucar-print-preview"></div>
+    </div>
+
     <!-- Tetapan Kos Operasi (pemilik sahaja) -->
     <div class="card" id="tetapan-kos-card">
       <div class="card-title">⚙️ Tetapan Kos Operasi</div>
@@ -983,6 +1002,14 @@
     </div>
 
     <div class="form-group"><label class="form-label">Nota Servis</label><textarea class="form-input" id="f-kedai-nota" placeholder="cth: servis setiap 2 minggu, bayar Jumaat"></textarea></div>
+
+    <div class="form-group">
+      <label class="form-label">📸 Galeri Gambar Kedai</label>
+      <input type="file" accept="image/*" capture="environment" id="f-kedai-gambar" onchange="previewGambarKedai()" class="form-input" />
+      <div class="map-hint">Snap gambar depan kedai — boleh tambah lagi gambar semasa lawatan akan datang.</div>
+      <div id="f-kedai-gambar-preview-wrap" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
+    </div>
+
     <button class="btn btn-primary" onclick="saveKedai()">💾 Simpan Kedai</button>
   </div>
 </div>
@@ -1283,7 +1310,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['laporan-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card'];
+  const pemilikOnly = ['laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -1334,6 +1361,7 @@ async function setPage(p) {
   }
   if (p==='lebih') {
     renderResitSel(); renderLaporan();
+    if (currentRole==='pemilik') renderBaucarList();
     document.getElementById('profil-nama').value = DATA.currentUser?.nama || '';
     document.getElementById('profil-telefon').value = DATA.currentUser?.telefon || '';
     if (!document.getElementById('upah-saya-bulan').value) document.getElementById('upah-saya-bulan').value = new Date().toISOString().slice(0,7);
@@ -1360,6 +1388,7 @@ function initAll() {
   document.getElementById('dash-date').textContent = new Date().toLocaleDateString('ms-MY',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
   // Month picker default
   document.getElementById('lap-bulan').value = new Date().toISOString().slice(0,7);
+  document.getElementById('baucar-bulan').value = new Date().toISOString().slice(0,7);
 }
 
 // ════════════════════════════════════════════════════
@@ -1799,6 +1828,7 @@ function renderKedai(q='') {
         ${k.last_visit?`<span class="badge badge-muted">Terakhir: ${fmtD(k.last_visit)}</span>`:''}
       </div>
       ${currentRole==='pemilik'&&k.didaftarkan_oleh?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">🧑‍💼 Didaftarkan oleh: ${esc(PROFIL_NAMA_CACHE[k.didaftarkan_oleh]||'?')}</div>`:''}
+      ${k.gambar_urls&&k.gambar_urls.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${k.gambar_urls.map(u=>`<img src="${esc(u)}" onclick="window.open('${esc(u)}','_blank')" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" />`).join('')}</div>`:''}
       <div style="display:flex;gap:6px">
         ${k.lat&&k.lng?`<a class="btn btn-secondary btn-sm" style="text-decoration:none" href="https://www.google.com/maps/search/?api=1&query=${k.lat},${k.lng}" target="_blank" rel="noopener">🗺️ Lihat di Google Maps</a>`:''}
         ${currentRole==='pemilik'?`<button class="btn btn-secondary btn-sm" onclick="editKedai('${k.id}')">✏️ Edit</button>`:''}
@@ -1914,6 +1944,9 @@ async function bukaModalKedaiBaru() {
   isiDaerahSelect();
   document.getElementById('f-kedai-tel').value='';
   document.getElementById('f-kedai-nota').value='';
+  document.getElementById('f-kedai-gambar').value='';
+  kedaiGambarUrlsSedia = []; kedaiGambarFilesPilihan = [];
+  renderKedaiGambarPreview();
   showModal('modal-tambah-kedai');
   await setKedaiMarker(PETA_PUSAT_DEFAULT.lat, PETA_PUSAT_DEFAULT.lng, false);
   if (kedaiMap) { kedaiMap.setCenter(PETA_PUSAT_DEFAULT); kedaiMap.setZoom(8); }
@@ -1946,8 +1979,59 @@ function editKedai(id) {
   document.getElementById('f-kedai-lat').value=k.lat||6.1248;
   document.getElementById('f-kedai-lng').value=k.lng||100.3678;
   document.getElementById('f-kedai-nota').value=k.nota||'';
+  document.getElementById('f-kedai-gambar').value='';
+  kedaiGambarUrlsSedia = k.gambar_urls && k.gambar_urls.length ? [...k.gambar_urls] : [];
+  kedaiGambarFilesPilihan = [];
+  renderKedaiGambarPreview();
   showModal('modal-tambah-kedai');
   setKedaiMarker(k.lat||6.1248, k.lng||100.3678, true);
+}
+
+// ── Galeri gambar kedai (snap gambar depan kedai semasa daftar/lawatan) ──
+let kedaiGambarUrlsSedia = [];
+let kedaiGambarFilesPilihan = [];
+
+function renderKedaiGambarPreview() {
+  const wrap = document.getElementById('f-kedai-gambar-preview-wrap');
+  const asas = kedaiGambarFilesPilihan.map((f,i)=>({ url:URL.createObjectURL(f), src:'file', idx:i }));
+  const sedia = kedaiGambarUrlsSedia.map((u,i)=>({ url:u, src:'sedia', idx:i }));
+  wrap.innerHTML = [...sedia, ...asas].map(it=>`
+    <div style="position:relative;width:64px;height:64px">
+      <img src="${it.url}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)" />
+      <button type="button" onclick="hapusGambarKedai('${it.src}',${it.idx})" title="Buang gambar ini" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;border:2px solid #fff;font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
+    </div>`).join('');
+}
+
+function hapusGambarKedai(src, idx) {
+  if (src==='file') kedaiGambarFilesPilihan = kedaiGambarFilesPilihan.filter((_,i)=>i!==idx);
+  else kedaiGambarUrlsSedia = kedaiGambarUrlsSedia.filter((_,i)=>i!==idx);
+  renderKedaiGambarPreview();
+}
+
+function previewGambarKedai() {
+  const files = Array.from(document.getElementById('f-kedai-gambar').files || []);
+  if (!files.length) return;
+  kedaiGambarFilesPilihan = [...kedaiGambarFilesPilihan, ...files];
+  document.getElementById('f-kedai-gambar').value = '';
+  renderKedaiGambarPreview();
+}
+
+// Resize sahaja (tiada watermark/sharpen — gambar keadaan kedai, bukan gambar produk pemasaran)
+function prosesGambarKedai(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 1000;
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.85);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
 }
 
 async function saveKedai() {
@@ -1956,8 +2040,22 @@ async function saveKedai() {
   if(!nama||!alamat) return toast('Nama dan alamat wajib diisi','err');
   const id=document.getElementById('edit-kedai-id').value;
   const adalahBaru = !id;
+  const kedaiId = id||genId('K');
+
+  let gambarUrls = kedaiGambarUrlsSedia;
+  if (useCloud && kedaiGambarFilesPilihan.length) {
+    toast('Memproses & memuat naik gambar kedai...');
+    for (let i=0; i<kedaiGambarFilesPilihan.length; i++) {
+      const blob = await prosesGambarKedai(kedaiGambarFilesPilihan[i]);
+      const path = `${kedaiId}-${Date.now()}-${i}.jpg`;
+      const { error: upErr } = await sb.storage.from('kedai-gambar').upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+      if (upErr) return toast('Gagal muat naik gambar kedai: '+upErr.message,'err');
+      gambarUrls = [...gambarUrls, sb.storage.from('kedai-gambar').getPublicUrl(path).data.publicUrl];
+    }
+  }
+
   const obj={
-    id:id||genId('K'),nama,alamat,
+    id:kedaiId,nama,alamat,
     negeri:document.getElementById('f-kedai-negeri').value,
     daerah:document.getElementById('f-kedai-daerah').value,
     telefon:document.getElementById('f-kedai-tel').value,
@@ -1969,6 +2067,7 @@ async function saveKedai() {
     // Simpan siapa daftarkan kedai ni — untuk bonus "kedai baru" dalam Kiraan Upah.
     // Bila EDIT (bukan daftar baru), kekalkan rekod asal, jangan tulis ganti.
     didaftarkan_oleh: adalahBaru ? DATA.currentUser.id : DATA.kedai.find(k=>k.id===id)?.didaftarkan_oleh||null,
+    gambar_urls: gambarUrls,
   };
   if (useCloud) {
     const { error } = await sb.from('kedai').upsert(obj);
@@ -2870,6 +2969,9 @@ async function hantarResitWhatsapp() {
 // ════════════════════════════════════════════════════
 //  LAPORAN
 // ════════════════════════════════════════════════════
+let LAPORAN_BULAN_TERKINI = '';
+let LAPORAN_PEKERJA_TERKINI = [];
+
 async function renderLaporan() {
   if (currentRole!=='pemilik') return;
   const bulan=document.getElementById('lap-bulan').value;
@@ -2916,9 +3018,16 @@ async function renderLaporan() {
     const bonusKedaiPekerja = kedaiPekerja*SETTINGS.upahKedaiBaru;
     const edagangPekerja = edagangLayakUpah.filter(o=>o.assigned_pekerja_id===pid);
     const upahEdagangPekerja = edagangPekerja.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
-    const jumlahPekerja = upahPekerja + kmPekerja*SETTINGS.minyak + hariPekerja*SETTINGS.makan + bonusKedaiPekerja + upahEdagangPekerja;
-    return { nama: profilMap[pid]||pid, bilangan: filPekerja.length, kedaiPekerja, edagangBil: edagangPekerja.length, jumlah: jumlahPekerja };
+    const petrolJumlah = kmPekerja*SETTINGS.minyak;
+    const makanJumlah = hariPekerja*SETTINGS.makan;
+    const upahJumlah = upahPekerja + upahEdagangPekerja; // upah penghantaran + e-dagang digabung bawah kategori "upah"
+    const jumlahPekerja = upahJumlah + petrolJumlah + makanJumlah + bonusKedaiPekerja;
+    return { pid, nama: profilMap[pid]||pid, bilangan: filPekerja.length, kedaiPekerja, edagangBil: edagangPekerja.length, upahJumlah, petrolJumlah, makanJumlah, jumlah: jumlahPekerja };
   }).sort((a,b)=>b.jumlah-a.jumlah);
+
+  // Simpan untuk butang "Jana Baucar Bulan Ini" — guna semula jumlah yang sama, tiada pengiraan baharu
+  LAPORAN_BULAN_TERKINI = bulan;
+  LAPORAN_PEKERJA_TERKINI = pecahanPekerja;
 
   document.getElementById('laporan-output').innerHTML=`
     <div class="stat-grid" style="margin-bottom:10px">
@@ -2938,8 +3047,127 @@ async function renderLaporan() {
       <span class="total-label">UNTUNG BERSIH</span>
       <span class="total-val" style="color:${untungBersih>=0?'var(--green)':'var(--red)'}">${fmt(untungBersih)}</span>
     </div>
-    ${pecahanPekerja.length?`<div class="divider"></div><div class="card-title" style="font-size:13px">👥 Pecahan Upah Ikut Pekerja</div>${pecahanPekerja.map(p=>`<div class="list-item"><div><div class="list-item-title">${esc(p.nama)}</div><div class="list-item-sub">${p.bilangan} penghantaran${p.kedaiPekerja?` · ${p.kedaiPekerja} kedai baru`:''}${p.edagangBil?` · ${p.edagangBil} e-dagang`:''}</div></div><div class="list-item-val">${fmt(p.jumlah)}</div></div>`).join('')}`:''}
+    ${pecahanPekerja.length?`<div class="divider"></div><div class="card-title" style="font-size:13px">👥 Pecahan Upah Ikut Pekerja</div>${pecahanPekerja.map(p=>`<div class="list-item"><div><div class="list-item-title">${esc(p.nama)}</div><div class="list-item-sub">${p.bilangan} penghantaran${p.kedaiPekerja?` · ${p.kedaiPekerja} kedai baru`:''}${p.edagangBil?` · ${p.edagangBil} e-dagang`:''}</div></div><div class="list-item-val">${fmt(p.jumlah)}</div></div>`).join('')}
+    <button class="btn btn-secondary" style="margin-top:10px" onclick="janaBaucarBulanIni()">🧾 Jana Baucar Bulan Ini</button>`:''}
     ${fil.length===0&&kedaiBulanIni.length===0&&edagangLayakUpah.length===0?`<div class="empty"><div class="empty-text">Tiada transaksi pada bulan ini</div></div>`:''}`;
+}
+
+// ════════════════════════════════════════════════════
+//  BAUCAR BAYARAN (Payment Voucher) — audit rasmi untuk petrol/upah/makan.
+//  Jumlah diambil terus daripada Laporan Bulanan (LAPORAN_PEKERJA_TERKINI) — tiada
+//  pengiraan baharu, sekadar formalkan angka yang sama menjadi dokumen bernombor siri.
+// ════════════════════════════════════════════════════
+const BAUCAR_KATEGORI_LABEL = { petrol:'⛽ Petrol', upah:'💰 Upah', makan:'🍽️ Duit Makan' };
+const BAUCAR_STATUS_LABEL = { draf:'📝 Draf', diluluskan:'✅ Diluluskan', dibayar:'💵 Dibayar' };
+let BAUCAR_CACHE = [];
+
+async function janaBaucarBulanIni() {
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  if (!LAPORAN_PEKERJA_TERKINI.length) return toast('Tiada data pekerja untuk bulan ini','err');
+  const tujuanTeks = { petrol:'Elaun minyak/petrol', upah:'Upah penghantaran & e-dagang', makan:'Elaun duit makan' };
+  let bilangan = 0, ralat = 0;
+  for (const p of LAPORAN_PEKERJA_TERKINI) {
+    const kategoriJumlah = { petrol: p.petrolJumlah, upah: p.upahJumlah, makan: p.makanJumlah };
+    for (const [kategori, jumlah] of Object.entries(kategoriJumlah)) {
+      if (jumlah <= 0) continue;
+      const tujuan = `${tujuanTeks[kategori]} — ${p.nama} — ${LAPORAN_BULAN_TERKINI}`;
+      const { error } = await sb.rpc('cipta_baucar_bayaran', { p_pekerja_id: p.pid, p_kategori: kategori, p_bulan: LAPORAN_BULAN_TERKINI, p_jumlah: jumlah, p_tujuan: tujuan });
+      if (error) ralat++; else bilangan++;
+    }
+  }
+  toast(ralat ? `${bilangan} baucar dijana, ${ralat} gagal` : `${bilangan} baucar bayaran berjaya dijana`, ralat?'err':'ok');
+  document.getElementById('baucar-bulan').value = LAPORAN_BULAN_TERKINI;
+  await renderBaucarList();
+}
+
+async function renderBaucarList() {
+  const el = document.getElementById('baucar-list');
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const bulan = document.getElementById('baucar-bulan').value;
+  const { data, error } = await sb.from('baucar_bayaran').select('*').eq('bulan', bulan).order('no_siri');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  BAUCAR_CACHE = data || [];
+  if (BAUCAR_CACHE.length && !Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
+  el.innerHTML = BAUCAR_CACHE.map(v => `
+    <div class="list-item" style="display:block">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div>
+          <div class="list-item-title">${esc(v.no_siri)} · ${BAUCAR_KATEGORI_LABEL[v.kategori]||v.kategori}</div>
+          <div class="list-item-sub">${esc(PROFIL_NAMA_CACHE[v.pekerja_id]||v.pekerja_id)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="list-item-val">${fmt(v.jumlah)}</div>
+          <span class="badge ${v.status==='dibayar'?'badge-green':v.status==='diluluskan'?'badge-teal':'badge-gold'}">${BAUCAR_STATUS_LABEL[v.status]}</span>
+        </div>
+      </div>
+      ${v.resit_url
+        ? `<div style="font-size:11px;margin-bottom:6px"><button class="btn-link" onclick="lihatResitBaucar('${esc(v.resit_url)}')">📎 Lihat Resit</button></div>`
+        : `<div style="font-size:11px;color:var(--red);margin-bottom:6px">⚠️ Tiada resit</div>`}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <input type="file" accept="image/*" style="font-size:10px;max-width:140px" onchange="muatNaikResitBaucar('${v.id}', this.files[0])" />
+        <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="ubahStatusBaucar('${v.id}', this.value)">
+          <option value="draf" ${v.status==='draf'?'selected':''}>📝 Draf</option>
+          <option value="diluluskan" ${v.status==='diluluskan'?'selected':''}>✅ Diluluskan</option>
+          <option value="dibayar" ${v.status==='dibayar'?'selected':''}>💵 Dibayar</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="cetakBaucar('${v.id}')">🖨️ Cetak</button>
+      </div>
+    </div>`).join('') || '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Tiada baucar untuk bulan ini — tekan "Jana Baucar Bulan Ini" dalam Laporan</div></div>';
+}
+
+async function muatNaikResitBaucar(id, file) {
+  if (!file) return;
+  const path = `${id}-${Date.now()}.jpg`;
+  const { error: upErr } = await sb.storage.from('baucar-resit').upload(path, file);
+  if (upErr) return toast('Gagal muat naik resit: '+upErr.message,'err');
+  const { error } = await sb.from('baucar_bayaran').update({ resit_url: path }).eq('id', id);
+  if (error) return toast('Gagal simpan resit: '+error.message,'err');
+  toast('Resit berjaya dimuat naik');
+  await renderBaucarList();
+}
+
+async function lihatResitBaucar(path) {
+  const { data, error } = await sb.storage.from('baucar-resit').createSignedUrl(path, 3600);
+  if (error) return toast('Gagal buka resit: '+error.message,'err');
+  window.open(data.signedUrl, '_blank');
+}
+
+async function ubahStatusBaucar(id, status) {
+  const kemaskini = { status };
+  if (status === 'diluluskan') { kemaskini.diluluskan_oleh = DATA.currentUser.id; kemaskini.diluluskan_pada = new Date().toISOString(); }
+  if (status === 'dibayar') kemaskini.dibayar_pada = new Date().toISOString();
+  const { error } = await sb.from('baucar_bayaran').update(kemaskini).eq('id', id);
+  if (error) return toast('Gagal kemaskini status: '+error.message,'err');
+  toast('Status baucar dikemaskini');
+  await renderBaucarList();
+}
+
+async function cetakBaucar(id) {
+  const v = BAUCAR_CACHE.find(x=>x.id===id); if (!v) return;
+  if (!Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
+  const nama = PROFIL_NAMA_CACHE[v.pekerja_id] || v.pekerja_id;
+  document.getElementById('baucar-print-preview').innerHTML = `<div class="baucar-box" id="baucar-print">
+    <div class="resit-header">
+      <img src="logo.png" alt="Wafi Tijarah Trading" style="width:36px;height:36px;border-radius:50%;margin-bottom:6px" />
+      <div style="font-weight:900;font-size:15px;letter-spacing:1px">SYARIKAT WAFI TIJARAH TRADING</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">Baucar Bayaran (Payment Voucher)</div>
+      <div style="font-size:9px;color:var(--muted)">No. Pendaftaran: AS0462205-D</div>
+    </div>
+    <div class="baucar-row" style="font-weight:700"><span>NO. BAUCAR</span><span>${esc(v.no_siri)}</span></div>
+    <div class="baucar-row"><span>TARIKH DIJANA</span><span>${fmtDT(v.created_at)}</span></div>
+    <div class="baucar-row"><span>KATEGORI</span><span>${BAUCAR_KATEGORI_LABEL[v.kategori]||v.kategori}</span></div>
+    <div class="baucar-row"><span>BULAN</span><span>${esc(v.bulan)}</span></div>
+    <div class="baucar-row"><span>DIBAYAR KEPADA</span><span>${esc(nama)}</span></div>
+    ${v.tujuan?`<div class="baucar-row"><span>TUJUAN</span><span style="text-align:right;max-width:60%">${esc(v.tujuan)}</span></div>`:''}
+    <div class="baucar-total"><span>JUMLAH</span><span>${fmt(v.jumlah)}</span></div>
+    ${!v.resit_url?`<div style="margin-top:10px;padding:8px;background:#FFF5F5;border:1px dashed var(--red);border-radius:6px;font-size:10px;text-align:center;color:var(--red)">⚠️ Tiada resit/bukti bayaran dilampirkan — sila lampirkan dokumen sokongan untuk tujuan audit LHDN</div>`:''}
+    <div class="baucar-tandatangan">
+      <div class="garis">Disediakan oleh</div>
+      <div class="garis">Diluluskan oleh</div>
+      <div class="garis">Diterima oleh (jika tunai)</div>
+    </div>
+  </div>`;
+  setTimeout(() => window.print(), 200);
 }
 
 // ════════════════════════════════════════════════════

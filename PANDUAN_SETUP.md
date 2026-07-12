@@ -33,6 +33,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 22. `SQL_TAMBAHAN_22.sql` — Rekod siapa daftarkan setiap kedai (untuk bonus "Kedai Baru" & paparan di Senarai Kedai) — lihat bahagian "🏪 Bonus Kedai Baru" di bawah
 > 23. `SQL_TAMBAHAN_23.sql` — Pelupusan Stok (rosak/expired/hilang) direkod terus dari tab Penghantaran — lihat bahagian "🗑️ Pelupusan Stok" di bawah
 > 24. `SQL_TAMBAHAN_24.sql` — Pemilik tugaskan pekerja untuk urus setiap pesanan e-dagang; pekerja tak ditugaskan tak nampak pesanan itu langsung — lihat bahagian "🛒 Tugasan Pesanan E-Dagang" di bawah
+> 26. `SQL_TAMBAHAN_26.sql` — Galeri gambar kedai + Baucar Bayaran (Payment Voucher) bernombor siri untuk audit LHDN — lihat bahagian "📸 Galeri Gambar Kedai" & "🧾 Baucar Bayaran" di bawah. **Perlu cipta 2 bucket Storage baharu secara manual dahulu** (`kedai-gambar` — Public ON, `baucar-resit` — Public OFF), lihat arahan dalam fail SQL.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -291,6 +292,24 @@ Pesanan dari laman e-dagang (`index.html`) kini perlu **ditugaskan kepada pekerj
 - **Upah** dikira automatik sama seperti penghantaran biasa — ikut upah per-produk (medan "Upah Pekerja" pada setiap Stok), dikira sebaik status pesanan bertukar ke **🚚 Dihantar** atau **✓ Selesai**. Dipaparkan dalam Laporan (pemilik) dan Kiraan Upah Saya (pekerja) sebagai baris "Upah E-Dagang", termasuk dalam pecahan harian.
 
 Tiada tetapan tambahan diperlukan — ciri ini automatik selepas `SQL_TAMBAHAN_24.sql` dijalankan.
+
+### 📸 Galeri Gambar Kedai
+Borang **Daftar/Kemaskini Kedai** kini ada butang **"📸 Galeri Gambar Kedai"** — snap gambar depan kedai terus dari kamera telefon (atau pilih gambar sedia ada). Gambar disimpan sebagai galeri (senarai, bukan satu gambar sahaja), jadi pekerja boleh terus tambah gambar baharu pada lawatan akan datang — gambar lama tidak ditimpa.
+
+Gambar dipaparkan sebagai deretan kecil pada kad kedai dalam **Senarai Kedai** — klik gambar untuk buka saiz penuh dalam tab baharu.
+
+**Setup wajib sebelum ciri ini berfungsi**: cipta bucket Storage baharu di Supabase Dashboard → Storage → New bucket → nama `kedai-gambar` → **Public bucket: ON**, kemudian jalankan `SQL_TAMBAHAN_26.sql`.
+
+### 🧾 Baucar Bayaran
+Setiap bulan, sistem sudah kira secara automatik upah, elaun minyak (petrol) & duit makan setiap pekerja (dipaparkan dalam **Laporan Bulanan**). Ciri ini **memformalkan angka yang sama** menjadi dokumen audit rasmi bernombor siri (cth: `PV-2026-0001`) — bukan pengiraan baharu, sekadar dokumen sokongan untuk tujuan audit LHDN.
+
+- Di **Laporan Bulanan**, tekan **"🧾 Jana Baucar Bulan Ini"** — sistem akan cipta satu baucar bagi setiap pekerja bagi setiap kategori (Petrol/Upah/Duit Makan) yang jumlahnya lebih RM0 pada bulan tersebut. Jana semula pada bulan yang sama akan kemaskini jumlah baucar **draf** sedia ada (bukan cipta pendua), tetapi baucar yang sudah **Diluluskan/Dibayar** dikekalkan tanpa diubah.
+- Kad **"🧾 Baucar Bayaran"** (di bawah Laporan) memaparkan senarai baucar ikut bulan — setiap satu boleh: muat naik resit/bukti bayaran (**pilihan sahaja, bukan wajib** — baucar tanpa resit dipaparkan amaran "⚠️ Tiada resit" tetapi tetap boleh diluluskan/dibayar), tukar status (Draf → Diluluskan → Dibayar), dan **cetak** sebagai dokumen rasmi lengkap dengan ruang tandatangan "Disediakan oleh / Diluluskan oleh / Diterima oleh".
+- Nombor siri (`PV-<tahun>-<0000>`) dijana secara automatik & selamat daripada pertindihan (guna PostgreSQL sequence), walaupun beberapa baucar dicipta serentak.
+
+**Setup wajib sebelum ciri ini berfungsi**: cipta bucket Storage baharu di Supabase Dashboard → Storage → New bucket → nama `baucar-resit` → **Public bucket: OFF** (data kewangan sensitif), kemudian jalankan `SQL_TAMBAHAN_26.sql`.
+
+⚠️ **Nota penting**: Baucar Bayaran ini ialah dokumen dalaman untuk kemudahan audit — ia **bukan** nasihat percukaian rasmi. Sila rujuk akauntan/ejen cukai berdaftar untuk memastikan format & dokumen sokongan yang digunakan memenuhi keperluan LHDN sepenuhnya bagi perniagaan anda.
 
 ### 🔍 SEO Laman E-Dagang (index.html)
 Laman e-dagang kini ada asas SEO yang lebih lengkap — tiada langkah setup diperlukan, semuanya automatik selepas fail dimuat naik semula.
