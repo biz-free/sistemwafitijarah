@@ -360,8 +360,17 @@
         <label class="form-label">Nota (Optional)</label>
         <textarea class="form-input" id="c-nota" placeholder="Nota tambahan..."></textarea>
       </div>
+      <div class="form-group" id="voucher-wrap">
+        <label class="form-label">Kod Voucher (Optional)</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" class="form-input" id="c-kod-voucher" placeholder="cth: RAYA10" style="text-transform:uppercase" />
+          <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="gunaVoucher()">✅ Guna Kod</button>
+        </div>
+        <div id="voucher-mesej" style="font-size:12px;margin-top:6px;display:none"></div>
+      </div>
       <div id="kiraan-jelas">
         <div class="kiraan-row"><span>Subjumlah</span><span id="kiraan-subtotal">RM 0.00</span></div>
+        <div class="kiraan-row" id="kiraan-diskaun-row" style="display:none;color:var(--green)"><span>Diskaun Voucher (<span id="kiraan-diskaun-kod"></span>) <button class="btn-link" style="font-size:11px" onclick="buangVoucher()">✕ Buang</button></span><span id="kiraan-diskaun">−RM 0.00</span></div>
         <div class="kiraan-row"><span>Kos Penghantaran<span id="kiraan-zon-label"></span></span><span id="kiraan-penghantaran">RM 0.00</span></div>
         <div class="kiraan-row jumlah"><span>JUMLAH AKHIR</span><span id="grand-total" style="color:var(--teal)">RM 0.00</span></div>
       </div>
@@ -1127,10 +1136,46 @@ function kemaskiniTotal() {
 
   const zonId = zonUntukNegeri(document.getElementById('c-negeri').value);
   const kosHantar = kosPenghantaranSemasa();
+  const diskaun = voucherAktif ? Math.min(voucherAktif.jenis_diskaun==='tetap' ? voucherAktif.nilai_diskaun : tot*voucherAktif.nilai_diskaun/100, tot) : 0;
   document.getElementById('kiraan-subtotal').textContent = fmt(tot);
+  document.getElementById('kiraan-diskaun-row').style.display = voucherAktif ? '' : 'none';
+  if (voucherAktif) {
+    document.getElementById('kiraan-diskaun-kod').textContent = voucherAktif.kod;
+    document.getElementById('kiraan-diskaun').textContent = '−' + fmt(diskaun);
+  }
   document.getElementById('kiraan-penghantaran').textContent = fmt(kosHantar);
   document.getElementById('kiraan-zon-label').textContent = zonId ? ` (${ZON[zonId]?.nama||''})` : '';
-  document.getElementById('grand-total').textContent = fmt(tot + kosHantar);
+  document.getElementById('grand-total').textContent = fmt(tot - diskaun + kosHantar);
+}
+
+let voucherAktif = null; // { kod, jenis_diskaun, nilai_diskaun }
+
+function tunjukMesejVoucher(mesej, ok) {
+  const el = document.getElementById('voucher-mesej');
+  el.style.display = 'block';
+  el.style.color = ok ? 'var(--green)' : 'var(--red)';
+  el.textContent = (ok ? '✅ ' : '⚠️ ') + mesej;
+}
+
+async function gunaVoucher() {
+  const kod = document.getElementById('c-kod-voucher').value.trim();
+  if (!kod) return toast('Sila isi kod voucher','err');
+  const tel = document.getElementById('c-tel').value.trim();
+  if (!tel) return tunjukMesejVoucher('Sila isi no. telefon dahulu sebelum guna kod voucher', false);
+  const { data, error } = await sb.rpc('validasi_baucar', { p_kod: kod, p_telefon: tel, p_subjumlah: subtotal() });
+  const hasil = Array.isArray(data) ? data[0] : data;
+  if (error || !hasil) return tunjukMesejVoucher('Gagal semak kod voucher','err');
+  if (!hasil.sah) { voucherAktif = null; kemaskiniTotal(); return tunjukMesejVoucher(hasil.mesej, false); }
+  voucherAktif = { kod: kod.toUpperCase(), jenis_diskaun: hasil.jenis_diskaun, nilai_diskaun: hasil.nilai_diskaun };
+  tunjukMesejVoucher(`Kod voucher "${voucherAktif.kod}" diguna pakai`, true);
+  kemaskiniTotal();
+}
+
+function buangVoucher() {
+  voucherAktif = null;
+  document.getElementById('c-kod-voucher').value = '';
+  document.getElementById('voucher-mesej').style.display = 'none';
+  kemaskiniTotal();
 }
 
 async function hantarPesanan() {
@@ -1174,7 +1219,7 @@ async function hantarPesanan() {
     items: entries.map(([pid,qty])=>{ const p=PRODUK.find(p=>p.id===pid); return { stokId:pid, nama:p?.nama||'?', unit:p?.unit||'', harga:p?.harga_jual||0, qty }; }),
     subjumlah: sub,
     kos_penghantaran: kosHantar,
-    diskaun: 0,
+    kod_baucar: voucherAktif?.kod || null,
     jumlah: sub + kosHantar,
     alamat, poskod, bandar: bandar || null, negeri,
     zon_penghantaran: zonId,
@@ -1209,6 +1254,7 @@ async function hantarPesanan() {
     return;
   }
 
+  voucherAktif = null;
   document.getElementById('form-card').style.display='none';
   document.getElementById('cart-bar').className='';
   document.getElementById('success-box').style.display='block';

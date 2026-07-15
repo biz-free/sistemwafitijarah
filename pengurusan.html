@@ -376,6 +376,7 @@
       <div style="display:flex;gap:8px">
         <input type="text" class="form-input" id="link-preorder" readonly style="font-size:12px" />
         <button class="btn btn-secondary btn-sm" onclick="salinLinkPreorder()" style="flex-shrink:0">📋 Salin</button>
+        <button class="btn btn-secondary btn-sm" onclick="bukaContohBorangPreorder()" style="flex-shrink:0">🔗 Buka</button>
       </div>
     </div>
 
@@ -735,6 +736,14 @@
       <button class="btn btn-primary" onclick="saveTetapanDiskaun()">💾 Simpan Tetapan</button>
     </div>
 
+    <!-- Voucher Diskaun (pemilik sahaja) -->
+    <div class="card" id="voucher-card">
+      <div class="card-title">🎟️ Voucher Diskaun</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Kod voucher untuk pelanggan storefront (index.html) masukkan semasa checkout untuk dapat diskaun.</div>
+      <button class="btn btn-primary" style="margin-bottom:12px" onclick="bukaModalVoucher()">+ Voucher Baru</button>
+      <div id="voucher-list"></div>
+    </div>
+
     <!-- Permohonan Ejen & Penghantar (pemilik sahaja) -->
     <div class="card" id="pemohon-program-card">
       <div class="card-title">🤝 Permohonan Ejen & Penghantar</div>
@@ -964,6 +973,30 @@
       <div class="form-group"><label class="form-label">Tarikh Luput Baru</label><input type="date" class="form-input" id="tl-luput-baru" /></div>
     </div>
     <button class="btn btn-primary" style="background:var(--red)" onclick="tukarStokLuput()">🔁 Sahkan Pertukaran</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-voucher">
+  <div class="modal-box">
+    <div class="modal-title"><span id="voucher-modal-title">🎟️ Voucher Baru</span><button class="modal-close" onclick="closeModal('modal-voucher')">✕ Tutup</button></div>
+    <input type="hidden" id="v-edit-kod" />
+    <div class="form-group"><label class="form-label">Kod Voucher</label><input type="text" class="form-input" id="v-kod" placeholder="cth: RAYA10" style="text-transform:uppercase" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Jenis Diskaun</label>
+        <select class="form-input" id="v-jenis">
+          <option value="peratus">Peratus (%)</option>
+          <option value="tetap">Tetap (RM)</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Nilai</label><input type="number" class="form-input" id="v-nilai" step="0.5" min="0" /></div>
+    </div>
+    <div class="form-group"><label class="form-label">Minima Belanja (RM, optional)</label><input type="number" class="form-input" id="v-minima" step="10" min="0" placeholder="0" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Had Guna Keseluruhan (optional)</label><input type="number" class="form-input" id="v-had-guna" min="1" placeholder="Tiada had" /></div>
+      <div class="form-group"><label class="form-label">Tarikh Luput (optional)</label><input type="date" class="form-input" id="v-luput" /></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:14px"><input type="checkbox" id="v-aktif" checked style="width:auto" /> Aktif</label>
+    <button class="btn btn-primary" onclick="saveVoucher()">💾 Simpan Voucher</button>
   </div>
 </div>
 
@@ -1312,7 +1345,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card'];
+  const pemilikOnly = ['laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -1374,6 +1407,7 @@ async function setPage(p) {
       if (!document.getElementById('kh-tarikh').value) document.getElementById('kh-tarikh').value = new Date().toISOString().slice(0,10);
       renderLaporanKehadiran();
       loadTetapanDiskaun();
+      renderVoucherList();
       renderSenaraiCutiSemua();
       renderStatusLive();
       semakStatusEasyParcel();
@@ -2513,6 +2547,11 @@ function salinLinkPreorder() {
   toast('Link disalin — kongsi dengan kedai via WhatsApp');
 }
 
+function bukaContohBorangPreorder() {
+  const link = document.getElementById('link-preorder').value;
+  if (link) window.open(link, '_blank');
+}
+
 async function checkPreorderBadge() {
   const { data } = await sb.from('pre_order').select('id').eq('status','baru');
   document.getElementById('badge-preorder').style.display = data?.length ? '' : 'none';
@@ -3474,6 +3513,83 @@ async function saveTetapanDiskaun() {
   qrBankUrlSedia = qrUrl; qrBankFilePilihan = null;
   await muatTetapanDiskaunUntukHantar();
   toast('Tetapan pre-order & diskaun dikemaskini');
+}
+
+// ════════════════════════════════════════════════════
+//  VOUCHER DISKAUN (storefront B2C index.html — pemilik jana kod, pelanggan claim semasa checkout)
+// ════════════════════════════════════════════════════
+async function renderVoucherList() {
+  const el = document.getElementById('voucher-list');
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const { data, error } = await sb.from('baucar').select('*').order('kod');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const hariIni = new Date().toISOString().slice(0,10);
+  el.innerHTML = (data||[]).map(v=>{
+    const luput = v.tarikh_luput && v.tarikh_luput < hariIni;
+    const statusTxt = luput ? '⏰ Luput' : (v.aktif ? '✅ Aktif' : '⏸️ Tidak Aktif');
+    const statusBadge = luput ? 'badge-red' : (v.aktif ? 'badge-green' : 'badge-gold');
+    const nilaiTxt = v.jenis_diskaun==='tetap' ? `RM${v.nilai_diskaun} diskaun` : `${v.nilai_diskaun}% diskaun`;
+    return `<div class="list-item">
+      <div>
+        <div class="list-item-title">${esc(v.kod)}</div>
+        <div class="list-item-sub">${nilaiTxt}${v.minima_belanja>0?` · min. ${fmt(v.minima_belanja)}`:''} · guna ${v.bilangan_guna}/${v.had_guna??'∞'}${v.tarikh_luput?` · luput ${fmtD(v.tarikh_luput)}`:''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="badge ${statusBadge}">${statusTxt}</span>
+        <button class="btn-delete-icon" style="position:static" onclick="toggleVoucherAktif('${esc(v.kod)}',${!v.aktif})" title="${v.aktif?'Nyahaktif':'Aktifkan'}">${v.aktif?'⏸️':'▶️'}</button>
+        <button class="btn-delete-icon" style="position:static" onclick="padamVoucher('${esc(v.kod)}')" title="Padam voucher">✕</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-icon">🎟️</div><div class="empty-text">Tiada voucher lagi — tekan "+ Voucher Baru"</div></div>';
+}
+
+function bukaModalVoucher() {
+  document.getElementById('voucher-modal-title').textContent = '🎟️ Voucher Baru';
+  document.getElementById('v-edit-kod').value = '';
+  document.getElementById('v-kod').value = '';
+  document.getElementById('v-kod').disabled = false;
+  document.getElementById('v-jenis').value = 'peratus';
+  document.getElementById('v-nilai').value = '';
+  document.getElementById('v-minima').value = '';
+  document.getElementById('v-had-guna').value = '';
+  document.getElementById('v-luput').value = '';
+  document.getElementById('v-aktif').checked = true;
+  showModal('modal-voucher');
+}
+
+async function saveVoucher() {
+  const kodBaharu = document.getElementById('v-kod').value.trim().toUpperCase();
+  if (!kodBaharu) return toast('Sila isi kod voucher','err');
+  const nilai = +document.getElementById('v-nilai').value || 0;
+  if (nilai <= 0) return toast('Sila isi nilai diskaun','err');
+  const payload = {
+    kod: kodBaharu,
+    jenis_diskaun: document.getElementById('v-jenis').value,
+    nilai_diskaun: nilai,
+    minima_belanja: +document.getElementById('v-minima').value || 0,
+    had_guna: document.getElementById('v-had-guna').value ? +document.getElementById('v-had-guna').value : null,
+    tarikh_luput: document.getElementById('v-luput').value || null,
+    aktif: document.getElementById('v-aktif').checked,
+  };
+  const { error } = await sb.from('baucar').upsert(payload);
+  if (error) return toast('Gagal simpan voucher: '+error.message,'err');
+  toast('Voucher disimpan');
+  closeModal('modal-voucher');
+  renderVoucherList();
+}
+
+async function toggleVoucherAktif(kod, aktif) {
+  const { error } = await sb.from('baucar').update({ aktif }).eq('kod', kod);
+  if (error) return toast('Gagal kemaskini voucher: '+error.message,'err');
+  renderVoucherList();
+}
+
+async function padamVoucher(kod) {
+  if (!confirm(`Padam voucher "${kod}" secara kekal?`)) return;
+  const { error } = await sb.from('baucar').delete().eq('kod', kod);
+  if (error) return toast('Gagal padam voucher: '+error.message,'err');
+  toast('Voucher dipadam');
+  renderVoucherList();
 }
 
 // ════════════════════════════════════════════════════

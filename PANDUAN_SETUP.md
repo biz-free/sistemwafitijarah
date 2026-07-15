@@ -36,6 +36,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 26. `SQL_TAMBAHAN_26.sql` — Galeri gambar kedai + Baucar Bayaran (Payment Voucher) bernombor siri untuk audit LHDN — lihat bahagian "📸 Galeri Gambar Kedai" & "🧾 Baucar Bayaran" di bawah. **Perlu cipta 2 bucket Storage baharu secara manual dahulu** (`kedai-gambar` — Public ON, `baucar-resit` — Public OFF), lihat arahan dalam fail SQL.
 > 27. `SQL_TAMBAHAN_27.sql` — Tambah lajur `butiran` pada `baucar_bayaran` untuk baucar Petrol menyimpan log perjalanan harian (tarikh + km) sebagai bukti sokongan automatik — lihat bahagian "🧾 Baucar Bayaran" di bawah. Tiada bucket Storage baharu diperlukan.
 > 28. `SQL_TAMBAHAN_28.sql` — Consignment: upah pekerja untuk penghantaran consignment kini hanya dikira SELEPAS kedai sahkan jualan sebenar (sokong jualan separa) — lihat bahagian "🤝 Consignment — Upah Ikut Jualan Sebenar" di bawah. Tiada bucket Storage baharu diperlukan.
+> 29. `SQL_TAMBAHAN_29.sql` — Voucher Diskaun untuk storefront B2C (index.html) — pemilik jana kod diskaun (peratus/tetap), pelanggan claim semasa checkout — lihat bahagian "🎟️ Voucher Diskaun" di bawah. Tiada bucket Storage baharu diperlukan.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -323,6 +324,17 @@ Borang **Rekod Baru** (tab Penghantaran) kini ada pilihan kaedah bayaran ke-4: *
 - Baki kuantiti tak terjual **tidak** automatik dipulangkan ke stok gudang — pemilik uruskan pelarasan stok fizikal secara berasingan jika perlu.
 
 **Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_28.sql`. Tiada bucket Storage baharu diperlukan.
+
+### 🎟️ Voucher Diskaun
+Kad **"🎟️ Voucher Diskaun"** (Lebih, pemilik sahaja) — jana kod voucher untuk pelanggan storefront `index.html` guna semasa checkout.
+
+- Tekan **"+ Voucher Baru"** — isi Kod (cth `RAYA10`), Jenis Diskaun (Peratus % atau Tetap RM), Nilai, dan pilihan tambahan: Minima Belanja, Had Guna Keseluruhan, Tarikh Luput. Tekan simpan.
+- Pelanggan masukkan kod dalam ruangan "Kod Voucher" semasa checkout di `index.html`, tekan "✅ Guna Kod" — sistem sahkan kod (aktif, belum luput, cukup minima belanja, belum cecah had guna, no. telefon belum guna kod sama) dan papar diskaun terus dalam jumlah akhir.
+- **Sekali guna sahaja setiap no. telefon** bagi setiap kod — tak boleh guna kod sama dua kali dengan no. telefon sama.
+- Diskaun **disahkan & dikira semula di server** (bukan dipercayai daripada client) semasa pesanan sebenar dihantar — jika kod jadi tak sah antara masa "Guna Kod" ditekan dan pesanan dihantar (cth kod habis had di saat akhir), pesanan akan gagal dengan mesej ralat yang jelas, pelanggan boleh cuba tanpa kod atau kod lain.
+- Butang ⏸️/▶️ pada senarai voucher untuk nyahaktif/aktifkan semula tanpa padam; butang ✕ untuk padam kekal.
+
+**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_29.sql`. Tiada bucket Storage baharu diperlukan.
 
 ### 🔍 SEO Laman E-Dagang (index.html)
 Laman e-dagang kini ada asas SEO yang lebih lengkap — tiada langkah setup diperlukan, semuanya automatik selepas fail dimuat naik semula.
