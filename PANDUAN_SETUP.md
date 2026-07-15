@@ -35,6 +35,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 24. `SQL_TAMBAHAN_24.sql` — Pemilik tugaskan pekerja untuk urus setiap pesanan e-dagang; pekerja tak ditugaskan tak nampak pesanan itu langsung — lihat bahagian "🛒 Tugasan Pesanan E-Dagang" di bawah
 > 26. `SQL_TAMBAHAN_26.sql` — Galeri gambar kedai + Baucar Bayaran (Payment Voucher) bernombor siri untuk audit LHDN — lihat bahagian "📸 Galeri Gambar Kedai" & "🧾 Baucar Bayaran" di bawah. **Perlu cipta 2 bucket Storage baharu secara manual dahulu** (`kedai-gambar` — Public ON, `baucar-resit` — Public OFF), lihat arahan dalam fail SQL.
 > 27. `SQL_TAMBAHAN_27.sql` — Tambah lajur `butiran` pada `baucar_bayaran` untuk baucar Petrol menyimpan log perjalanan harian (tarikh + km) sebagai bukti sokongan automatik — lihat bahagian "🧾 Baucar Bayaran" di bawah. Tiada bucket Storage baharu diperlukan.
+> 28. `SQL_TAMBAHAN_28.sql` — Consignment: upah pekerja untuk penghantaran consignment kini hanya dikira SELEPAS kedai sahkan jualan sebenar (sokong jualan separa) — lihat bahagian "🤝 Consignment — Upah Ikut Jualan Sebenar" di bawah. Tiada bucket Storage baharu diperlukan.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -312,6 +313,16 @@ Setiap bulan, sistem sudah kira secara automatik upah, elaun minyak (petrol) & d
 **Setup wajib sebelum ciri ini berfungsi**: cipta bucket Storage baharu di Supabase Dashboard → Storage → New bucket → nama `baucar-resit` → **Public bucket: OFF** (data kewangan sensitif), kemudian jalankan `SQL_TAMBAHAN_26.sql` dan `SQL_TAMBAHAN_27.sql` (tambah lajur `butiran` untuk log perjalanan petrol — tiada bucket Storage baharu diperlukan untuk #27).
 
 ⚠️ **Nota penting**: Baucar Bayaran ini ialah dokumen dalaman untuk kemudahan audit — ia **bukan** nasihat percukaian rasmi. Sila rujuk akauntan/ejen cukai berdaftar untuk memastikan format & dokumen sokongan yang digunakan memenuhi keperluan LHDN sepenuhnya bagi perniagaan anda.
+
+### 🤝 Consignment — Upah Ikut Jualan Sebenar
+Borang **Rekod Baru** (tab Penghantaran) kini ada pilihan kaedah bayaran ke-4: **"🤝 Consignment"** — untuk barang yang diletak di kedai tanpa bayaran serta-merta, kedai hanya bayar **selepas** ia berjaya dijual kepada pelanggan akhir.
+
+- Sebelum ini, upah pekerja dikira **serta-merta** bila penghantaran direkod, tanpa mengira sama ada kedai betul-betul dah jual barang tu. Kini, untuk penghantaran **Consignment sahaja**, upah **tidak** dikira dalam Laporan Bulanan/Kiraan Upah sehingga jualan disahkan.
+- Penghantaran consignment yang belum disahkan dipaparkan di **Sejarah** (tab Penghantaran) dengan label ungu "🤝 Consignment — belum disahkan jualan (upah belum dikira)".
+- **Pemilik ATAU pekerja yang buat penghantaran asal** boleh sahkan — masukkan kuantiti *sebenar* yang terjual bagi setiap produk (default = kuantiti dihantar, boleh kurangkan jika jualan separa) dan tekan **"✅ Sahkan Jualan"**. Upah hanya dikira untuk kuantiti yang disahkan terjual — baki tak terjual tidak diupah.
+- Baki kuantiti tak terjual **tidak** automatik dipulangkan ke stok gudang — pemilik uruskan pelarasan stok fizikal secara berasingan jika perlu.
+
+**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_28.sql`. Tiada bucket Storage baharu diperlukan.
 
 ### 🔍 SEO Laman E-Dagang (index.html)
 Laman e-dagang kini ada asas SEO yang lebih lengkap — tiada langkah setup diperlukan, semuanya automatik selepas fail dimuat naik semula.

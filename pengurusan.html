@@ -198,6 +198,7 @@
     .bayar-opt.active-terus { border-color:var(--green);color:var(--green);background:#1D7A4A14; }
     .bayar-opt.active-transfer { border-color:var(--teal);color:var(--teal);background:#0E7C8614; }
     .bayar-opt.active-hutang { border-color:var(--red);color:var(--red);background:#C0392B14; }
+    .bayar-opt.active-consignment { border-color:var(--purple);color:var(--purple);background:#6B4EAF14; }
     .bayar-opt.active-jenis { border-color:var(--teal);color:var(--teal);background:#0E7C8614; }
     .bayar-opt.active-rosak { border-color:var(--red);color:var(--red);background:#C0392B14; }
 
@@ -532,10 +533,11 @@
 
         <div class="form-group" id="h-bayar-wrap">
           <label class="form-label">Kaedah Bayaran</label>
-          <div class="bayar-toggle" style="grid-template-columns:repeat(3,1fr)">
+          <div class="bayar-toggle">
             <div class="bayar-opt active-terus" id="opt-terus" onclick="setBayar('terus')">💵 Tunai</div>
             <div class="bayar-opt" id="opt-transfer" onclick="setBayar('transfer')">🏦 Transfer</div>
             <div class="bayar-opt" id="opt-hutang" onclick="setBayar('hutang')">📋 Hutang</div>
+            <div class="bayar-opt" id="opt-consignment" onclick="setBayar('consignment')">🤝 Consignment</div>
           </div>
         </div>
 
@@ -2277,6 +2279,7 @@ function setBayar(v) {
   document.getElementById('opt-terus').className='bayar-opt'+(v==='terus'?' active-terus':'');
   document.getElementById('opt-transfer').className='bayar-opt'+(v==='transfer'?' active-transfer':'');
   document.getElementById('opt-hutang').className='bayar-opt'+(v==='hutang'?' active-hutang':'');
+  document.getElementById('opt-consignment').className='bayar-opt'+(v==='consignment'?' active-consignment':'');
   calcTotal();
 }
 
@@ -2349,8 +2352,8 @@ async function submitHantar() {
     else toast('Gagal dapatkan GPS — jarak direkod sebagai 0km','err');
   }
 
-  const statusBayar = hBayar==='hutang'?'hutang':'selesai';
-  const LABEL_KAEDAH = { terus:'Tunai', transfer:'Online Transfer', hutang:'Catat Hutang' };
+  const statusBayar = (hBayar==='hutang'||hBayar==='consignment')?'hutang':'selesai';
+  const LABEL_KAEDAH = { terus:'Tunai', transfer:'Online Transfer', hutang:'Catat Hutang', consignment:'Consignment' };
   const trx={
     id:genId('T'), tarikh_masa:new Date().toISOString(), kedai_id:kedaiId, nama_pembeli:namaPembeli||null,
     items:hItems.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return{stokId:it.stokId,qty:+it.qty,harga:s.harga_jual}; }),
@@ -2458,15 +2461,46 @@ async function renderSejarah(kedaiId='') {
     }
     const namaDestinasi = namaDestinasiTrx(t);
     const itemsStr=t.items.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `${s.nama} ×${it.qty}`; }).join(' · ');
-    return `<div class="trx-card ${t.status==='hutang'?'hutang':''}">
+    const belumSahkan = t.kaedah_bayaran==='consignment' && !t.jualan_disahkan;
+    const bolehSahkan = currentRole==='pemilik' || t.created_by===DATA.currentUser?.id || t.created_by===DATA.currentUser?.email;
+    return `<div class="trx-card ${t.status==='hutang'?'hutang':''}" ${belumSahkan?'style="border-left-color:var(--purple);background:#6B4EAF0D"':''}>
       <div style="display:flex;justify-content:space-between;margin-bottom:4px">
         <div><div style="font-weight:800;font-size:13px">${esc(namaDestinasi)}</div><div style="font-size:10px;color:var(--muted)">${fmtDT(t.tarikh_masa)} · ${esc(t.resit||'')}</div></div>
         <div style="text-align:right"><div style="font-weight:800;font-size:14px">${fmt(t.jumlah)}</div><span class="badge ${t.status==='selesai'?'badge-green':'badge-red'}">${t.status==='selesai'?'✓ Selesai':'⏳ Hutang'}</span></div>
       </div>
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
       ${t.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(t.nota)}</div>`:''}
+      ${belumSahkan?`
+      <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:6px">🤝 Consignment — belum disahkan jualan (upah belum dikira)</div>
+        ${bolehSahkan?`
+          <div id="jual-items-${t.id}">
+            ${t.items.map((it,i)=>{ const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:4px;font-size:11px">
+              <span>${esc(s.nama)} (dihantar ${it.qty})</span>
+              <input type="number" min="0" max="${it.qty}" value="${it.qty}" id="jual-${t.id}-${i}" class="form-input" style="width:64px;padding:4px 6px;font-size:11px" />
+            </div>`; }).join('')}
+          </div>
+          <button class="btn btn-secondary btn-sm" style="margin-top:4px" onclick="sahkanJualanKonsainan('${t.id}')">✅ Sahkan Jualan</button>
+        `:`<div style="font-size:11px;color:var(--muted)">⏳ Menunggu pengesahan jualan</div>`}
+      </div>`:''}
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-icon">🚚</div><div class="empty-text">Tiada rekod penghantaran</div></div>';
+}
+
+async function sahkanJualanKonsainan(trxId) {
+  const t = DATA.transaksi.find(x=>x.id===trxId);
+  if (!t) return;
+  const itemsTerjual = t.items.map((it,i)=>{
+    const v = document.getElementById(`jual-${trxId}-${i}`);
+    const qty = Math.max(0, Math.min(+v.value||0, +it.qty));
+    return { stokId: it.stokId, qty };
+  });
+  const { error } = await sb.rpc('sahkan_jualan_konsainan', { p_transaksi_id: trxId, p_items_terjual: itemsTerjual });
+  if (error) return toast('Gagal sahkan jualan: '+error.message,'err');
+  toast('Jualan disahkan — upah pekerja akan dikira dalam Laporan/Kiraan Upah bulan ini');
+  await loadData();
+  renderSejarah();
 }
 
 // ════════════════════════════════════════════════════
@@ -3300,7 +3334,9 @@ function saveSettings() {
 // Upah pekerja kini ditetapkan per-produk (medan "upah_pekerja" pada setiap stok),
 // bukan kadar sejagat — jumlah upah 1 penghantaran = SUM(qty x upah_pekerja produk).
 function jumlahUpahTransaksi(t) {
-  return t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(x=>x.id===it.stokId); return s+(+stokItem?.upah_pekerja||0)*it.qty; },0);
+  if (t.kaedah_bayaran==='consignment' && !t.jualan_disahkan) return 0; // belum disahkan jual, tiada upah lagi
+  const items = (t.kaedah_bayaran==='consignment' && t.items_terjual) ? t.items_terjual : t.items;
+  return items.reduce((s,it)=>{ const stokItem=DATA.stok.find(x=>x.id===it.stokId); return s+(+stokItem?.upah_pekerja||0)*it.qty; },0);
 }
 
 // ════════════════════════════════════════════════════
