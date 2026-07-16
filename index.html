@@ -1188,6 +1188,9 @@ async function hantarPesanan() {
   const negeri = document.getElementById('c-negeri').value;
   const nota = document.getElementById('c-nota').value.trim();
   if (!nama || !tel) return toast('Sila isi nama dan no. telefon','err');
+  const telDigits = tel.replace(/\D/g,'');
+  const telNormalized = telDigits.startsWith('60') ? telDigits : telDigits.startsWith('0') ? '60'+telDigits.slice(1) : '60'+telDigits;
+  if (!/^(6011\d{8}|601[02-9]\d{7})$/.test(telNormalized)) return toast('Nombor telefon tidak sah. Sila semak semula (cth: 0123456789)','err');
   if (!alamat || !poskod || !negeri) return toast('Sila lengkapkan alamat penghantaran','err');
   const entries = Object.entries(cart);
   if (!entries.length) return toast('Sila pilih sekurang-kurangnya satu barang','err');
@@ -1247,7 +1250,11 @@ async function hantarPesanan() {
     toast('Sedang menyediakan halaman bayaran...');
     const { data, error: billErr } = await sb.functions.invoke('billplz-create-bill', { body: { orderId: id } });
     if (billErr || data?.error) {
-      toast('Gagal sediakan bayaran online: ' + (data?.error || billErr.message) + '. Sila hubungi kami untuk bantuan.', 'err');
+      let mesejRalat = data?.error || billErr?.message || 'Ralat tidak diketahui';
+      if (billErr?.context?.json) {
+        try { const errBody = await billErr.context.json(); if (errBody?.error) mesejRalat = errBody.error; } catch {}
+      }
+      toast('Gagal sediakan bayaran online: ' + mesejRalat + '. Sila hubungi kami untuk bantuan.', 'err');
       return;
     }
     window.location.href = data.url;

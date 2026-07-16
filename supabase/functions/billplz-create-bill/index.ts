@@ -71,7 +71,14 @@ Deno.serve(async (req) => {
     try { billData = JSON.parse(billBodyText); } catch { /* biar kosong */ }
 
     if (!billRes.ok || !billData?.id || !billData?.url) {
-      return new Response(JSON.stringify({ error: "Gagal cipta bill Billplz", detail: billBodyText }), { status: 502, headers: corsHeaders });
+      const billplzMsg = String(billData?.error?.message?.[0] || "");
+      let mesejRamah = "Gagal sediakan bayaran online. Sila cuba lagi atau hubungi kami.";
+      if (/mobile/i.test(billplzMsg)) {
+        mesejRamah = "Nombor telefon yang dimasukkan tidak sah. Sila semak semula & pastikan lengkap (cth: 0123456789).";
+      } else if (/email/i.test(billplzMsg)) {
+        mesejRamah = "Alamat e-mel yang dimasukkan tidak sah.";
+      }
+      return new Response(JSON.stringify({ error: mesejRamah, detail: billBodyText }), { status: 502, headers: corsHeaders });
     }
 
     const { error: updErr } = await adminClient.from("pesanan_edagang").update({
