@@ -473,7 +473,10 @@
 
     <div id="kedai-servis" style="display:none">
       <div class="card">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Kedai yang lama tidak dihantar stok (≥14 hari) atau tak pernah dilawati langsung.</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px">
+          <div style="font-size:12px;color:var(--muted)">Kedai yang lama tidak dihantar stok (≥7 hari) atau tak pernah dilawati langsung, dikumpulkan ikut route jika ada.</div>
+          <button class="btn btn-secondary btn-sm" id="btn-urus-route" style="flex-shrink:0;display:none" onclick="bukaModalRoute()">🗺️ Urus Route</button>
+        </div>
         <div id="servis-map" style="height:220px;border-radius:12px;border:1.5px solid var(--border);margin-bottom:10px"></div>
         <div id="servis-list"></div>
       </div>
@@ -893,10 +896,8 @@
     <input type="hidden" id="edit-stok-id" />
     <div class="form-group"><label class="form-label">Nama Produk</label><input type="text" class="form-input" id="f-stok-nama" placeholder="cth: Tamar Cocoa 900g" /></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Kategori</label>
-        <select class="form-input" id="f-stok-kat">
-          <option>Minuman</option><option>Kesihatan &amp; Kecantikan</option><option>Makanan</option><option>Lain-lain</option>
-        </select>
+      <div class="form-group"><label class="form-label">Kategori <button type="button" class="btn-link" style="font-size:11px" onclick="bukaModalKategori()">✏️ Urus Kategori</button></label>
+        <select class="form-input" id="f-stok-kat"></select>
       </div>
       <div class="form-group"><label class="form-label">Unit</label>
         <select class="form-input" id="f-stok-unit">
@@ -974,6 +975,28 @@
       <div class="form-group"><label class="form-label">Tarikh Luput Baru</label><input type="date" class="form-input" id="tl-luput-baru" /></div>
     </div>
     <button class="btn btn-primary" style="background:var(--red)" onclick="tukarStokLuput()">🔁 Sahkan Pertukaran</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-kategori">
+  <div class="modal-box">
+    <div class="modal-title">🏷️ Urus Kategori Produk<button class="modal-close" onclick="closeModal('modal-kategori')">✕ Tutup</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <input type="text" class="form-input" id="kategori-nama-baru" placeholder="cth: Snek" />
+      <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="tambahKategori()">+ Tambah</button>
+    </div>
+    <div id="kategori-senarai"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-route">
+  <div class="modal-box">
+    <div class="modal-title">🗺️ Urus Route Kedai<button class="modal-close" onclick="closeModal('modal-route')">✕ Tutup</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <input type="text" class="form-input" id="route-nama-baru" placeholder="cth: Route A" />
+      <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="ciptaRoute()">+ Cipta</button>
+    </div>
+    <div id="route-senarai"></div>
   </div>
 </div>
 
@@ -1563,11 +1586,64 @@ function tambahGambarUrlStok() {
   refreshGambarPreview();
 }
 
-function bukaModalStokBaru() {
+let KATEGORI_STOK_CACHE = [];
+async function renderPilihanKategori(selected) {
+  if (useCloud) {
+    const { data } = await sb.from('kategori_stok').select('*').order('nama');
+    KATEGORI_STOK_CACHE = data || [];
+  }
+  const sel = document.getElementById('f-stok-kat');
+  sel.innerHTML = KATEGORI_STOK_CACHE.map(k=>`<option value="${esc(k.nama)}">${esc(k.nama)}</option>`).join('') || '<option value="Lain-lain">Lain-lain</option>';
+  sel.value = selected && KATEGORI_STOK_CACHE.some(k=>k.nama===selected) ? selected : (KATEGORI_STOK_CACHE[0]?.nama || 'Lain-lain');
+}
+
+function bukaModalKategori() {
+  showModal('modal-kategori');
+  renderSenaraiKategori();
+}
+
+async function renderSenaraiKategori() {
+  const el = document.getElementById('kategori-senarai');
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const { data, error } = await sb.from('kategori_stok').select('*').order('nama');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  KATEGORI_STOK_CACHE = data || [];
+  el.innerHTML = KATEGORI_STOK_CACHE.map(k=>{
+    const bilProduk = DATA.stok.filter(s=>s.kategori===k.nama).length;
+    return `<div class="list-item">
+      <div class="list-item-title">${esc(k.nama)}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:var(--muted)">${bilProduk} produk</span>
+        <button class="btn-delete-icon" style="position:static" onclick="padamKategori('${k.id}','${esc(k.nama)}')" title="Padam kategori">✕</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-text">Tiada kategori lagi</div></div>';
+}
+
+async function tambahKategori() {
+  const nama = document.getElementById('kategori-nama-baru').value.trim();
+  if (!nama) return toast('Sila isi nama kategori','err');
+  const { error } = await sb.from('kategori_stok').insert({ nama });
+  if (error) return toast('Gagal tambah kategori: '+error.message,'err');
+  document.getElementById('kategori-nama-baru').value = '';
+  toast('Kategori ditambah');
+  renderSenaraiKategori();
+}
+
+async function padamKategori(id, nama) {
+  const bilProduk = DATA.stok.filter(s=>s.kategori===nama).length;
+  if (!confirm(`Padam kategori "${nama}" secara kekal?${bilProduk?` (${bilProduk} produk sedia ada kekalkan label ini, cuma tak lagi dalam senarai pilihan)`:''}`)) return;
+  const { error } = await sb.from('kategori_stok').delete().eq('id', id);
+  if (error) return toast('Gagal padam: '+error.message,'err');
+  toast('Kategori dipadam');
+  renderSenaraiKategori();
+}
+
+async function bukaModalStokBaru() {
   document.getElementById('stok-modal-title').textContent='Tambah Produk Baru';
   document.getElementById('edit-stok-id').value='';
   document.getElementById('f-stok-nama').value='';
-  document.getElementById('f-stok-kat').value='Minuman';
+  await renderPilihanKategori();
   document.getElementById('f-stok-unit').value='unit';
   document.getElementById('f-stok-beli').value='';
   document.getElementById('f-stok-jual').value='';
@@ -1596,12 +1672,12 @@ async function padamStok(id, nama) {
   toast(`Produk "${nama}" dipadam`);
 }
 
-function editStok(id) {
+async function editStok(id) {
   const s = DATA.stok.find(s=>s.id===id); if(!s) return;
   document.getElementById('stok-modal-title').textContent='Edit Produk';
   document.getElementById('edit-stok-id').value=id;
   document.getElementById('f-stok-nama').value=s.nama;
-  document.getElementById('f-stok-kat').value=s.kategori||'Minuman';
+  await renderPilihanKategori(s.kategori);
   document.getElementById('f-stok-unit').value=s.unit;
   document.getElementById('f-stok-beli').value=s.harga_beli;
   document.getElementById('f-stok-jual').value=s.harga_jual;
@@ -1784,7 +1860,25 @@ function setKedaiTab(t) {
 
 let servisMap=null, servisMarkers=[];
 
+// Susun kedai ikut jarak GPS berdekatan (nearest-neighbour, mula dari kedai pertama)
+// supaya laluan servis lebih efisien — kedai tanpa lat/lng diletak di hujung.
+function susunRouteIkutJarak(kedaiList) {
+  const ada = kedaiList.filter(k=>k.lat&&k.lng);
+  const takAda = kedaiList.filter(k=>!(k.lat&&k.lng));
+  if (!ada.length) return kedaiList;
+  const hasil = [ada[0]];
+  const baki = ada.slice(1);
+  while (baki.length) {
+    const last = hasil[hasil.length-1];
+    let terdekatIdx = 0, jarakMin = Infinity;
+    baki.forEach((k,i)=>{ const j = haversineKm({lat:last.lat,lng:last.lng},{lat:k.lat,lng:k.lng}); if (j<jarakMin) { jarakMin=j; terdekatIdx=i; } });
+    hasil.push(baki.splice(terdekatIdx,1)[0]);
+  }
+  return [...hasil, ...takAda];
+}
+
 async function renderServisKedai() {
+  document.getElementById('btn-urus-route').style.display = currentRole==='pemilik' ? '' : 'none';
   const el = document.getElementById('servis-list');
   // Pekerja hanya nampak kedai yang PERNAH mereka hantar sendiri
   let kedaiSkop = DATA.kedai;
@@ -1792,9 +1886,11 @@ async function renderServisKedai() {
     const idSaya = new Set(DATA.transaksi.filter(t=>t.created_by===DATA.currentUser.id||t.created_by===DATA.currentUser.email).map(t=>t.kedai_id));
     kedaiSkop = DATA.kedai.filter(k=>idSaya.has(k.id));
   }
-  const perluServis = kedaiSkop.filter(k=>daysSince(k.last_visit)>=14).sort((a,b)=>daysSince(b.last_visit)-daysSince(a.last_visit));
+  const perluServis = kedaiSkop.filter(k=>daysSince(k.last_visit)>=7);
 
-  el.innerHTML = perluServis.map(k=>`
+  const { data: routes } = useCloud ? await sb.from('route_kedai').select('*').order('nama') : { data: [] };
+
+  const kedaiCardHtml = k => `
     <div class="kedai-card lama" style="cursor:pointer" onclick="focusServisKedai('${k.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
         <div style="font-weight:800;font-size:14px">${esc(k.nama)}</div>
@@ -1802,7 +1898,21 @@ async function renderServisKedai() {
       </div>
       <div style="font-size:12px;color:var(--muted)">📍 ${esc(k.alamat)}</div>
       ${k.telefon?`<div style="font-size:12px;color:var(--muted)">📞 ${esc(k.telefon)}</div>`:''}
-    </div>`).join('') || '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Semua kedai baru sahaja dilawati!</div></div>';
+    </div>`;
+
+  let html = '';
+  (routes||[]).forEach(r => {
+    const kedaiRoute = susunRouteIkutJarak(perluServis.filter(k=>k.route_id===r.id));
+    if (!kedaiRoute.length) return;
+    html += `<div style="font-weight:800;font-size:13px;color:var(--teal);margin:14px 0 8px">🗺️ ${esc(r.nama)} (${kedaiRoute.length} kedai)</div>`;
+    html += kedaiRoute.map(kedaiCardHtml).join('');
+  });
+  const takBerRoute = perluServis.filter(k=>!k.route_id).sort((a,b)=>daysSince(b.last_visit)-daysSince(a.last_visit));
+  if (takBerRoute.length) {
+    if (html) html += `<div style="font-weight:800;font-size:13px;color:var(--muted);margin:14px 0 8px">📍 Belum Ada Route</div>`;
+    html += takBerRoute.map(kedaiCardHtml).join('');
+  }
+  el.innerHTML = html || '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Semua kedai baru sahaja dilawati!</div></div>';
 
   // Peta
   const mapEl = document.getElementById('servis-map');
@@ -1824,6 +1934,69 @@ function focusServisKedai(id) {
   servisMap.setCenter({lat:k.lat,lng:k.lng});
   servisMap.setZoom(15);
   document.getElementById('servis-map').scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+// ── Urus Route Kedai (pemilik sahaja) ──
+function bukaModalRoute() {
+  showModal('modal-route');
+  renderSenaraiRoute();
+}
+
+async function renderSenaraiRoute() {
+  const el = document.getElementById('route-senarai');
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const { data: routes, error } = await sb.from('route_kedai').select('*').order('nama');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  el.innerHTML = (routes||[]).map(r => {
+    const kedaiDalamRoute = DATA.kedai.filter(k=>k.route_id===r.id);
+    return `<div class="list-item" style="display:block">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="list-item-title">${esc(r.nama)}</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-secondary btn-sm" onclick="toggleRouteKedaiList('${r.id}')">🏪 ${kedaiDalamRoute.length} kedai</button>
+          <button class="btn-delete-icon" style="position:static" onclick="padamRoute('${r.id}')" title="Padam route">✕</button>
+        </div>
+      </div>
+      <div id="route-kedai-${r.id}" style="display:none;margin-top:8px;max-height:200px;overflow-y:auto;border-top:1px dashed var(--border);padding-top:8px">
+        ${DATA.kedai.map(k=>`<label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;cursor:pointer">
+          <input type="checkbox" style="width:auto" ${k.route_id===r.id?'checked':''} onchange="tetapkanRouteKedai('${k.id}', this.checked?'${r.id}':null)" />
+          ${esc(k.nama)}${k.route_id && k.route_id!==r.id?' <span style="color:var(--muted)">(route lain)</span>':''}
+        </label>`).join('')}
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-icon">🗺️</div><div class="empty-text">Tiada route lagi — cipta satu di atas</div></div>';
+}
+
+function toggleRouteKedaiList(routeId) {
+  const el = document.getElementById('route-kedai-'+routeId);
+  el.style.display = el.style.display==='none' ? '' : 'none';
+}
+
+async function ciptaRoute() {
+  const nama = document.getElementById('route-nama-baru').value.trim();
+  if (!nama) return toast('Sila isi nama route','err');
+  const { error } = await sb.from('route_kedai').insert({ nama });
+  if (error) return toast('Gagal cipta route: '+error.message,'err');
+  document.getElementById('route-nama-baru').value = '';
+  toast('Route dicipta');
+  renderSenaraiRoute();
+}
+
+async function tetapkanRouteKedai(kedaiId, routeId) {
+  const { error } = await sb.from('kedai').update({ route_id: routeId }).eq('id', kedaiId);
+  if (error) return toast('Gagal kemaskini route: '+error.message,'err');
+  await loadData();
+  renderSenaraiRoute();
+  renderServisKedai();
+}
+
+async function padamRoute(id) {
+  if (!confirm('Padam route ini? Kedai dalam route akan jadi "belum ada route".')) return;
+  const { error } = await sb.from('route_kedai').delete().eq('id', id);
+  if (error) return toast('Gagal padam: '+error.message,'err');
+  await loadData();
+  renderSenaraiRoute();
+  renderServisKedai();
 }
 
 function renderKedai(q='') {

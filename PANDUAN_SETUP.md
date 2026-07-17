@@ -39,6 +39,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 29. `SQL_TAMBAHAN_29.sql` — Voucher Diskaun untuk storefront B2C (index.html) — pemilik jana kod diskaun (peratus/tetap), pelanggan claim semasa checkout — lihat bahagian "🎟️ Voucher Diskaun" di bawah. Tiada bucket Storage baharu diperlukan.
 > 30. `SQL_TAMBAHAN_30.sql` — Pembetulan bug: padam transaksi kedai kini pulangkan stok ke gudang pusat & laraskan balik hutang kedai (dulu stok "hilang" apabila transaksi dipadam). Tiada bucket Storage baharu diperlukan.
 > 31. `SQL_TAMBAHAN_31.sql` — "Sertai Ejen" digantikan dengan "Sertai Kami — Servis Marketing" (borang pembekal produk) — lihat bahagian "📦 Sertai Kami — Servis Marketing" di bawah. Tiada bucket Storage baharu diperlukan (guna semula bucket `produk-gambar`).
+> 32. `SQL_TAMBAHAN_32.sql` — Route/Laluan Kedai (tab Kedai → Perlu Servis) + Kategori Produk boleh edit (tab Stok) — lihat bahagian "🗺️ Route/Laluan Kedai" & "🏷️ Kategori Produk Boleh Edit" di bawah. Tiada bucket Storage baharu diperlukan.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -353,6 +354,23 @@ Butang footer **"🤝 Sertai Kami — Servis Marketing"** (dulu "Sertai Ejen") d
 - Permohonan masuk ke kad **"🤝 Permohonan Masuk"** (Lebih, pemilik sahaja) di bawah tab baharu **"📦 Marketing"** — papar semua butiran produk termasuk gambar, sama seperti tab Ejen/Penghantar sedia ada (tukar status Baru/Dihubungi/Diterima/Ditolak, padam).
 
 **Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_31.sql`. Tiada bucket Storage baharu diperlukan.
+
+### 🗺️ Route/Laluan Kedai
+Tab **Kedai → 📍 Perlu Servis** (kedai lama tak dihantar stok, kini ≥7 hari — dulu 14 hari) kini boleh dikumpul mengikut route/laluan.
+
+- Pemilik tekan **"🗺️ Urus Route"** — cipta route (cth "Route A"), tekan butang bilangan kedai untuk buka senarai semak & pilih kedai mana masuk route tu.
+- Dalam senarai "Perlu Servis", kedai dikumpulkan ikut route masing-masing, **disusun automatik ikut jarak GPS berdekatan** (nearest-neighbour) supaya penghantar tak perlu fikir turutan — kedai tanpa route diletak di bawah bahagian "Belum Ada Route".
+- Route boleh dipadam bila-bila masa — kedai dalam route tu akan jadi "belum ada route" secara automatik (tak dipadam).
+
+**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_32.sql`. Tiada bucket Storage baharu diperlukan.
+
+### 🏷️ Kategori Produk Boleh Edit
+Borang Tambah/Edit Produk (tab Stok) — dropdown Kategori kini **boleh diedit** oleh pemilik, bukan senarai tetap dalam kod.
+
+- Tekan **"✏️ Urus Kategori"** di sebelah label Kategori dalam borang produk — tambah kategori baharu atau padam yang tak diperlukan.
+- Padam kategori **tak** jejaskan produk sedia ada yang guna label tu (produk kekal, cuma label itu takkan ada dalam senarai pilihan untuk produk baharu).
+
+**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_32.sql` (sama fail dengan Route/Laluan di atas).
 
 ### 🔍 SEO Laman E-Dagang (index.html)
 Laman e-dagang kini ada asas SEO yang lebih lengkap — tiada langkah setup diperlukan, semuanya automatik selepas fail dimuat naik semula.

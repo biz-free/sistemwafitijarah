@@ -1035,3 +1035,29 @@ BEGIN
 END;
 $$;
 GRANT EXECUTE ON FUNCTION sahkan_jualan_konsainan(text, jsonb) TO authenticated;
+
+-- ═══ Route/Laluan Kedai — kumpulkan kedai kepada laluan bernama untuk memudahkan
+--     penghantar servis kedai lama tak dilawati mengikut laluan (auto-susun ikut jarak GPS) ═══
+CREATE TABLE IF NOT EXISTS route_kedai (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nama text NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE route_kedai ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "staff boleh baca route" ON route_kedai FOR SELECT
+  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()));
+CREATE POLICY "pemilik urus route" ON route_kedai FOR ALL USING (is_pemilik()) WITH CHECK (is_pemilik());
+
+ALTER TABLE kedai ADD COLUMN IF NOT EXISTS route_id uuid REFERENCES route_kedai(id) ON DELETE SET NULL;
+
+-- ═══ Kategori produk boleh edit (medan stok.kategori kekal teks bebas, tak diikat FK) ═══
+CREATE TABLE IF NOT EXISTS kategori_stok (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nama text NOT NULL UNIQUE,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE kategori_stok ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "staff boleh baca kategori" ON kategori_stok FOR SELECT
+  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()));
+CREATE POLICY "pemilik urus kategori" ON kategori_stok FOR ALL USING (is_pemilik()) WITH CHECK (is_pemilik());
+INSERT INTO kategori_stok (nama) VALUES ('Minuman'),('Kesihatan & Kecantikan'),('Makanan'),('Lain-lain') ON CONFLICT (nama) DO NOTHING;
