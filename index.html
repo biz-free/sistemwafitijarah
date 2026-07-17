@@ -75,6 +75,8 @@
     .header-actions { position:absolute;top:18px;right:16px;display:flex;gap:8px;align-items:center; z-index:3; }
     #btn-akaun { background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;backdrop-filter:blur(4px);transition:background 0.15s; }
     #btn-akaun:hover { background:rgba(255,255,255,0.22); }
+    #btn-jejak { position:relative;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.2);color:#fff;width:34px;height:34px;border-radius:8px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);transition:background 0.15s; }
+    #btn-jejak:hover { background:rgba(255,255,255,0.22); }
     #btn-cart-icon { position:relative;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.2);color:#fff;width:34px;height:34px;border-radius:8px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);transition:background 0.15s; }
     #btn-cart-icon:hover { background:rgba(255,255,255,0.22); }
     #cart-icon-badge { position:absolute;top:-6px;right:-6px;background:var(--gold);color:var(--navy);font-size:10px;font-weight:800;border-radius:10px;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--navy); }
@@ -220,6 +222,7 @@
 <header>
   <div class="hero-light"></div>
   <div class="header-actions">
+    <button id="btn-jejak" onclick="bukaModalJejak()" title="Jejak Pesanan">📦</button>
     <button id="btn-cart-icon" onclick="keBayaran()" title="Lihat troli & checkout">🛒<span id="cart-icon-badge" style="display:none">0</span></button>
     <button id="btn-akaun" onclick="bukaAkaunModal()" title="Akaun Saya">👤</button>
   </div>
@@ -510,6 +513,22 @@
     </div>
     <div class="form-group"><label class="form-label">Nota (Optional)</label><textarea class="form-input" id="kj-nota" placeholder="cth: waktu boleh bekerja, pengalaman menghantar, dll"></textarea></div>
     <button class="btn btn-primary" onclick="hantarPermohonan('penghantar')">Hantar Permohonan</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="jejak-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="tutupModalJejak()">✕</button>
+    <div class="section-title">📦 Jejak Pesanan</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Masukkan nombor pesanan anda (cth: ED12345678) untuk semak status & tracking penghantaran.</div>
+    <div class="form-group">
+      <label class="form-label">Nombor Pesanan</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" class="form-input" id="jejak-id" placeholder="cth: ED12345678" onkeydown="if(event.key==='Enter')jejakPesanan()" />
+        <button class="btn btn-primary btn-sm" style="flex-shrink:0;width:auto" onclick="jejakPesanan()">🔍 Jejak</button>
+      </div>
+    </div>
+    <div id="jejak-hasil"></div>
   </div>
 </div>
 
@@ -810,6 +829,44 @@ function kembaliUtama() {
 function keBayaran() {
   if (!Object.keys(cart).length) return toast('Troli anda kosong — pilih produk dahulu','err');
   papar('bayaran');
+}
+
+function bukaModalJejak() { document.getElementById('jejak-modal').classList.add('show'); }
+function tutupModalJejak() { document.getElementById('jejak-modal').classList.remove('show'); }
+
+const JEJAK_STATUS_TXT = { baru:'🆕 Baru', diproses:'⏳ Diproses', dihantar:'🚚 Dihantar', selesai:'✅ Selesai', dibatalkan:'✕ Dibatalkan' };
+const JEJAK_BAYAR_TXT = { menunggu:'⏳ Menunggu Pembayaran', disahkan:'✅ Dibayar', gagal:'❌ Bayaran Gagal' };
+
+async function jejakPesanan() {
+  const id = document.getElementById('jejak-id').value.trim().toUpperCase();
+  const hasilEl = document.getElementById('jejak-hasil');
+  if (!id) return toast('Sila masukkan nombor pesanan','err');
+  hasilEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Mencari...</div>';
+  const { data, error } = await sb.rpc('jejak_pesanan_awam', { p_id: id });
+  const o = data?.[0];
+  if (error || !o) {
+    hasilEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--red);font-size:12px">⚠️ Pesanan tidak dijumpai. Sila semak nombor pesanan.</div>';
+    return;
+  }
+  const itemsStr = (o.items||[]).map(it=>`${esc(it.nama)} ×${it.qty}`).join(', ');
+  hasilEl.innerHTML = `
+    <div style="background:var(--bg);border-radius:10px;padding:14px;margin-top:10px">
+      <div style="font-weight:800;font-size:14px;color:var(--navy)">${esc(o.id)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">${new Date(o.created_at).toLocaleDateString('ms-MY',{day:'2-digit',month:'short',year:'numeric'})}</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <span style="background:#fff;border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700">${JEJAK_STATUS_TXT[o.status_pesanan]||esc(o.status_pesanan)}</span>
+        <span style="background:#fff;border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700">${JEJAK_BAYAR_TXT[o.status_bayaran]||esc(o.status_bayaran)}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text);margin-bottom:6px"><strong>Barang:</strong> ${itemsStr || '—'}</div>
+      <div style="font-size:12px;color:var(--text);margin-bottom:10px"><strong>Jumlah:</strong> ${fmt(o.jumlah)}</div>
+      ${o.nama_kurier ? `
+        <div style="border-top:1px dashed var(--border);padding-top:10px">
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px">🚚 ${esc(o.nama_kurier)}</div>
+          ${o.no_tracking ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">No. Tracking: ${esc(o.no_tracking)}</div>` : ''}
+          ${o.easyparcel_status ? `<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Status Kurier: ${esc(o.easyparcel_status)}</div>` : ''}
+          ${o.easyparcel_tracking_url ? `<a href="${esc(o.easyparcel_tracking_url)}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="text-decoration:none;display:inline-block;width:auto">🔗 Jejak di Laman Kurier</a>` : ''}
+        </div>` : `<div style="font-size:12px;color:var(--muted);border-top:1px dashed var(--border);padding-top:10px">Maklumat penghantaran belum tersedia lagi.</div>`}
+    </div>`;
 }
 
 function bukaAkaunModal() { document.getElementById('akaun-modal').classList.add('show'); }

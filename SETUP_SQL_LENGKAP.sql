@@ -916,6 +916,21 @@ LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
 $$;
 GRANT EXECUTE ON FUNCTION semak_status_pesanan(text) TO anon, authenticated;
 
+-- ═══ Fungsi awam — Jejak Pesanan (ikon header index.html), pelanggan masukkan
+--     nombor pesanan sahaja, dapat status & tracking kurier (sengaja tak
+--     pulangkan telefon/emel/alamat, sama seperti semak_status_pesanan) ═══
+CREATE OR REPLACE FUNCTION jejak_pesanan_awam(p_id text)
+RETURNS TABLE(
+  id text, status_pesanan text, status_bayaran text, items jsonb, jumlah float,
+  nama_kurier text, no_tracking text, easyparcel_tracking_url text, easyparcel_status text,
+  created_at timestamptz
+)
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  SELECT id, status_pesanan, status_bayaran, items, jumlah, nama_kurier, no_tracking, easyparcel_tracking_url, easyparcel_status, created_at
+  FROM pesanan_edagang WHERE id = p_id;
+$$;
+GRANT EXECUTE ON FUNCTION jejak_pesanan_awam(text) TO anon, authenticated;
+
 -- ═══ Pelupusan Stok — pekerja rekod stok bawaan rosak/expired/hilang dari tab Penghantaran ═══
 CREATE TABLE IF NOT EXISTS pelupusan_stok (
   id text PRIMARY KEY,

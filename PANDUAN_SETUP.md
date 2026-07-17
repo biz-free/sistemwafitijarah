@@ -42,6 +42,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 32. `SQL_TAMBAHAN_32.sql` — Route/Laluan Kedai (tab Kedai → Perlu Servis) + Kategori Produk boleh edit (tab Stok) — lihat bahagian "🗺️ Route/Laluan Kedai" & "🏷️ Kategori Produk Boleh Edit" di bawah. Tiada bucket Storage baharu diperlukan.
 > 33. Deploy Edge Function baharu `produk-preview` — preview WhatsApp/Facebook untuk pautan produk dikongsi — lihat bahagian "📱 Preview WhatsApp untuk Pautan Produk" di bawah. Tiada perubahan SQL diperlukan.
 > 34. `SQL_TAMBAHAN_33.sql` — pesan.html: kategori produk, susun semula 2-halaman & kaedah "💳 Bayar Online" (Billplz) — lihat bahagian "🛍️ Kemaskini Borang Pesan (pesan.html)" di bawah. **Perlu deploy semula `billplz-create-bill` & `billplz-webhook`.**
+> 35. `SQL_TAMBAHAN_34.sql` — Ikon "📦 Jejak Pesanan" di header index.html, pelanggan masukkan nombor pesanan untuk semak status & tracking kurier — lihat bahagian "📦 Jejak Pesanan" di bawah. Tiada bucket Storage/Edge Function baharu diperlukan.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -408,6 +409,14 @@ npx supabase functions deploy billplz-create-bill
 npx supabase functions deploy billplz-webhook --no-verify-jwt
 ```
 Tiada secrets baharu diperlukan — guna terus `BILLPLZ_SECRET_KEY`/`BILLPLZ_X_SIGNATURE_KEY`/`BILLPLZ_COLLECTION_ID` yang sedia ada untuk `index.html`.
+
+### 📦 Jejak Pesanan
+Ikon **"📦"** baharu di header `index.html` (sebelah kiri ikon troli 🛒) — pelanggan masukkan **nombor pesanan sahaja** (cth `ED12345678`) untuk lihat status pesanan, status bayaran, senarai barang, jumlah, dan **status tracking kurier** (nama kurier, no. tracking, pautan terus ke laman kurier) sekiranya label EasyParcel sudah dijana.
+
+- Fungsi ni **sengaja tak pulangkan** nombor telefon, e-mel, atau alamat pelanggan — sama seperti had privasi `semak_status_pesanan` sedia ada — jadi selamat untuk sesiapa cuba nombor pesanan (tiada maklumat peribadi terdedah, cuma status).
+- Berfungsi untuk pesanan dari `index.html` (pesanan_edagang) sahaja — pesanan dari `pesan.html` (kedai runcit) tak guna kurier automatik, jadi tak relevan untuk ciri ni.
+
+**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_34.sql`. Tiada bucket Storage/Edge Function baharu diperlukan.
 
 ### 🔍 SEO Laman E-Dagang (index.html)
 Laman e-dagang kini ada asas SEO yang lebih lengkap — tiada langkah setup diperlukan, semuanya automatik selepas fail dimuat naik semula.
