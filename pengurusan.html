@@ -744,13 +744,14 @@
       <div id="voucher-list"></div>
     </div>
 
-    <!-- Permohonan Ejen & Penghantar (pemilik sahaja) -->
+    <!-- Permohonan Ejen, Penghantar & Servis Marketing (pemilik sahaja) -->
     <div class="card" id="pemohon-program-card">
-      <div class="card-title">🤝 Permohonan Ejen & Penghantar</div>
-      <div style="display:flex;gap:6px;margin-bottom:12px">
+      <div class="card-title">🤝 Permohonan Masuk</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
         <button id="pp-tab-semua" onclick="setTabPemohon('semua')" class="btn btn-sm" style="width:auto;background:var(--navy);color:#fff">Semua</button>
         <button id="pp-tab-ejen" onclick="setTabPemohon('ejen')" class="btn btn-sm" style="width:auto;background:transparent;color:var(--muted);border:1.5px solid var(--border)">🤝 Ejen</button>
         <button id="pp-tab-penghantar" onclick="setTabPemohon('penghantar')" class="btn btn-sm" style="width:auto;background:transparent;color:var(--muted);border:1.5px solid var(--border)">🛵 Penghantar</button>
+        <button id="pp-tab-marketing" onclick="setTabPemohon('marketing')" class="btn btn-sm" style="width:auto;background:transparent;color:var(--muted);border:1.5px solid var(--border)">📦 Marketing</button>
       </div>
       <div id="senarai-pemohon"></div>
     </div>
@@ -2351,6 +2352,13 @@ async function submitHantar() {
   if(!peribadi && !kedaiId) return toast('Sila pilih kedai','err');
   if(hItems.some(it=>!it.stokId||+it.qty<1)) return toast('Sila isi semua item','err');
 
+  // Kenal pasti pre-order yang sedang dilayan (jika ada), supaya boleh ditanda 'selesai'
+  // selepas penghantaran berjaya — dua laluan mungkin: kedai belum berdaftar (_PO_ prefix)
+  // atau pre-order yang dah diambil (claim) & kedainya dah berdaftar (aktifPreorderInfo).
+  let preorderIdSelesai = null;
+  if (!peribadi && kedaiId.startsWith('_PO_')) preorderIdSelesai = poDestinasiCache[kedaiId]?.id || null;
+  else if (!peribadi && aktifPreorderInfo && kedaiId === aktifPreorderInfo.kedai_id) preorderIdSelesai = aktifPreorderInfo.id;
+
   // Destinasi dari pre-order yang belum berdaftar sebagai kedai — daftar automatik dahulu
   if (!peribadi && kedaiId.startsWith('_PO_')) {
     const po = poDestinasiCache[kedaiId];
@@ -2407,6 +2415,11 @@ async function submitHantar() {
       p_jumlah_asal:trx.jumlah_asal, p_diskaun_peratus:trx.diskaun_peratus,
     });
     if (error) return toast('Gagal rekod penghantaran: '+error.message,'err');
+    if (preorderIdSelesai) {
+      await sb.from('pre_order').update({ status: 'selesai' }).eq('id', preorderIdSelesai);
+      aktifPreorderInfo = null;
+      renderPreorderInfoBanner();
+    }
     await loadData();
     await loadStokBawaan();
   } else {
@@ -2755,12 +2768,12 @@ async function renderTransaksiKedaiList() {
 }
 
 async function padamTransaksiKedai(id) {
-  if (!confirm('Padam rekod transaksi ini secara kekal? Tindakan ini tidak boleh diundur.')) return;
-  const { error } = await sb.from('transaksi').delete().eq('id', id);
+  if (!confirm('Padam rekod transaksi ini secara kekal? Stok akan dipulangkan ke stok gudang pusat. Tindakan ini tidak boleh diundur.')) return;
+  const { error } = await sb.rpc('padam_transaksi_kedai', { p_id: id });
   if (error) return toast('Gagal padam: '+error.message,'err');
   await loadData();
   renderTransaksiKedaiList();
-  toast('Transaksi dipadam');
+  toast('Transaksi dipadam & stok dipulangkan ke gudang');
 }
 
 // ════════════════════════════════════════════════════
@@ -3599,7 +3612,7 @@ let tabPemohonSemasa = 'semua';
 const PEMOHON_STATUS_TXT = { baru:'🆕 Baru', dihubungi:'📞 Dihubungi', diterima:'✅ Diterima', ditolak:'✕ Ditolak' };
 function setTabPemohon(jenis) {
   tabPemohonSemasa = jenis;
-  ['semua','ejen','penghantar'].forEach(j => {
+  ['semua','ejen','penghantar','marketing'].forEach(j => {
     const btn = document.getElementById(`pp-tab-${j}`);
     btn.style.background = j===jenis ? 'var(--navy)' : 'transparent';
     btn.style.color = j===jenis ? '#fff' : 'var(--muted)';
@@ -3614,12 +3627,18 @@ async function renderSenaraiPemohon() {
   if (tabPemohonSemasa !== 'semua') q = q.eq('jenis', tabPemohonSemasa);
   const { data, error } = await q;
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const IKON_JENIS = { ejen:'🤝', penghantar:'🛵', marketing:'📦' };
   el.innerHTML = (data||[]).map(p => `
     <div class="trx-card">
       <button class="btn-delete-icon" onclick="padamPemohon('${p.id}')" title="Padam permohonan">✕</button>
-      <div style="font-weight:800;font-size:13px">${p.jenis==='ejen'?'🤝':'🛵'} ${esc(p.nama)}</div>
+      <div style="font-weight:800;font-size:13px">${IKON_JENIS[p.jenis]||'📋'} ${esc(p.nama)}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:2px">📞 ${esc(p.telefon)}${p.kawasan?' · 📍 '+esc(p.kawasan):''} · ${fmtDT(p.created_at)}</div>
       ${p.jenis==='penghantar'?`<div style="font-size:11px;margin-top:4px">🏍️ Ada kenderaan: ${p.ada_kenderaan?'Ya':'Tidak'}</div>`:''}
+      ${p.jenis==='marketing'?`
+        <div style="font-size:11px;margin-top:4px;font-weight:700">📦 ${esc(p.nama_produk||'?')}</div>
+        <div style="font-size:11px;color:var(--muted)">${p.harga?`💰 ${fmt(p.harga)}`:''}${p.margin_peratus?` · 📊 Margin ${p.margin_peratus}%`:''}</div>
+        ${p.gambar_url?`<div style="margin-top:6px"><img src="${esc(p.gambar_url)}" onclick="window.open('${esc(p.gambar_url)}','_blank')" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" /></div>`:''}
+      `:''}
       ${p.nota?`<div style="font-size:11px;color:var(--muted);margin-top:4px">📝 ${esc(p.nota)}</div>`:''}
       <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px;margin-top:8px" onchange="kemaskiniPemohon('${p.id}',this.value)">
         <option value="baru" ${p.status==='baru'?'selected':''}>🆕 Baru</option>

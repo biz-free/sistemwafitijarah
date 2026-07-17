@@ -37,6 +37,8 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 27. `SQL_TAMBAHAN_27.sql` — Tambah lajur `butiran` pada `baucar_bayaran` untuk baucar Petrol menyimpan log perjalanan harian (tarikh + km) sebagai bukti sokongan automatik — lihat bahagian "🧾 Baucar Bayaran" di bawah. Tiada bucket Storage baharu diperlukan.
 > 28. `SQL_TAMBAHAN_28.sql` — Consignment: upah pekerja untuk penghantaran consignment kini hanya dikira SELEPAS kedai sahkan jualan sebenar (sokong jualan separa) — lihat bahagian "🤝 Consignment — Upah Ikut Jualan Sebenar" di bawah. Tiada bucket Storage baharu diperlukan.
 > 29. `SQL_TAMBAHAN_29.sql` — Voucher Diskaun untuk storefront B2C (index.html) — pemilik jana kod diskaun (peratus/tetap), pelanggan claim semasa checkout — lihat bahagian "🎟️ Voucher Diskaun" di bawah. Tiada bucket Storage baharu diperlukan.
+> 30. `SQL_TAMBAHAN_30.sql` — Pembetulan bug: padam transaksi kedai kini pulangkan stok ke gudang pusat & laraskan balik hutang kedai (dulu stok "hilang" apabila transaksi dipadam). Tiada bucket Storage baharu diperlukan.
+> 31. `SQL_TAMBAHAN_31.sql` — "Sertai Ejen" digantikan dengan "Sertai Kami — Servis Marketing" (borang pembekal produk) — lihat bahagian "📦 Sertai Kami — Servis Marketing" di bawah. Tiada bucket Storage baharu diperlukan (guna semula bucket `produk-gambar`).
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -335,6 +337,22 @@ Kad **"🎟️ Voucher Diskaun"** (Lebih, pemilik sahaja) — jana kod voucher u
 - Butang ⏸️/▶️ pada senarai voucher untuk nyahaktif/aktifkan semula tanpa padam; butang ✕ untuk padam kekal.
 
 **Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_29.sql`. Tiada bucket Storage baharu diperlukan.
+
+### 🐛 Pembetulan Bug — Pre-Order & Padam Transaksi
+Dua bug diperbetulkan:
+
+- **Pre-order tak ditanda selesai**: sebelum ini, bila pekerja hantar barang untuk pre-order (dari tab Hantar → Pre-Order), rekod pre-order asal kekal "belum selesai" selama-lamanya walaupun barang dah sampai kedai. Kini `submitHantar()` automatik kemaskini status pre-order tu ke `selesai` sebaik penghantaran berjaya direkod.
+- **Stok "hilang" bila padam transaksi**: sebelum ini, memadam rekod transaksi (Tempahan → Transaksi Kedai) hanya buang rekod tanpa pulangkan stok yang telah ditolak semasa penghantaran asal — jadi kuantiti tu hilang terus daripada sistem. Kini padam transaksi guna RPC `padam_transaksi_kedai()` yang **pulangkan stok ke gudang pusat** secara automatik, dan laraskan balik hutang kedai jika transaksi tu berstatus hutang.
+
+**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_30.sql`. Tiada bucket Storage baharu diperlukan.
+
+### 📦 Sertai Kami — Servis Marketing
+Butang footer **"🤝 Sertai Kami — Servis Marketing"** (dulu "Sertai Ejen") di `index.html` kini borang untuk pembekal produk yang mahu Wafi Tijarah bantu jual/pasarkan produk mereka.
+
+- Medan borang: Nama, No. Telefon, Nama Produk, Harga Jualan, Margin Keuntungan (%), Gambar Produk, Nota.
+- Permohonan masuk ke kad **"🤝 Permohonan Masuk"** (Lebih, pemilik sahaja) di bawah tab baharu **"📦 Marketing"** — papar semua butiran produk termasuk gambar, sama seperti tab Ejen/Penghantar sedia ada (tukar status Baru/Dihubungi/Diterima/Ditolak, padam).
+
+**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_31.sql`. Tiada bucket Storage baharu diperlukan.
 
 ### 🔍 SEO Laman E-Dagang (index.html)
 Laman e-dagang kini ada asas SEO yang lebih lengkap — tiada langkah setup diperlukan, semuanya automatik selepas fail dimuat naik semula.

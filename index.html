@@ -391,9 +391,9 @@
 <footer id="site-footer">
   <div class="footer-inner">
     <div class="footer-col">
-      <h4>Maklumat Kedai</h4>
+      <h4>Maklumat Kami</h4>
       <button onclick="bukaTentangKami()">Tentang Kami</button>
-      <button onclick="bukaModalInfo('ejen-modal')">🤝 Sertai Ejen</button>
+      <button onclick="bukaModalInfo('ejen-modal')">🤝 Sertai Kami — Servis Marketing</button>
       <button onclick="bukaModalInfo('kerja-modal')">🛵 Sertai Kami — Kerja Kosong</button>
       <a href="pesan.html">Borang Pesanan Kedai Runcit</a>
       <a href="pengurusan.html">Log Masuk Pengurusan</a>
@@ -479,14 +479,18 @@
 <div class="modal-overlay" id="ejen-modal">
   <div class="modal-box">
     <button class="modal-close" onclick="tutupModalInfo('ejen-modal')">✕</button>
-    <div class="section-title">🤝 Sertai Sebagai Ejen</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Berminat menjadi ejen jualan Wafi Tijarah Trading di kawasan anda? Isi borang ini & pihak kami akan hubungi anda untuk perbincangan lanjut.</div>
-    <div style="font-size:11px;background:#F5F0FF;border:1px solid #6B4EAF;border-radius:10px;padding:10px;margin-bottom:14px">💰 <strong>Komisen:</strong> dikira ikut kadar sama seperti penghantar barang kami (per produk berjaya dihantar/dijual). <strong>Bayaran:</strong> melalui transfer bank/QR.</div>
+    <div class="section-title">🤝 Sertai Kami — Servis Marketing</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Ada produk yang ingin kami bantu jual/pasarkan? Isi borang ringkas ini & pihak kami akan hubungi anda untuk perbincangan lanjut.</div>
     <div class="form-group"><label class="form-label">Nama Penuh</label><input type="text" class="form-input" id="ej-nama" /></div>
     <div class="form-group"><label class="form-label">No. Telefon</label><input type="tel" class="form-input" id="ej-tel" placeholder="01x-xxxxxxx" /></div>
-    <div class="form-group"><label class="form-label">Kawasan/Lokasi</label><input type="text" class="form-input" id="ej-kawasan" placeholder="cth: Alor Setar, Kedah" /></div>
-    <div class="form-group"><label class="form-label">Nota (Optional)</label><textarea class="form-input" id="ej-nota" placeholder="Ceritakan sedikit kenapa anda berminat..."></textarea></div>
-    <button class="btn btn-primary" onclick="hantarPermohonan('ejen')">Hantar Permohonan</button>
+    <div class="form-group"><label class="form-label">Nama Produk</label><input type="text" class="form-input" id="ej-nama-produk" placeholder="cth: Madu Asli Kelulut" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Harga Jualan (RM)</label><input type="number" class="form-input" id="ej-harga" step="0.10" min="0" /></div>
+      <div class="form-group"><label class="form-label">Margin Keuntungan (%)</label><input type="number" class="form-input" id="ej-margin" step="1" min="0" max="100" /></div>
+    </div>
+    <div class="form-group"><label class="form-label">Gambar Produk</label><input type="file" accept="image/*" class="form-input" id="ej-gambar" /></div>
+    <div class="form-group"><label class="form-label">Nota (Optional)</label><textarea class="form-input" id="ej-nota" placeholder="Maklumat tambahan produk anda..."></textarea></div>
+    <button class="btn btn-primary" onclick="hantarPermohonan('marketing')">Hantar Permohonan</button>
   </div>
 </div>
 
@@ -803,26 +807,52 @@ function bukaModalInfo(id) { document.getElementById(id).classList.add('show'); 
 function tutupModalInfo(id) { document.getElementById(id).classList.remove('show'); }
 
 async function hantarPermohonan(jenis) {
-  const prefix = jenis === 'ejen' ? 'ej' : 'kj';
+  const prefix = jenis === 'penghantar' ? 'kj' : 'ej';
   const nama = document.getElementById(`${prefix}-nama`).value.trim();
   const tel = document.getElementById(`${prefix}-tel`).value.trim();
-  const kawasan = document.getElementById(`${prefix}-kawasan`).value.trim();
-  const nota = document.getElementById(`${prefix}-nota`).value.trim();
   if (!nama || !tel) return toast('Sila isi nama dan no. telefon','err');
 
-  const payload = { jenis, nama, telefon: tel, kawasan: kawasan || null, nota: nota || null };
-  if (jenis === 'penghantar') payload.ada_kenderaan = document.getElementById('kj-kenderaan').checked;
+  const payload = { jenis, nama, telefon: tel };
+
+  if (jenis === 'marketing') {
+    const namaProduk = document.getElementById('ej-nama-produk').value.trim();
+    if (!namaProduk) return toast('Sila isi nama produk','err');
+    payload.nama_produk = namaProduk;
+    payload.harga = document.getElementById('ej-harga').value ? +document.getElementById('ej-harga').value : null;
+    payload.margin_peratus = document.getElementById('ej-margin').value ? +document.getElementById('ej-margin').value : null;
+    payload.nota = document.getElementById('ej-nota').value.trim() || null;
+    const fail = document.getElementById('ej-gambar').files[0];
+    if (fail) {
+      const ext = fail.name.split('.').pop();
+      const path = `pemohon-marketing-${Date.now()}.${ext}`;
+      const { error: upErr } = await sb.storage.from('produk-gambar').upload(path, fail);
+      if (upErr) return toast('Gagal muat naik gambar: '+upErr.message,'err');
+      payload.gambar_url = sb.storage.from('produk-gambar').getPublicUrl(path).data.publicUrl;
+    }
+  } else {
+    payload.kawasan = document.getElementById(`${prefix}-kawasan`).value.trim() || null;
+    payload.nota = document.getElementById(`${prefix}-nota`).value.trim() || null;
+    if (jenis === 'penghantar') payload.ada_kenderaan = document.getElementById('kj-kenderaan').checked;
+  }
 
   const { error } = await sb.from('pemohon_program').insert(payload);
   if (error) return toast('Gagal hantar permohonan: '+error.message,'err');
 
-  tutupModalInfo(jenis === 'ejen' ? 'ejen-modal' : 'kerja-modal');
+  tutupModalInfo(jenis === 'penghantar' ? 'kerja-modal' : 'ejen-modal');
   toast('Permohonan diterima! Pihak kami akan hubungi anda tidak lama lagi.');
   document.getElementById(`${prefix}-nama`).value = '';
   document.getElementById(`${prefix}-tel`).value = '';
-  document.getElementById(`${prefix}-kawasan`).value = '';
-  document.getElementById(`${prefix}-nota`).value = '';
-  if (jenis === 'penghantar') document.getElementById('kj-kenderaan').checked = false;
+  if (jenis === 'marketing') {
+    document.getElementById('ej-nama-produk').value = '';
+    document.getElementById('ej-harga').value = '';
+    document.getElementById('ej-margin').value = '';
+    document.getElementById('ej-gambar').value = '';
+    document.getElementById('ej-nota').value = '';
+  } else {
+    document.getElementById(`${prefix}-kawasan`).value = '';
+    document.getElementById(`${prefix}-nota`).value = '';
+    if (jenis === 'penghantar') document.getElementById('kj-kenderaan').checked = false;
+  }
 }
 function tutupAkaunModal() { document.getElementById('akaun-modal').classList.remove('show'); }
 

@@ -355,6 +355,30 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION pulang_stok_pekerja(text, int) TO authenticated;
 
+-- Padam transaksi kedai (pemilik sahaja) — pulangkan stok yang telah ditolak semasa
+-- penghantaran asal ke stok gudang pusat, dan laraskan balik hutang kedai jika berkaitan.
+CREATE OR REPLACE FUNCTION padam_transaksi_kedai(p_id text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_trx RECORD; item jsonb;
+BEGIN
+  IF NOT is_pemilik() THEN RAISE EXCEPTION 'Hanya pemilik boleh padam transaksi'; END IF;
+
+  SELECT * INTO v_trx FROM transaksi WHERE id = p_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Transaksi tidak dijumpai'; END IF;
+
+  FOR item IN SELECT * FROM jsonb_array_elements(v_trx.items) LOOP
+    UPDATE stok SET stok = stok + (item->>'qty')::int WHERE id = item->>'stokId';
+  END LOOP;
+
+  IF v_trx.status = 'hutang' AND v_trx.kedai_id IS NOT NULL THEN
+    UPDATE kedai SET hutang = GREATEST(0, hutang - v_trx.jumlah) WHERE id = v_trx.kedai_id;
+  END IF;
+
+  DELETE FROM transaksi WHERE id = p_id;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION padam_transaksi_kedai(text) TO authenticated;
+
 -- Kemaskini profil sendiri (nama/telefon sahaja — tak dedah medan role)
 CREATE OR REPLACE FUNCTION kemaskini_profil_sendiri(p_nama text, p_telefon text) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -614,12 +638,16 @@ ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS minima_penghantaran_percuma float D
 -- ═══ Permohonan Ejen & Penghantar Part-Time (pesan.html) ═══
 CREATE TABLE IF NOT EXISTS pemohon_program (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  jenis text NOT NULL CHECK (jenis IN ('ejen','penghantar')),
+  jenis text NOT NULL CHECK (jenis IN ('ejen','penghantar','marketing')),
   nama text NOT NULL,
   telefon text NOT NULL,
   kawasan text,
   ada_kenderaan boolean,
   nota text,
+  nama_produk text, -- servis marketing sahaja
+  harga float, -- servis marketing sahaja
+  margin_peratus float, -- servis marketing sahaja
+  gambar_url text, -- servis marketing sahaja
   status text DEFAULT 'baru',
   created_at timestamptz DEFAULT now()
 );
