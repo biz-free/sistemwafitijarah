@@ -732,11 +732,16 @@ function suntikItemListSchema() {
   });
 }
 
-function kongsiLinkProduk(produkId, event) {
+async function kongsiLinkProduk(produkId, event) {
   if (event) event.stopPropagation();
-  const url = urlKongsiProduk(produkId);
+  const urlPanjang = urlKongsiProduk(produkId);
   if (!navigator.clipboard) return toast('Pelayar tidak menyokong salin pautan','err');
-  navigator.clipboard.writeText(url)
+  let urlAkhir = urlPanjang;
+  try {
+    const { data } = await sb.functions.invoke('shorten-link', { body: { url: urlPanjang } });
+    if (data?.url) urlAkhir = data.url;
+  } catch { /* biar guna pautan panjang jika pemendek gagal */ }
+  navigator.clipboard.writeText(urlAkhir)
     .then(()=>toast('Pautan produk disalin — kongsi terus ke WhatsApp!'))
     .catch(()=>toast('Gagal salin pautan','err'));
 }

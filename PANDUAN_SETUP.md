@@ -387,6 +387,12 @@ npx supabase functions deploy produk-preview --no-verify-jwt
 > ⚠️ **MESTI** guna `--no-verify-jwt` — crawler WhatsApp/Facebook hantar permintaan tanpa token log masuk, sama seperti `billplz-webhook`.
 - **Test**: salin pautan kongsi mana-mana produk, tampal di [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) untuk lihat preview yang akan keluar (WhatsApp guna enjin crawler serupa Facebook) — patut papar gambar, nama & harga produk sebenar.
 
+**Pendekkan pautan kongsi**: pautan `produk-preview` agak panjang (nama domain Supabase + laluan) — Edge Function baharu `shorten-link` proksi ke [TinyURL](https://tinyurl.com) (percuma, tiada akaun/API key diperlukan) untuk pendekkan pautan bila butang "🔗" ditekan. Kalau pemendekan gagal (cth TinyURL down), sistem automatik guna pautan panjang asal — preview WhatsApp tetap berfungsi sama ada pautan pendek atau panjang.
+```
+npx supabase functions deploy shorten-link
+```
+(Tak perlu `--no-verify-jwt` — fungsi ni dipanggil dari kod laman dengan token biasa, bukan crawler luar.)
+
 ### 🛍️ Kemaskini Borang Pesan (pesan.html)
 Borang repeat-order kedai runcit (`pesan.html`) dikemaskini dengan 3 perkara:
 
