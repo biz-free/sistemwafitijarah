@@ -87,6 +87,8 @@ CREATE TABLE pre_order (
   bayar_tarikh date,
   bayar_masa text,
   bukti_bayaran_url text,
+  billplz_bill_id text,
+  status_bayaran text DEFAULT 'menunggu',
   created_at timestamptz DEFAULT now()
 );
 
@@ -907,7 +909,10 @@ GRANT EXECUTE ON FUNCTION easyparcel_status() TO authenticated;
 CREATE OR REPLACE FUNCTION semak_status_pesanan(p_id text)
 RETURNS TABLE(status_bayaran text, status_pesanan text, jumlah float)
 LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
-  SELECT status_bayaran, status_pesanan, jumlah FROM pesanan_edagang WHERE id = p_id;
+  SELECT status_bayaran, status_pesanan, jumlah FROM pesanan_edagang WHERE id = p_id
+  UNION ALL
+  SELECT status_bayaran, status, jumlah_selepas_diskaun FROM pre_order WHERE id = p_id
+  LIMIT 1;
 $$;
 GRANT EXECUTE ON FUNCTION semak_status_pesanan(text) TO anon, authenticated;
 

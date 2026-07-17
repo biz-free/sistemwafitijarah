@@ -68,17 +68,22 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminClient = createClient(supabaseUrl, serviceKey);
 
-    const { data: order } = await adminClient.from("pesanan_edagang").select("id, status_bayaran").eq("billplz_bill_id", fields["id"]).single();
+    let orderTable = "pesanan_edagang";
+    let { data: order } = await adminClient.from("pesanan_edagang").select("id, status_bayaran").eq("billplz_bill_id", fields["id"]).single();
+    if (!order) {
+      orderTable = "pre_order";
+      ({ data: order } = await adminClient.from("pre_order").select("id, status_bayaran").eq("billplz_bill_id", fields["id"]).single());
+    }
     if (!order) {
       console.error("Billplz webhook: tiada pesanan sepadan dengan bill_id", fields["id"]);
       return new Response("OK", { status: 200 }); // tiada apa nak retry — bukan ralat pihak kita
     }
 
     const dibayar = fields["paid"] === "true";
-    const { error: updErr } = await adminClient.from("pesanan_edagang").update({
-      status_bayaran: dibayar ? "disahkan" : "gagal",
-      updated_at: new Date().toISOString(),
-    }).eq("id", order.id);
+    const kemaskini: Record<string, unknown> = orderTable === "pre_order"
+      ? { status_bayaran: dibayar ? "disahkan" : "gagal" }
+      : { status_bayaran: dibayar ? "disahkan" : "gagal", updated_at: new Date().toISOString() };
+    const { error: updErr } = await adminClient.from(orderTable).update(kemaskini).eq("id", order.id);
 
     if (updErr) {
       console.error("Billplz webhook: gagal kemaskini pesanan", updErr);

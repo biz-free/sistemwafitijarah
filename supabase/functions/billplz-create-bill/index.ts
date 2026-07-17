@@ -1,8 +1,10 @@
 // Edge Function: billplz-create-bill
-// Dipanggil dari checkout (index.html) selepas pesanan disimpan, bila
-// pelanggan pilih "Bayar Online (FPX/Kad)" — cipta Bill Billplz & pulangkan
-// URL bayaran untuk redirect pelanggan. Secret Key Billplz kekal di server
+// Dipanggil dari checkout (index.html DAN pesan.html) selepas pesanan disimpan,
+// bila pelanggan/kedai pilih "Bayar Online (FPX/Kad)" — cipta Bill Billplz &
+// pulangkan URL bayaran untuk redirect. Secret Key Billplz kekal di server
 // (service_role/secret sahaja) — tidak pernah masuk kod client-side.
+// Sokong DUA jenis pesanan: pesanan_edagang (index.html) & pre_order (pesan.html)
+// — cuba pesanan_edagang dahulu, fallback ke pre_order jika tiada padanan.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -12,6 +14,7 @@ const corsHeaders = {
 };
 
 const REDIRECT_URL_ASAS = "https://www.wafitijarahtrading.com/";
+const REDIRECT_URL_PESAN = "https://www.wafitijarahtrading.com/pesan.html";
 const CALLBACK_URL = "https://smepriytkoxkmpvjvvzq.supabase.co/functions/v1/billplz-webhook";
 
 function telefonBillplz(raw: string | null | undefined): string {
@@ -34,7 +37,12 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminClient = createClient(supabaseUrl, serviceKey);
 
-    const { data: order, error: orderErr } = await adminClient.from("pesanan_edagang").select("*").eq("id", orderId).single();
+    let orderTable = "pesanan_edagang";
+    let { data: order, error: orderErr } = await adminClient.from("pesanan_edagang").select("*").eq("id", orderId).single();
+    if (orderErr || !order) {
+      orderTable = "pre_order";
+      ({ data: order, error: orderErr } = await adminClient.from("pre_order").select("*").eq("id", orderId).single());
+    }
     if (orderErr || !order) {
       return new Response(JSON.stringify({ error: "Pesanan tidak dijumpai" }), { status: 404, headers: corsHeaders });
     }
@@ -47,14 +55,20 @@ Deno.serve(async (req) => {
     const collectionId = Deno.env.get("BILLPLZ_COLLECTION_ID")!;
     const basicAuth = btoa(`${secretKey}:`);
 
+    const nama = orderTable === "pre_order" ? order.kedai_nama : order.pelanggan_nama;
+    const telefon = orderTable === "pre_order" ? order.kedai_telefon : order.pelanggan_telefon;
+    const emel = orderTable === "pre_order" ? null : order.pelanggan_email;
+    const jumlah = orderTable === "pre_order" ? order.jumlah_selepas_diskaun : order.jumlah;
+    const redirectAsas = orderTable === "pre_order" ? REDIRECT_URL_PESAN : REDIRECT_URL_ASAS;
+
     const body = new URLSearchParams({
       collection_id: collectionId,
-      email: order.pelanggan_email || "pelanggan@wafitijarahtrading.com",
-      mobile: telefonBillplz(order.pelanggan_telefon),
-      name: order.pelanggan_nama,
-      amount: String(Math.round(order.jumlah * 100)),
+      email: emel || "pelanggan@wafitijarahtrading.com",
+      mobile: telefonBillplz(telefon),
+      name: nama,
+      amount: String(Math.round(jumlah * 100)),
       callback_url: CALLBACK_URL,
-      redirect_url: `${REDIRECT_URL_ASAS}?billplz_pesanan=${encodeURIComponent(orderId)}`,
+      redirect_url: `${redirectAsas}?billplz_pesanan=${encodeURIComponent(orderId)}`,
       description: `Pesanan ${orderId} - Wafi Tijarah Trading`,
       reference_1_label: "Pesanan",
       reference_1: orderId,
@@ -81,11 +95,10 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: mesejRamah, detail: billBodyText }), { status: 502, headers: corsHeaders });
     }
 
-    const { error: updErr } = await adminClient.from("pesanan_edagang").update({
-      billplz_bill_id: billData.id,
-      kaedah_bayaran: "billplz",
-      updated_at: new Date().toISOString(),
-    }).eq("id", orderId);
+    const kemaskini: Record<string, unknown> = orderTable === "pre_order"
+      ? { billplz_bill_id: billData.id, bayar_metod: "billplz" }
+      : { billplz_bill_id: billData.id, kaedah_bayaran: "billplz", updated_at: new Date().toISOString() };
+    const { error: updErr } = await adminClient.from(orderTable).update(kemaskini).eq("id", orderId);
     if (updErr) {
       return new Response(JSON.stringify({ error: "Bill dicipta tapi gagal simpan ke pesanan: " + updErr.message }), { status: 500, headers: corsHeaders });
     }

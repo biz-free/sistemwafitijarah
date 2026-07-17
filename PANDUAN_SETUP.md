@@ -41,6 +41,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 31. `SQL_TAMBAHAN_31.sql` — "Sertai Ejen" digantikan dengan "Sertai Kami — Servis Marketing" (borang pembekal produk) — lihat bahagian "📦 Sertai Kami — Servis Marketing" di bawah. Tiada bucket Storage baharu diperlukan (guna semula bucket `produk-gambar`).
 > 32. `SQL_TAMBAHAN_32.sql` — Route/Laluan Kedai (tab Kedai → Perlu Servis) + Kategori Produk boleh edit (tab Stok) — lihat bahagian "🗺️ Route/Laluan Kedai" & "🏷️ Kategori Produk Boleh Edit" di bawah. Tiada bucket Storage baharu diperlukan.
 > 33. Deploy Edge Function baharu `produk-preview` — preview WhatsApp/Facebook untuk pautan produk dikongsi — lihat bahagian "📱 Preview WhatsApp untuk Pautan Produk" di bawah. Tiada perubahan SQL diperlukan.
+> 34. `SQL_TAMBAHAN_33.sql` — pesan.html: kategori produk, susun semula 2-halaman & kaedah "💳 Bayar Online" (Billplz) — lihat bahagian "🛍️ Kemaskini Borang Pesan (pesan.html)" di bawah. **Perlu deploy semula `billplz-create-bill` & `billplz-webhook`.**
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -385,6 +386,22 @@ npx supabase functions deploy produk-preview --no-verify-jwt
 ```
 > ⚠️ **MESTI** guna `--no-verify-jwt` — crawler WhatsApp/Facebook hantar permintaan tanpa token log masuk, sama seperti `billplz-webhook`.
 - **Test**: salin pautan kongsi mana-mana produk, tampal di [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) untuk lihat preview yang akan keluar (WhatsApp guna enjin crawler serupa Facebook) — patut papar gambar, nama & harga produk sebenar.
+
+### 🛍️ Kemaskini Borang Pesan (pesan.html)
+Borang repeat-order kedai runcit (`pesan.html`) dikemaskini dengan 3 perkara:
+
+1. **Kategori produk** — cip kategori ("Semua", "Minuman", dll., ikut kategori sedia ada dalam Stok) di atas grid produk untuk kedai tapis dengan mudah.
+2. **Susun semula 2-halaman** — Halaman 1 (Pilih Barang) dan Halaman 2 (Kaedah Bayaran + Maklumat Kedai) kini berasingan, dengan bar troli di bawah memaparkan butang **"CHECKOUT ➜"** untuk teruskan, sama seperti `index.html`.
+3. **Kaedah bayaran "💳 Bayar Online"** — Billplz automatik (FPX/kad), sama seperti `index.html`. Kedai runcit dibawa terus ke halaman bayaran Billplz selepas hantar pesanan, status disahkan automatik melalui webhook.
+
+**Setup wajib sebelum "Bayar Online" berfungsi**:
+1. Jalankan `SQL_TAMBAHAN_33.sql` (tambah lajur `billplz_bill_id`/`status_bayaran` pada `pre_order`, kemaskini fungsi `semak_status_pesanan` supaya sokong kedua-dua jadual pesanan).
+2. **Deploy semula** 2 Edge Function sedia ada (kini sokong `pesanan_edagang` DAN `pre_order`):
+```
+npx supabase functions deploy billplz-create-bill
+npx supabase functions deploy billplz-webhook --no-verify-jwt
+```
+Tiada secrets baharu diperlukan — guna terus `BILLPLZ_SECRET_KEY`/`BILLPLZ_X_SIGNATURE_KEY`/`BILLPLZ_COLLECTION_ID` yang sedia ada untuk `index.html`.
 
 ### 🔍 SEO Laman E-Dagang (index.html)
 Laman e-dagang kini ada asas SEO yang lebih lengkap — tiada langkah setup diperlukan, semuanya automatik selepas fail dimuat naik semula.
