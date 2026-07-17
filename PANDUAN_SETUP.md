@@ -43,6 +43,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 33. Deploy Edge Function baharu `produk-preview` — preview WhatsApp/Facebook untuk pautan produk dikongsi — lihat bahagian "📱 Preview WhatsApp untuk Pautan Produk" di bawah. Tiada perubahan SQL diperlukan.
 > 34. `SQL_TAMBAHAN_33.sql` — pesan.html: kategori produk, susun semula 2-halaman & kaedah "💳 Bayar Online" (Billplz) — lihat bahagian "🛍️ Kemaskini Borang Pesan (pesan.html)" di bawah. **Perlu deploy semula `billplz-create-bill` & `billplz-webhook`.**
 > 35. `SQL_TAMBAHAN_34.sql` — Ikon "📦 Jejak Pesanan" di header index.html, pelanggan masukkan nombor pesanan untuk semak status & tracking kurier — lihat bahagian "📦 Jejak Pesanan" di bawah. Tiada bucket Storage/Edge Function baharu diperlukan.
+> 36. Deploy Edge Function baharu `easyparcel-track-order` — status kurier LIVE (on-demand) dalam modal "📦 Jejak Pesanan" bila pembeli tekan butang "🔍 Jejak" — lihat bahagian "📦 Jejak Pesanan" di bawah (kemaskini). Tiada perubahan SQL diperlukan.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -417,6 +418,17 @@ Ikon **"📦"** baharu di header `index.html` (sebelah kiri ikon troli 🛒) —
 - Berfungsi untuk pesanan dari `index.html` (pesanan_edagang) sahaja — pesanan dari `pesan.html` (kedai runcit) tak guna kurier automatik, jadi tak relevan untuk ciri ni.
 
 **Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_34.sql`. Tiada bucket Storage/Edge Function baharu diperlukan.
+
+#### 🔴 Status Kurier LIVE (on-demand)
+Bila pembeli tekan butang **"🔍 Jejak"**, selain status tersimpan dalam pangkalan data, sistem juga cuba panggil Edge Function `easyparcel-track-order` untuk dapatkan status **terkini terus dari EasyParcel** (bukan status "beku" yang direkod sekali sahaja semasa label dijana). Jika panggilan berjaya, baris "Status Kurier" bertukar kepada status live; jika gagal (cth kuota API, endpoint tak sepadan, dsb.), baris tu senyap kembali kepada status tersimpan sedia ada tanpa sebarang mesej ralat kepada pembeli — pautan "🔗 Jejak di Laman Kurier" sentiasa tersedia sebagai jalan fallback.
+
+⚠️ **Endpoint status EasyParcel yang digunakan (`shipment/track_orders`) dianggarkan** mengikut corak URL `shipment/submit_orders` yang sudah disahkan berfungsi (Buat Label) — bukan disahkan 100% daripada dokumentasi rasmi. Jika status live tak pernah keluar selepas deploy, semak log fungsi (`npx supabase functions logs easyparcel-track-order`) — baris `EasyParcel track_orders status: ### body: {...}` akan tunjuk respons ralat sebenar EasyParcel untuk laraskan endpoint/parameter yang betul.
+
+```
+npx supabase functions deploy easyparcel-track-order
+```
+
+**Setup wajib sebelum ciri ini berfungsi**: deploy Edge Function `easyparcel-track-order` (arahan di atas). Guna semula secret `EASYPARCEL_CLIENT_ID`/`EASYPARCEL_CLIENT_SECRET` sedia ada — tiada secret baharu diperlukan.
 
 ### 🔍 SEO Laman E-Dagang (index.html)
 Laman e-dagang kini ada asas SEO yang lebih lengkap — tiada langkah setup diperlukan, semuanya automatik selepas fail dimuat naik semula.

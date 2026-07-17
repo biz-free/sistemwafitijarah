@@ -863,10 +863,26 @@ async function jejakPesanan() {
         <div style="border-top:1px dashed var(--border);padding-top:10px">
           <div style="font-size:12px;font-weight:700;margin-bottom:4px">🚚 ${esc(o.nama_kurier)}</div>
           ${o.no_tracking ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">No. Tracking: ${esc(o.no_tracking)}</div>` : ''}
-          ${o.easyparcel_status ? `<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Status Kurier: ${esc(o.easyparcel_status)}</div>` : ''}
+          <div id="jejak-live-status" style="font-size:12px;color:var(--muted);margin-bottom:8px">${o.easyparcel_status ? `Status Kurier: ${esc(o.easyparcel_status)}` : ''}${o.no_tracking && !['selesai','dibatalkan'].includes(o.status_pesanan) ? ' <span style="opacity:.7">(menyemak terkini...)</span>' : ''}</div>
           ${o.easyparcel_tracking_url ? `<a href="${esc(o.easyparcel_tracking_url)}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="text-decoration:none;display:inline-block;width:auto">🔗 Jejak di Laman Kurier</a>` : ''}
         </div>` : `<div style="font-size:12px;color:var(--muted);border-top:1px dashed var(--border);padding-top:10px">Maklumat penghantaran belum tersedia lagi.</div>`}
     </div>`;
+
+  if (o.no_tracking && !['selesai','dibatalkan'].includes(o.status_pesanan)) {
+    semakStatusLiveKurier(o.id);
+  }
+}
+
+async function semakStatusLiveKurier(orderId) {
+  const liveEl = document.getElementById('jejak-live-status');
+  if (!liveEl) return;
+  try {
+    const { data, error } = await sb.functions.invoke('easyparcel-track-order', { body: { orderId } });
+    if (error || !data?.status) { liveEl.innerHTML = liveEl.innerHTML.replace(/<span[^>]*>\(menyemak terkini\.\.\.\)<\/span>/, ''); return; }
+    liveEl.innerHTML = `Status Kurier Terkini: <strong>${esc(data.status)}</strong>`;
+  } catch (e) {
+    liveEl.innerHTML = liveEl.innerHTML.replace(/<span[^>]*>\(menyemak terkini\.\.\.\)<\/span>/, '');
+  }
 }
 
 function bukaAkaunModal() { document.getElementById('akaun-modal').classList.add('show'); }
