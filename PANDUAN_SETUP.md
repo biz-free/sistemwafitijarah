@@ -40,6 +40,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 30. `SQL_TAMBAHAN_30.sql` — Pembetulan bug: padam transaksi kedai kini pulangkan stok ke gudang pusat & laraskan balik hutang kedai (dulu stok "hilang" apabila transaksi dipadam). Tiada bucket Storage baharu diperlukan.
 > 31. `SQL_TAMBAHAN_31.sql` — "Sertai Ejen" digantikan dengan "Sertai Kami — Servis Marketing" (borang pembekal produk) — lihat bahagian "📦 Sertai Kami — Servis Marketing" di bawah. Tiada bucket Storage baharu diperlukan (guna semula bucket `produk-gambar`).
 > 32. `SQL_TAMBAHAN_32.sql` — Route/Laluan Kedai (tab Kedai → Perlu Servis) + Kategori Produk boleh edit (tab Stok) — lihat bahagian "🗺️ Route/Laluan Kedai" & "🏷️ Kategori Produk Boleh Edit" di bawah. Tiada bucket Storage baharu diperlukan.
+> 33. Deploy Edge Function baharu `produk-preview` — preview WhatsApp/Facebook untuk pautan produk dikongsi — lihat bahagian "📱 Preview WhatsApp untuk Pautan Produk" di bawah. Tiada perubahan SQL diperlukan.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -371,6 +372,19 @@ Borang Tambah/Edit Produk (tab Stok) — dropdown Kategori kini **boleh diedit**
 - Padam kategori **tak** jejaskan produk sedia ada yang guna label tu (produk kekal, cuma label itu takkan ada dalam senarai pilihan untuk produk baharu).
 
 **Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_32.sql` (sama fail dengan Route/Laluan di atas).
+
+### 📱 Preview WhatsApp untuk Pautan Produk
+Sebelum ini, bila pautan produk (`?produk=S009`) dikongsi ke WhatsApp, preview yang keluar generik (bukan gambar/nama/harga produk sebenar) — sebab WhatsApp "baca" pautan tanpa jalankan JavaScript, jadi meta-tag yang diset oleh `index.html` (selepas page dimuatkan) tak pernah nampak oleh WhatsApp.
+
+**Penyelesaian**: Edge Function baharu `produk-preview` kesan bila crawler media sosial (WhatsApp/Facebook/Telegram/LinkedIn/dll.) akses pautan, dan balas terus dengan HTML + meta-tag Open Graph **sebenar** (gambar, nama, harga) dari server — tanpa perlu JavaScript. Pelawat biasa (bukan crawler) terus di-redirect ke laman produk sebenar dalam masa < 1 saat.
+
+- Butang **"🔗"** (kongsi) pada setiap produk kini salin pautan dalam format `https://<project>.supabase.co/functions/v1/produk-preview?id=<kod produk>` — bukan pautan `index.html?produk=...` terus.
+- Deploy Edge Function ni (dari folder `wafi-app`):
+```
+npx supabase functions deploy produk-preview --no-verify-jwt
+```
+> ⚠️ **MESTI** guna `--no-verify-jwt` — crawler WhatsApp/Facebook hantar permintaan tanpa token log masuk, sama seperti `billplz-webhook`.
+- **Test**: salin pautan kongsi mana-mana produk, tampal di [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) untuk lihat preview yang akan keluar (WhatsApp guna enjin crawler serupa Facebook) — patut papar gambar, nama & harga produk sebenar.
 
 ### 🔍 SEO Laman E-Dagang (index.html)
 Laman e-dagang kini ada asas SEO yang lebih lengkap — tiada langkah setup diperlukan, semuanya automatik selepas fail dimuat naik semula.

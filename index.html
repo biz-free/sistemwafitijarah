@@ -671,6 +671,13 @@ function urlProduk(produkId) {
   return location.origin + location.pathname + '?produk=' + encodeURIComponent(produkId);
 }
 
+// Pautan khas untuk DIKONGSI (WhatsApp/Facebook/dll.) — laluan Edge Function yang
+// balas dengan meta-tag OG sebenar untuk crawler bot media sosial (yang tak jalankan
+// JavaScript), kemudian auto-redirect pelawat biasa ke halaman produk sebenar.
+function urlKongsiProduk(produkId) {
+  return SUPABASE_URL + '/functions/v1/produk-preview?id=' + encodeURIComponent(produkId);
+}
+
 function kemaskiniSEOProduk(produkId) {
   const p = PRODUK.find(x=>x.id===produkId);
   if (!p) return;
@@ -727,7 +734,7 @@ function suntikItemListSchema() {
 
 function kongsiLinkProduk(produkId, event) {
   if (event) event.stopPropagation();
-  const url = urlProduk(produkId);
+  const url = urlKongsiProduk(produkId);
   if (!navigator.clipboard) return toast('Pelayar tidak menyokong salin pautan','err');
   navigator.clipboard.writeText(url)
     .then(()=>toast('Pautan produk disalin — kongsi terus ke WhatsApp!'))
