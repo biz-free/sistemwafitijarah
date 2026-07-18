@@ -690,11 +690,14 @@ function urlProduk(produkId) {
   return location.origin + location.pathname + '?produk=' + encodeURIComponent(produkId);
 }
 
-// Pautan khas untuk DIKONGSI (WhatsApp/Facebook/dll.) — laluan Edge Function yang
-// balas dengan meta-tag OG sebenar untuk crawler bot media sosial (yang tak jalankan
-// JavaScript), kemudian auto-redirect pelawat biasa ke halaman produk sebenar.
+// Pautan khas untuk DIKONGSI (WhatsApp/Facebook/Gmail/dll.) — fail HTML statik yang
+// dijana & di-commit ke GitHub Pages (produk-preview-gen) bila produk disimpan di
+// pengurusan.html, dengan meta-tag OG sebenar untuk crawler bot. GitHub Pages sajikan
+// .html dengan Content-Type betul (tak macam Supabase yang sengaja tukar text/html
+// ke text/plain), jadi crawler ketat macam Gmail pun boleh baca. Fail tu juga
+// auto-redirect pelawat biasa ke halaman produk sebenar (meta refresh).
 function urlKongsiProduk(produkId) {
-  return SUPABASE_URL + '/functions/v1/produk-preview?id=' + encodeURIComponent(produkId);
+  return location.origin + '/preview/' + encodeURIComponent(produkId) + '.html';
 }
 
 function kemaskiniSEOProduk(produkId) {

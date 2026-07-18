@@ -44,6 +44,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 34. `SQL_TAMBAHAN_33.sql` — pesan.html: kategori produk, susun semula 2-halaman & kaedah "💳 Bayar Online" (Billplz) — lihat bahagian "🛍️ Kemaskini Borang Pesan (pesan.html)" di bawah. **Perlu deploy semula `billplz-create-bill` & `billplz-webhook`.**
 > 35. `SQL_TAMBAHAN_34.sql` — Ikon "📦 Jejak Pesanan" di header index.html, pelanggan masukkan nombor pesanan untuk semak status & tracking kurier — lihat bahagian "📦 Jejak Pesanan" di bawah. Tiada bucket Storage/Edge Function baharu diperlukan.
 > 36. Deploy Edge Function baharu `easyparcel-track-order` — status kurier LIVE (on-demand) dalam modal "📦 Jejak Pesanan" bila pembeli tekan butang "🔍 Jejak" — lihat bahagian "📦 Jejak Pesanan" di bawah (kemaskini). Tiada perubahan SQL diperlukan.
+> 37. Deploy Edge Function baharu `produk-preview-gen` + set secret `GITHUB_TOKEN` — pratonton WhatsApp/Gmail untuk pautan produk kini commit fail HTML statik terus ke GitHub Pages (bukan sajikan dari Supabase, yang sengaja tak boleh sajikan HTML dengan Content-Type betul) — lihat bahagian "📱 Preview WhatsApp/Gmail untuk Pautan Produk" di bawah (kemaskini besar). Tiada perubahan SQL diperlukan.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -376,19 +377,28 @@ Borang Tambah/Edit Produk (tab Stok) — dropdown Kategori kini **boleh diedit**
 
 **Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_32.sql` (sama fail dengan Route/Laluan di atas).
 
-### 📱 Preview WhatsApp untuk Pautan Produk
+### 📱 Preview WhatsApp/Gmail untuk Pautan Produk
 Sebelum ini, bila pautan produk (`?produk=S009`) dikongsi ke WhatsApp, preview yang keluar generik (bukan gambar/nama/harga produk sebenar) — sebab WhatsApp "baca" pautan tanpa jalankan JavaScript, jadi meta-tag yang diset oleh `index.html` (selepas page dimuatkan) tak pernah nampak oleh WhatsApp.
 
-**Penyelesaian**: Edge Function baharu `produk-preview` balas dengan HTML + meta-tag Open Graph **sebenar** (gambar, nama, harga) dari server — tanpa perlu JavaScript — supaya crawler media sosial (WhatsApp/Facebook/Telegram/LinkedIn/Gmail/dll.) sentiasa nampak maklumat produk sebenar. Pelawat biasa terus dibawa ke laman produk sebenar dalam masa yang tak ketara guna `<meta http-equiv="refresh">`.
+> ⚠️ **Sejarah percubaan (penting untuk elak ulang kesilapan sama)**:
+> 1. Edge Function `produk-preview` cuba KESAN dulu sama ada permintaan datang dari crawler (semak User-Agent) sebelum balas meta-tag. Masalah: senarai UA crawler tak lengkap (Gmail tak sepadan), jadi crawler tak dikenali dapat 302 kosong (tiada meta-tag).
+> 2. Dibetulkan supaya `produk-preview` balas meta-tag OG kepada SEMUA permintaan (tiada lagi kesan UA). Tapi preview Gmail **masih gagal** — disiasat lanjut dan didapati **Supabase Edge Functions SENGAJA menukar Content-Type `text/html` kepada `text/plain` untuk permintaan GET** (ciri platform rasmi, bukan pepijat — [rujukan rasmi](https://supabase.com/docs/guides/functions/http-methods)), sebagai langkah keselamatan supaya domain kongsi `*.supabase.co` tak boleh hos kandungan web boleh-laksana (elak phishing/XSS). Crawler ketat macam Gmail tolak baca meta-tag sebab Content-Type salah, walaupun kandungan HTML sebenarnya betul.
+> 3. Dicuba juga upload fail HTML statik ke **Supabase Storage** (bukan Edge Function) — tapi Storage **turut** memaksa `text/plain` untuk fail `.html` yang disajikan secara awam (disahkan praktikal, sekatan sama diguna pakai ke seluruh domain `*.supabase.co`, bukan Edge Function sahaja).
+>
+> **Kesimpulan**: TIADA cara nak sajikan HTML dengan Content-Type betul dari mana-mana URL `*.supabase.co`. Penyelesaian sebenar: jana fail HTML statik dan **commit terus ke GitHub Pages** (domain `wafitijarahtrading.com` sendiri), yang sajikan `.html` dengan Content-Type betul secara semula jadi.
 
-> ⚠️ **Kemaskini**: versi awal cuba KESAN dulu sama ada permintaan datang dari crawler (semak User-Agent) sebelum balas meta-tag — pelawat biasa terus di-redirect (302), crawler dapat HTML. Masalahnya: senarai User-Agent crawler yang dikenali tak lengkap (cth pratonton pautan Gmail langsung tak sepadan), jadi crawler yang tak dikenali dapat 302 kosong (tiada meta-tag) dan preview gagal keluar — cuma papar nama domain generik. Sekarang fungsi balas HTML + meta-tag yang SAMA kepada SEMUA permintaan tanpa cuba kesan crawler — lebih selamat untuk crawler yang tak dijangka.
+**Penyelesaian akhir**: Edge Function `produk-preview-gen` dipanggil dari `pengurusan.html` setiap kali produk disimpan (`saveStok()`) — ia jana HTML + meta-tag Open Graph sebenar (gambar, nama, harga) dan **commit terus ke repo GitHub** (`biz-free/sistemwafitijarah`, guna GitHub Contents API) di laluan `preview/<kod produk>.html`. GitHub Pages auto-deploy fail tu dalam masa ~30–90 saat, jadi pautan kongsi jadi `https://www.wafitijarahtrading.com/preview/<kod produk>.html` — di domain sendiri, Content-Type betul, berfungsi untuk SEMUA crawler termasuk Gmail. Fail tu sendiri auto-redirect pelawat biasa ke halaman produk sebenar guna `<meta http-equiv="refresh">`.
 
-- Butang **"🔗"** (kongsi) pada setiap produk kini salin pautan dalam format `https://<project>.supabase.co/functions/v1/produk-preview?id=<kod produk>` — bukan pautan `index.html?produk=...` terus.
-- Deploy Edge Function ni (dari folder `wafi-app`):
+- Butang **"🔗"** (kongsi) pada setiap produk kini salin pautan dalam format `https://wafitijarahtrading.com/preview/<kod produk>.html`.
+- **Setup wajib — 2 langkah:**
+  1. Cipta [GitHub Fine-grained Personal Access Token](https://github.com/settings/personal-access-tokens/new) — skop **HANYA** repo `biz-free/sistemwafitijarah`, kebenaran **Repository permissions → Contents → Read and write**. Salin token tu (hanya nampak sekali).
+  2. Set sebagai secret Supabase (dari folder `wafi-app`):
 ```
-npx supabase functions deploy produk-preview --no-verify-jwt
+npx supabase secrets set GITHUB_TOKEN=<token-yang-disalin>
+npx supabase functions deploy produk-preview-gen
 ```
-> ⚠️ **MESTI** guna `--no-verify-jwt` — crawler WhatsApp/Facebook hantar permintaan tanpa token log masuk, sama seperti `billplz-webhook`.
+> ⚠️ Produk sedia ada (dicipta sebelum ciri ni wujud) belum ada fail pratonton — edit & simpan semula setiap produk sekali (buka "✏️ Edit" → "Simpan") untuk jana fail pratonton buat kali pertama, atau minta bantuan jana secara pukal.
+- Edge Function lama `produk-preview` (dan bucket Storage `produk-preview` yang dicuba sekejap) dibiarkan wujud tapi **tak digunakan lagi** — tak perlu dipadam, tapi boleh diabaikan.
 - **Test**: salin pautan kongsi mana-mana produk, tampal di [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) untuk lihat preview yang akan keluar (WhatsApp guna enjin crawler serupa Facebook) — patut papar gambar, nama & harga produk sebenar.
 
 **Pendekkan pautan kongsi — DIBUANG**: sebelum ini butang "🔗" cuba pendekkan pautan `produk-preview` guna Edge Function `shorten-link` (proksi ke TinyURL, kemudian dicuba is.gd). **Kedua-duanya menyebabkan preview WhatsApp/Facebook gagal papar** — pemendek percuma memaparkan halaman iklan/confirmation dulu sebelum redirect sebenar, dan crawler WhatsApp (yang tak jalankan JavaScript & tak tunggu) hanya sempat nampak branding generik pemendek tu, bukan meta-tag produk kita. Ciri pemendekan pautan ni dibuang sepenuhnya (`kongsiLinkProduk()` di `index.html` kongsi pautan `produk-preview` terus) supaya preview produk sentiasa betul. Edge Function `shorten-link` kekal wujud (tak dipanggil lagi) — tak perlu dipadam, tapi tak perlu deploy/kemaskini lagi.

@@ -1785,6 +1785,7 @@ async function saveStok() {
   if (useCloud) {
     const { error } = await sb.from('stok').upsert(obj);
     if (error) return toast('Gagal simpan produk: '+error.message,'err');
+    sb.functions.invoke('produk-preview-gen', { body: { produkId: stokId } }).catch(()=>{});
   }
   if(id) DATA.stok=DATA.stok.map(s=>s.id===id?obj:s);
   else DATA.stok.push(obj);
