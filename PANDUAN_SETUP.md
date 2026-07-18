@@ -379,7 +379,9 @@ Borang Tambah/Edit Produk (tab Stok) — dropdown Kategori kini **boleh diedit**
 ### 📱 Preview WhatsApp untuk Pautan Produk
 Sebelum ini, bila pautan produk (`?produk=S009`) dikongsi ke WhatsApp, preview yang keluar generik (bukan gambar/nama/harga produk sebenar) — sebab WhatsApp "baca" pautan tanpa jalankan JavaScript, jadi meta-tag yang diset oleh `index.html` (selepas page dimuatkan) tak pernah nampak oleh WhatsApp.
 
-**Penyelesaian**: Edge Function baharu `produk-preview` kesan bila crawler media sosial (WhatsApp/Facebook/Telegram/LinkedIn/dll.) akses pautan, dan balas terus dengan HTML + meta-tag Open Graph **sebenar** (gambar, nama, harga) dari server — tanpa perlu JavaScript. Pelawat biasa (bukan crawler) terus di-redirect ke laman produk sebenar dalam masa < 1 saat.
+**Penyelesaian**: Edge Function baharu `produk-preview` balas dengan HTML + meta-tag Open Graph **sebenar** (gambar, nama, harga) dari server — tanpa perlu JavaScript — supaya crawler media sosial (WhatsApp/Facebook/Telegram/LinkedIn/Gmail/dll.) sentiasa nampak maklumat produk sebenar. Pelawat biasa terus dibawa ke laman produk sebenar dalam masa yang tak ketara guna `<meta http-equiv="refresh">`.
+
+> ⚠️ **Kemaskini**: versi awal cuba KESAN dulu sama ada permintaan datang dari crawler (semak User-Agent) sebelum balas meta-tag — pelawat biasa terus di-redirect (302), crawler dapat HTML. Masalahnya: senarai User-Agent crawler yang dikenali tak lengkap (cth pratonton pautan Gmail langsung tak sepadan), jadi crawler yang tak dikenali dapat 302 kosong (tiada meta-tag) dan preview gagal keluar — cuma papar nama domain generik. Sekarang fungsi balas HTML + meta-tag yang SAMA kepada SEMUA permintaan tanpa cuba kesan crawler — lebih selamat untuk crawler yang tak dijangka.
 
 - Butang **"🔗"** (kongsi) pada setiap produk kini salin pautan dalam format `https://<project>.supabase.co/functions/v1/produk-preview?id=<kod produk>` — bukan pautan `index.html?produk=...` terus.
 - Deploy Edge Function ni (dari folder `wafi-app`):

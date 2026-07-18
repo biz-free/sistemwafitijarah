@@ -1,19 +1,22 @@
 // Edge Function: produk-preview
-// Dipanggil bila pautan produk dikongsi (WhatsApp/Facebook/Telegram/dll.) — crawler bot
-// media sosial tak jalankan JavaScript, jadi meta-tag Open Graph yang diset oleh
+// Dipanggil bila pautan produk dikongsi (WhatsApp/Facebook/Telegram/Gmail/dll.) — crawler
+// bot media sosial tak jalankan JavaScript, jadi meta-tag Open Graph yang diset oleh
 // index.html (SPA) selepas dimuatkan TAK akan pernah nampak oleh crawler tersebut.
-// Fungsi ni kesan User-Agent crawler & balas terus dengan HTML statik + meta-tag OG
-// sebenar (gambar/nama/harga produk) dari server, tanpa perlu jalankan JS langsung.
-// Pelawat biasa (bukan crawler) terus redirect (302) ke laman sebenar.
+// Fungsi ni balas SETIAP permintaan dengan HTML statik + meta-tag OG sebenar
+// (gambar/nama/harga produk) dari server, tanpa perlu jalankan JS langsung.
+//
+// NOTA: dulu fungsi ni cuba kesan User-Agent crawler (regex whitelist) dan hantar 302
+// redirect terus untuk pelawat biasa. Tapi senarai UA crawler tak lengkap (cth Gmail
+// link-preview tak sepadan mana-mana pattern), jadi crawler yang tak dikenali dapat 302
+// kosong (tiada meta-tag) dan preview gagal keluar. Sekarang SEMUA permintaan (crawler
+// atau bukan) dapat HTML yang sama dengan meta refresh serta-merta — lebih selamat &
+// tak perlu jangka setiap crawler baharu, dan pelawat biasa tetap sampai ke laman
+// produk dalam masa yang tak ketara (~serta-merta, jauh lebih pantas drpd pemendek
+// pautan pihak ketiga yang ada halaman iklan).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SITE_URL = "https://www.wafitijarahtrading.com/";
-
-const CRAWLER_PATTERNS = [
-  /whatsapp/i, /facebookexternalhit/i, /facebot/i, /twitterbot/i,
-  /telegrambot/i, /linkedinbot/i, /slackbot/i, /discordbot/i, /pinterest/i,
-];
 
 function esc(s: unknown): string {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
@@ -23,13 +26,6 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const produkId = url.searchParams.get("id") || "";
   const tujuanUrl = produkId ? `${SITE_URL}?produk=${encodeURIComponent(produkId)}` : SITE_URL;
-
-  const userAgent = req.headers.get("user-agent") || "";
-  const adalahCrawler = CRAWLER_PATTERNS.some((p) => p.test(userAgent));
-
-  if (!adalahCrawler) {
-    return new Response(null, { status: 302, headers: { Location: tujuanUrl } });
-  }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
