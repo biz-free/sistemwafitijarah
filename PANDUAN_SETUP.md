@@ -45,6 +45,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 35. `SQL_TAMBAHAN_34.sql` — Ikon "📦 Jejak Pesanan" di header index.html, pelanggan masukkan nombor pesanan untuk semak status & tracking kurier — lihat bahagian "📦 Jejak Pesanan" di bawah. Tiada bucket Storage/Edge Function baharu diperlukan.
 > 36. Deploy Edge Function baharu `easyparcel-track-order` — status kurier LIVE (on-demand) dalam modal "📦 Jejak Pesanan" bila pembeli tekan butang "🔍 Jejak" — lihat bahagian "📦 Jejak Pesanan" di bawah (kemaskini). Tiada perubahan SQL diperlukan.
 > 37. Deploy Edge Function baharu `produk-preview-gen` + set secret `GITHUB_TOKEN` — pratonton WhatsApp/Gmail untuk pautan produk kini commit fail HTML statik terus ke GitHub Pages (bukan sajikan dari Supabase, yang sengaja tak boleh sajikan HTML dengan Content-Type betul) — lihat bahagian "📱 Preview WhatsApp/Gmail untuk Pautan Produk" di bawah (kemaskini besar). Tiada perubahan SQL diperlukan.
+> 38. `SQL_TAMBAHAN_35.sql` — Mesej Promosi (Notifikasi Bergerak) di laman utama index.html, ditetapkan pemilik di tab "🎟️ Voucher Diskaun" (pengurusan.html) — lihat bahagian "📢 Notifikasi Promosi Bergerak (Laman Utama)" di bawah.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -343,6 +344,15 @@ Kad **"🎟️ Voucher Diskaun"** (Lebih, pemilik sahaja) — jana kod voucher u
 - Butang ⏸️/▶️ pada senarai voucher untuk nyahaktif/aktifkan semula tanpa padam; butang ✕ untuk padam kekal.
 
 **Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_29.sql`. Tiada bucket Storage baharu diperlukan.
+
+### 📢 Notifikasi Promosi Bergerak (Laman Utama)
+Di bawah senarai voucher dalam kad **"🎟️ Voucher Diskaun"** (pengurusan.html), ada ruangan **"📢 Mesej Promosi (Notifikasi Bergerak di Laman Utama)"** — pemilik boleh taip SEBARANG makluman (bukan terhad kepada voucher sahaja, cth promosi am, cuti perayaan, dll.) dan tekan **"💾 Simpan Mesej Promosi"**.
+
+- Mesej yang disimpan terus dipapar di `index.html` (laman utama pelanggan) sebagai notifikasi emas **bergerak dari kanan ke kiri**, sticky di bawah header supaya kekal kelihatan semasa scroll.
+- Kosongkan ruangan & tekan simpan untuk **sembunyikan** notifikasi — tiada banner dipapar langsung jika mesej kosong.
+- Mesej disimpan dalam lajur `tetapan.promo_mesej` (baris tunggal, sama macam tetapan diskaun/bank) — kemaskini serta-merta tanpa perlu refresh cache atau redeploy apa-apa.
+
+**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_35.sql`. Tiada bucket Storage/Edge Function baharu diperlukan.
 
 ### 🐛 Pembetulan Bug — Pre-Order & Padam Transaksi
 Dua bug diperbetulkan:

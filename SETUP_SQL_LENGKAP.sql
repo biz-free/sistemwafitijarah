@@ -1081,3 +1081,6 @@ CREATE POLICY "staff boleh baca kategori" ON kategori_stok FOR SELECT
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()));
 CREATE POLICY "pemilik urus kategori" ON kategori_stok FOR ALL USING (is_pemilik()) WITH CHECK (is_pemilik());
 INSERT INTO kategori_stok (nama) VALUES ('Minuman'),('Kesihatan & Kecantikan'),('Makanan'),('Lain-lain') ON CONFLICT (nama) DO NOTHING;
+
+-- ═══ Mesej Promosi (Notifikasi Bergerak) untuk laman utama (index.html) ═══
+ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS promo_mesej text;

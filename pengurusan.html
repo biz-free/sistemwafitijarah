@@ -745,6 +745,15 @@
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Kod voucher untuk pelanggan storefront (index.html) masukkan semasa checkout untuk dapat diskaun.</div>
       <button class="btn btn-primary" style="margin-bottom:12px" onclick="bukaModalVoucher()">+ Voucher Baru</button>
       <div id="voucher-list"></div>
+
+      <div style="border-top:1px dashed var(--border);margin-top:16px;padding-top:14px">
+        <div class="form-group">
+          <label class="form-label">📢 Mesej Promosi (Notifikasi Bergerak di Laman Utama)</label>
+          <textarea class="form-input" id="set-promo-mesej" placeholder="cth: 🎉 Voucher NEWBABY — Diskaun 50%! Sah sehingga 31 Julai 2026."></textarea>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Papar sebagai notifikasi emas bergerak dari kanan ke kiri di laman utama pelanggan (index.html). Kosongkan & simpan untuk sembunyikan.</div>
+        </div>
+        <button class="btn btn-secondary" onclick="simpanPromoMesej()">💾 Simpan Mesej Promosi</button>
+      </div>
     </div>
 
     <!-- Permohonan Ejen, Penghantar & Servis Marketing (pemilik sahaja) -->
@@ -3581,6 +3590,7 @@ async function loadTetapanDiskaun() {
   document.getElementById('set-consignment-limit').value = data.consignment_limit ?? 300;
   document.getElementById('set-minima-penghantaran-percuma').value = data.minima_penghantaran_percuma ?? 100;
   document.getElementById('set-butiran-bank').value = data.butiran_bank || '';
+  document.getElementById('set-promo-mesej').value = data.promo_mesej || '';
   qrBankUrlSedia = data.qr_bank_url || null;
   const prev = document.getElementById('qr-bank-preview');
   if (data.qr_bank_url) { prev.src = data.qr_bank_url; prev.style.display='block'; } else { prev.style.display='none'; }
@@ -3700,6 +3710,13 @@ async function saveTetapanDiskaun() {
   qrBankUrlSedia = qrUrl; qrBankFilePilihan = null;
   await muatTetapanDiskaunUntukHantar();
   toast('Tetapan pre-order & diskaun dikemaskini');
+}
+
+async function simpanPromoMesej() {
+  const mesej = document.getElementById('set-promo-mesej').value.trim();
+  const { error } = await sb.from('tetapan').update({ promo_mesej: mesej || null }).eq('id', 1);
+  if (error) return toast('Gagal simpan mesej promosi: '+error.message,'err');
+  toast(mesej ? 'Mesej promosi disimpan — kini papar di laman utama' : 'Mesej promosi dikosongkan — notifikasi disembunyikan');
 }
 
 // ════════════════════════════════════════════════════

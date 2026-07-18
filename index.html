@@ -32,6 +32,11 @@
     #promo-banner { background:var(--navy);color:#EFE3B8;padding:8px 16px;font-size:11px;font-weight:700;letter-spacing:0.3px;display:flex;align-items:center;gap:10px; }
     #promo-banner .promo-text { flex:1;text-align:center; }
 
+    /* ── NOTIFIKASI VOUCHER BERGERAK (mesej promosi ditetapkan pemilik) ── */
+    #voucher-marquee { position:sticky;top:0;z-index:60;height:38px;overflow:hidden;background:linear-gradient(90deg,#FFD873,var(--gold));box-shadow:0 2px 8px rgba(0,0,0,0.15); }
+    #voucher-marquee-track { position:absolute;left:100%;top:0;white-space:nowrap;color:var(--navy);font-weight:800;font-size:13px;line-height:38px;animation:voucher-marquee-move 16s linear infinite; }
+    @keyframes voucher-marquee-move { from{left:100%;} to{left:-100%;} }
+
     /* ── HERO ── */
     header {
       position:relative; overflow:hidden; text-align:center; padding:36px 16px 44px;
@@ -237,6 +242,10 @@
   </div>
   <div class="hero-scroll" onclick="document.getElementById('view-produk').scrollIntoView({behavior:'smooth'})">↓</div>
 </header>
+
+<div id="voucher-marquee" style="display:none">
+  <div id="voucher-marquee-track"></div>
+</div>
 
 <div id="main">
   <div id="form-card">
@@ -618,7 +627,7 @@ function zonUntukNegeri(negeri) {
 }
 
 let PRODUK = [];
-let TETAPAN = { qr_bank_url: null, butiran_bank: '' };
+let TETAPAN = { qr_bank_url: null, butiran_bank: '', promo_mesej: '' };
 let ZON = {}; // { id: {nama, kadar_asas, kadar_per_kg, anggaran_hari} }
 let cart = {}; // { stokId: qty }
 
@@ -772,7 +781,7 @@ async function initHalaman() {
   muatDataPoskod(); // lazy, tak perlu tunggu — auto-isi bandar/negeri sekadar bonus
   const [{ data: produk, error: e1 }, { data: tetapan }, { data: zon }] = await Promise.all([
     sb.rpc('senarai_produk_awam'),
-    sb.from('tetapan').select('qr_bank_url,butiran_bank').eq('id', 1).single(),
+    sb.from('tetapan').select('qr_bank_url,butiran_bank,promo_mesej').eq('id', 1).single(),
     sb.from('zon_penghantaran').select('*'),
   ]);
   if (e1) toast('Gagal muat senarai produk — sila cuba lagi kemudian','err');
@@ -782,6 +791,13 @@ async function initHalaman() {
   document.getElementById('bank-qr-img').src = TETAPAN.qr_bank_url || '';
   document.getElementById('bank-qr-img').style.display = TETAPAN.qr_bank_url ? '' : 'none';
   document.getElementById('bank-butiran').textContent = TETAPAN.butiran_bank || 'Sila hubungi kami untuk butiran akaun bank.';
+  const marquee = document.getElementById('voucher-marquee');
+  if (TETAPAN.promo_mesej && TETAPAN.promo_mesej.trim()) {
+    document.getElementById('voucher-marquee-track').textContent = TETAPAN.promo_mesej.trim();
+    marquee.style.display = '';
+  } else {
+    marquee.style.display = 'none';
+  }
   renderKategoriPills();
   renderProdukGrid();
   suntikItemListSchema();
