@@ -389,11 +389,7 @@ npx supabase functions deploy produk-preview --no-verify-jwt
 > ⚠️ **MESTI** guna `--no-verify-jwt` — crawler WhatsApp/Facebook hantar permintaan tanpa token log masuk, sama seperti `billplz-webhook`.
 - **Test**: salin pautan kongsi mana-mana produk, tampal di [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) untuk lihat preview yang akan keluar (WhatsApp guna enjin crawler serupa Facebook) — patut papar gambar, nama & harga produk sebenar.
 
-**Pendekkan pautan kongsi**: pautan `produk-preview` agak panjang (nama domain Supabase + laluan) — Edge Function baharu `shorten-link` proksi ke [TinyURL](https://tinyurl.com) (percuma, tiada akaun/API key diperlukan) untuk pendekkan pautan bila butang "🔗" ditekan. Kalau pemendekan gagal (cth TinyURL down), sistem automatik guna pautan panjang asal — preview WhatsApp tetap berfungsi sama ada pautan pendek atau panjang.
-```
-npx supabase functions deploy shorten-link
-```
-(Tak perlu `--no-verify-jwt` — fungsi ni dipanggil dari kod laman dengan token biasa, bukan crawler luar.)
+**Pendekkan pautan kongsi — DIBUANG**: sebelum ini butang "🔗" cuba pendekkan pautan `produk-preview` guna Edge Function `shorten-link` (proksi ke TinyURL, kemudian dicuba is.gd). **Kedua-duanya menyebabkan preview WhatsApp/Facebook gagal papar** — pemendek percuma memaparkan halaman iklan/confirmation dulu sebelum redirect sebenar, dan crawler WhatsApp (yang tak jalankan JavaScript & tak tunggu) hanya sempat nampak branding generik pemendek tu, bukan meta-tag produk kita. Ciri pemendekan pautan ni dibuang sepenuhnya (`kongsiLinkProduk()` di `index.html` kongsi pautan `produk-preview` terus) supaya preview produk sentiasa betul. Edge Function `shorten-link` kekal wujud (tak dipanggil lagi) — tak perlu dipadam, tapi tak perlu deploy/kemaskini lagi.
 
 ### 🛍️ Kemaskini Borang Pesan (pesan.html)
 Borang repeat-order kedai runcit (`pesan.html`) dikemaskini dengan 3 perkara:

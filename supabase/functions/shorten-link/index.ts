@@ -3,6 +3,12 @@
 // diperlukan). Dipanggil dari client sebab TinyURL API tak benarkan CORS
 // terus dari browser, jadi perlu proksi melalui server (Edge Function ni
 // tiada sekatan CORS bila panggil API luar).
+//
+// NOTA: is.gd dicuba sebagai gantian (untuk elak halaman iklan TinyURL) tapi
+// ditolak balik ke TinyURL sebab is.gd menolak panggilan dari IP awan
+// Supabase ("Error, database insert failed") — tak boleh dipercayai untuk
+// panggilan server-ke-server. Kekal guna TinyURL buat masa ini sehingga
+// shortener sendiri (di domain wafitijarahtrading.com) dibina.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
