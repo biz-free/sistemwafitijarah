@@ -46,6 +46,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 36. Deploy Edge Function baharu `easyparcel-track-order` — status kurier LIVE (on-demand) dalam modal "📦 Jejak Pesanan" bila pembeli tekan butang "🔍 Jejak" — lihat bahagian "📦 Jejak Pesanan" di bawah (kemaskini). Tiada perubahan SQL diperlukan.
 > 37. Deploy Edge Function baharu `produk-preview-gen` + set secret `GITHUB_TOKEN` — pratonton WhatsApp/Gmail untuk pautan produk kini commit fail HTML statik terus ke GitHub Pages (bukan sajikan dari Supabase, yang sengaja tak boleh sajikan HTML dengan Content-Type betul) — lihat bahagian "📱 Preview WhatsApp/Gmail untuk Pautan Produk" di bawah (kemaskini besar). Tiada perubahan SQL diperlukan.
 > 38. `SQL_TAMBAHAN_35.sql` — Mesej Promosi (Notifikasi Bergerak) di laman utama index.html, ditetapkan pemilik di tab "🎟️ Voucher Diskaun" (pengurusan.html) — lihat bahagian "📢 Notifikasi Promosi Bergerak (Laman Utama)" di bawah.
+> 39. Kad baharu **"📣 Hebahan WhatsApp (Marketing)"** di pengurusan.html (Lebih, pemilik sahaja) — lihat bahagian "📣 Hebahan WhatsApp (Marketing)" di bawah. Tiada perubahan SQL/Edge Function diperlukan.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -353,6 +354,19 @@ Di bawah senarai voucher dalam kad **"🎟️ Voucher Diskaun"** (pengurusan.htm
 - Mesej disimpan dalam lajur `tetapan.promo_mesej` (baris tunggal, sama macam tetapan diskaun/bank) — kemaskini serta-merta tanpa perlu refresh cache atau redeploy apa-apa.
 
 **Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_35.sql`. Tiada bucket Storage/Edge Function baharu diperlukan.
+
+### 📣 Hebahan WhatsApp (Marketing)
+Kad **"📣 Hebahan WhatsApp (Marketing)"** di pengurusan.html (Lebih, pemilik sahaja) — bantu pemilik hantar mesej promosi kepada senarai nombor WhatsApp secara tersusun.
+
+- **Bukan bot/automasi** — sistem cuma jana pautan `wa.me/<nombor>?text=<mesej>` untuk setiap kontak. Bila tekan "Hantar", WhatsApp terbuka dalam tab baharu dengan mesej dah siap ditaip; pemilik SENDIRI yang tekan hantar dalam WhatsApp. Ini elak isu automasi/bot yang melanggar terma WhatsApp.
+- **Senarai Nombor**: satu nombor setiap baris (format apa-apa: `0123456789`, `+6012...`, `6012...` semua diterima & dinormalisasi). Letak nama selepas koma untuk personalize (cth `0123456789, Aisyah`). Duplicate & baris tak sah diabaikan automatik.
+- **Mesej Hebahan**: guna `{nama}` untuk letak nama automatik, `*bintang*` untuk **bold** dalam WhatsApp. Disyorkan letak ayat "Reply STOP" untuk pilihan berhenti terima hebahan.
+- Tekan **"⚡ Jana Batch"** — sistem susun senarai kepada batch 15 nombor. Setiap kontak ada butang "Hantar" (buka WhatsApp + tanda "dihantar") dan boleh undo ("✓ Dihantar" → tekan untuk buka semula).
+- Progress (X/Y dihantar) & status setiap batch auto-disimpan di **peranti/pelayar tu sahaja** (localStorage) — boleh tutup & sambung esok dari nombor terakhir. **Bukan disegerakkan ke cloud** — kalau tukar peranti/pelayar, senarai & progress perlu dimasukkan/jana semula.
+- ⚠️ **Elak nombor pelanggan sebenar disimpan dalam kod sumber**: senarai nombor SENGAJA tidak "hardcode" dalam fail — ia ditaip/tampal terus dalam apps semasa digunakan, supaya tiada nombor telefon pelanggan tersimpan dalam repo Git (yang boleh terdedah secara awam melalui GitHub Pages).
+- 💡 Tips dalaman kad ni: habiskan satu batch (15 nombor) dahulu, rehat 15–30 minit sebelum sambung batch seterusnya — elak akaun WhatsApp disekat kerana dianggap spam oleh sistem WhatsApp sendiri.
+
+**Setup wajib sebelum ciri ini berfungsi**: tiada — berfungsi terus tanpa SQL/Edge Function/secret baharu.
 
 ### 🐛 Pembetulan Bug — Pre-Order & Padam Transaksi
 Dua bug diperbetulkan:
