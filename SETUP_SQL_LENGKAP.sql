@@ -850,6 +850,8 @@ CREATE TABLE IF NOT EXISTS baucar_guna (
 ALTER TABLE baucar_guna ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "pemilik baca baucar_guna" ON baucar_guna;
 CREATE POLICY "pemilik baca baucar_guna" ON baucar_guna FOR SELECT USING (is_pemilik());
+DROP POLICY IF EXISTS "pemilik padam baucar_guna" ON baucar_guna;
+CREATE POLICY "pemilik padam baucar_guna" ON baucar_guna FOR DELETE USING (is_pemilik());
 
 CREATE OR REPLACE FUNCTION validasi_baucar(p_kod text, p_telefon text, p_subjumlah float)
 RETURNS TABLE(sah boolean, mesej text, diskaun float, jenis_diskaun text, nilai_diskaun float)

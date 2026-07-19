@@ -756,6 +756,19 @@
       </div>
     </div>
 
+    <!-- Data Pembeli (pemilik sahaja) -->
+    <div class="card" id="data-pembeli-card">
+      <div class="card-title">👥 Data Pembeli</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Senarai pelanggan e-dagang (index.html) disatukan ikut nombor telefon — untuk susulan & marketing.</div>
+      <div class="form-group"><input type="text" class="form-input" id="dp-cari" placeholder="🔍 Cari nama/telefon..." oninput="renderDataPembeli()" /></div>
+      <div id="dp-jumlah" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
+      <div id="dp-list"></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-secondary btn-sm" style="width:auto;flex:1" onclick="dpSalinUntukHebahan()">📋 Salin untuk Hebahan WhatsApp</button>
+        <button class="btn btn-secondary btn-sm" style="width:auto;flex:1" onclick="dpMuatTurunCSV()">⬇️ Muat Turun CSV</button>
+      </div>
+    </div>
+
     <!-- Hebahan WhatsApp / Marketing (pemilik sahaja) -->
     <div class="card" id="wa-hebahan-card">
       <div class="card-title">📣 Hebahan WhatsApp (Marketing)</div>
@@ -939,7 +952,7 @@
       </div>
       <div class="form-group"><label class="form-label">Unit</label>
         <select class="form-input" id="f-stok-unit">
-          <option>unit</option><option>beg</option><option>kotak</option><option>tin</option><option>papan</option><option>botol</option><option>kg</option>
+          <option>unit</option><option>beg</option><option>kotak</option><option>tin</option><option>papan</option><option>botol</option><option>kg</option><option>sachet (25g)</option>
         </select>
       </div>
     </div>
@@ -1407,7 +1420,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card'];
+  const pemilikOnly = ['laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -1470,6 +1483,7 @@ async function setPage(p) {
       renderLaporanKehadiran();
       loadTetapanDiskaun();
       renderVoucherList();
+      loadDataPembeli();
       whLoad();
       renderSenaraiCutiSemua();
       renderStatusLive();
@@ -3043,6 +3057,8 @@ async function renderEdagangList() {
           <option value="gagal" ${o.status_bayaran==='gagal'?'selected':''}>✕ Bayaran Gagal</option>
         </select>
         ${o.bukti_bayaran_url?`<button class="btn btn-secondary btn-sm" onclick="lihatBuktiBayaran('${esc(o.bukti_bayaran_url)}')">📎 Bukti Bayaran</button>`:''}
+        ${currentRole==='pemilik' && o.status_bayaran!=='disahkan' && o.pelanggan_email?`<button class="btn btn-secondary btn-sm" style="width:auto" onclick="hantarEmelSusulan('${o.id}', this)">📧 Emel Susulan</button>`:''}
+        ${currentRole==='pemilik' && o.status_bayaran!=='disahkan' && o.kod_baucar?`<button class="btn btn-secondary btn-sm" style="width:auto" onclick="bebaskanVoucher('${o.id}','${esc(o.kod_baucar)}','${esc(o.pelanggan_telefon)}')">🔓 Bebaskan Voucher (${esc(o.kod_baucar)})</button>`:''}
       </div>
       <div style="display:flex;gap:6px;margin-top:8px">
         <input type="text" class="form-input" style="font-size:11px" placeholder="Nama kurier" value="${esc(o.nama_kurier||'')}" onchange="kemaskiniEdagang('${o.id}','nama_kurier',this.value)" />
@@ -3063,6 +3079,37 @@ async function kemaskiniEdagang(id, field, value) {
   const { error } = await sb.from('pesanan_edagang').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
   if (error) return toast('Gagal kemaskini: '+error.message,'err');
   toast('Pesanan dikemaskini');
+  renderEdagangList();
+}
+
+async function hantarEmelSusulan(orderId, btnEl) {
+  btnEl.disabled = true;
+  const asalTeks = btnEl.textContent;
+  btnEl.textContent = '⏳ Menghantar...';
+  const { data, error } = await sb.functions.invoke('hantar-emel-susulan', { body: { orderId } });
+  if (error || data?.error) {
+    let mesej = data?.error || error.message;
+    if (error?.context) {
+      try { const body = await error.context.json(); if (body?.error) mesej = body.error; } catch { /* biar mesej asal */ }
+    }
+    toast('Gagal hantar emel: ' + mesej, 'err');
+    btnEl.disabled = false;
+    btnEl.textContent = asalTeks;
+    return;
+  }
+  toast('Emel susulan berjaya dihantar ke ' + data.email);
+  btnEl.disabled = false;
+  btnEl.textContent = asalTeks;
+}
+
+async function bebaskanVoucher(orderId, kod, telefon) {
+  if (!confirm(`Bebaskan voucher "${kod}" untuk ${telefon} supaya boleh diguna semula pada pesanan baharu?\n\nTindakan ini memadam rekod penggunaan voucher tu — pesanan SEMASA (${orderId}) tidak berubah, cuma kod tu jadi boleh guna semula.`)) return;
+  const { error: delErr } = await sb.from('baucar_guna').delete().eq('kod', kod).eq('telefon', telefon);
+  if (delErr) return toast('Gagal bebaskan voucher: '+delErr.message,'err');
+  const { data: bc } = await sb.from('baucar').select('bilangan_guna').eq('kod', kod).single();
+  if (bc) await sb.from('baucar').update({ bilangan_guna: Math.max(0, (bc.bilangan_guna||0)-1) }).eq('kod', kod);
+  await sb.from('pesanan_edagang').update({ kod_baucar: null }).eq('id', orderId);
+  toast(`Voucher "${kod}" dibebaskan — ${telefon} boleh guna semula`);
   renderEdagangList();
 }
 
@@ -3747,6 +3794,73 @@ async function simpanPromoMesej() {
   const { error } = await sb.from('tetapan').update({ promo_mesej: mesej || null }).eq('id', 1);
   if (error) return toast('Gagal simpan mesej promosi: '+error.message,'err');
   toast(mesej ? 'Mesej promosi disimpan — kini papar di laman utama' : 'Mesej promosi dikosongkan — notifikasi disembunyikan');
+}
+
+// ════════════════════════════════════════════════════
+//  DATA PEMBELI — satukan pesanan_edagang ikut nombor telefon supaya pemilik
+//  nampak senarai pelanggan (bukan senarai pesanan) untuk susulan & marketing.
+// ════════════════════════════════════════════════════
+let DP_CUSTOMERS = [];
+
+async function loadDataPembeli() {
+  const { data, error } = await sb.from('pesanan_edagang')
+    .select('pelanggan_nama, pelanggan_telefon, pelanggan_email, jumlah, status_bayaran, created_at')
+    .order('created_at', { ascending: false });
+  if (error) { document.getElementById('dp-list').innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+
+  const byTel = new Map();
+  (data || []).forEach(o => {
+    const tel = o.pelanggan_telefon || '—';
+    if (!byTel.has(tel)) {
+      byTel.set(tel, { telefon: tel, nama: o.pelanggan_nama, email: o.pelanggan_email, bilPesanan: 0, jumlahDibayar: 0, terakhir: o.created_at });
+    }
+    const c = byTel.get(tel);
+    c.bilPesanan += 1;
+    if (o.status_bayaran === 'disahkan') c.jumlahDibayar += (+o.jumlah || 0);
+    if (!c.email && o.pelanggan_email) c.email = o.pelanggan_email;
+  });
+  DP_CUSTOMERS = [...byTel.values()].sort((a, b) => b.jumlahDibayar - a.jumlahDibayar);
+  renderDataPembeli();
+}
+
+function renderDataPembeli() {
+  const q = (document.getElementById('dp-cari').value || '').toLowerCase().trim();
+  const list = q ? DP_CUSTOMERS.filter(c => (c.nama||'').toLowerCase().includes(q) || (c.telefon||'').includes(q)) : DP_CUSTOMERS;
+  document.getElementById('dp-jumlah').textContent = `${list.length} pelanggan unik${q?' (ditapis)':''}`;
+  document.getElementById('dp-list').innerHTML = list.map(c => `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="min-width:0">
+        <div style="font-weight:700;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.nama||'—')}</div>
+        <div style="font-size:11px;color:var(--muted)">📞 ${esc(c.telefon)}${c.email?' · ✉️ '+esc(c.email):''}</div>
+        <div style="font-size:10px;color:var(--muted)">${c.bilPesanan} pesanan · Pesanan terakhir: ${fmtD(c.terakhir)}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0"><div style="font-weight:800;font-size:13px;color:var(--teal)">${fmt(c.jumlahDibayar)}</div><div style="font-size:9px;color:var(--muted)">dibayar</div></div>
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada data pelanggan lagi</div></div>';
+}
+
+function dpSalinUntukHebahan() {
+  const q = (document.getElementById('dp-cari').value || '').toLowerCase().trim();
+  const list = q ? DP_CUSTOMERS.filter(c => (c.nama||'').toLowerCase().includes(q) || (c.telefon||'').includes(q)) : DP_CUSTOMERS;
+  if (!list.length) return toast('Tiada pelanggan untuk disalin','err');
+  const teks = list.map(c => c.nama ? `${c.telefon}, ${c.nama}` : c.telefon).join('\n');
+  navigator.clipboard.writeText(teks)
+    .then(()=>toast(`${list.length} nombor disalin — tampal dalam ruangan "Senarai Nombor" di Hebahan WhatsApp`))
+    .catch(()=>toast('Gagal salin — pelayar tidak menyokong clipboard','err'));
+}
+
+function dpMuatTurunCSV() {
+  const q = (document.getElementById('dp-cari').value || '').toLowerCase().trim();
+  const list = q ? DP_CUSTOMERS.filter(c => (c.nama||'').toLowerCase().includes(q) || (c.telefon||'').includes(q)) : DP_CUSTOMERS;
+  if (!list.length) return toast('Tiada pelanggan untuk dimuat turun','err');
+  const baris = [['Nama','Telefon','Emel','Bil. Pesanan','Jumlah Dibayar','Pesanan Terakhir']];
+  list.forEach(c => baris.push([c.nama||'', c.telefon||'', c.email||'', c.bilPesanan, c.jumlahDibayar.toFixed(2), c.terakhir||'']));
+  const csv = baris.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿'+csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `data-pembeli-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ════════════════════════════════════════════════════

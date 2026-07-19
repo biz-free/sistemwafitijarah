@@ -3,7 +3,7 @@
 //  Membolehkan apps berfungsi offline
 // ═══════════════════════════════════════════════
 
-const CACHE_NAME = 'wafi-tijarah-v21';
+const CACHE_NAME = 'wafi-tijarah-v22';
 const ASSETS = [
   './pengurusan.html',
   './manifest.json',

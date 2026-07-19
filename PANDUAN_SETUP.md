@@ -47,6 +47,9 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 37. Deploy Edge Function baharu `produk-preview-gen` + set secret `GITHUB_TOKEN` — pratonton WhatsApp/Gmail untuk pautan produk kini commit fail HTML statik terus ke GitHub Pages (bukan sajikan dari Supabase, yang sengaja tak boleh sajikan HTML dengan Content-Type betul) — lihat bahagian "📱 Preview WhatsApp/Gmail untuk Pautan Produk" di bawah (kemaskini besar). Tiada perubahan SQL diperlukan.
 > 38. `SQL_TAMBAHAN_35.sql` — Mesej Promosi (Notifikasi Bergerak) di laman utama index.html, ditetapkan pemilik di tab "🎟️ Voucher Diskaun" (pengurusan.html) — lihat bahagian "📢 Notifikasi Promosi Bergerak (Laman Utama)" di bawah.
 > 39. Kad baharu **"📣 Hebahan WhatsApp (Marketing)"** di pengurusan.html (Lebih, pemilik sahaja) — lihat bahagian "📣 Hebahan WhatsApp (Marketing)" di bawah. Tiada perubahan SQL/Edge Function diperlukan.
+> 40. Unit **"sachet (25g)"** ditambah pada pilihan Unit (Tambah/Edit Produk, tab Stok). Tiada perubahan SQL diperlukan.
+> 41. Kad baharu **"👥 Data Pembeli"** di pengurusan.html (Lebih, pemilik sahaja) — senarai pelanggan e-dagang disatukan ikut nombor telefon, untuk susulan & marketing. Tiada perubahan SQL diperlukan.
+> 42. `SQL_TAMBAHAN_36.sql` + Edge Function baharu `hantar-emel-susulan` + set secret `RESEND_API_KEY` — susulan emel untuk pesanan belum/gagal bayar, dan butang "🔓 Bebaskan Voucher" untuk guna semula kod voucher yang gagal — lihat bahagian "📧 Susulan Bayaran & Bebas Voucher" di bawah.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -367,6 +370,34 @@ Kad **"📣 Hebahan WhatsApp (Marketing)"** di pengurusan.html (Lebih, pemilik s
 - 💡 Tips dalaman kad ni: habiskan satu batch (15 nombor) dahulu, rehat 15–30 minit sebelum sambung batch seterusnya — elak akaun WhatsApp disekat kerana dianggap spam oleh sistem WhatsApp sendiri.
 
 **Setup wajib sebelum ciri ini berfungsi**: tiada — berfungsi terus tanpa SQL/Edge Function/secret baharu.
+
+### 👥 Data Pembeli
+Kad **"👥 Data Pembeli"** di pengurusan.html (Lebih, pemilik sahaja) — satukan semua pesanan e-dagang (`pesanan_edagang`) ikut nombor telefon supaya pemilik nampak **senarai pelanggan** (bukan senarai pesanan), untuk susulan & marketing.
+
+- Setiap pelanggan tunjuk: nama, telefon, emel, bilangan pesanan, jumlah **dibayar** (hanya kira pesanan `status_bayaran = disahkan`), dan tarikh pesanan terakhir. Disusun ikut jumlah dibayar tertinggi dahulu.
+- Ruangan carian untuk tapis ikut nama/telefon.
+- Butang **"📋 Salin untuk Hebahan WhatsApp"** — salin senarai (format `telefon, nama`) ke clipboard, terus boleh tampal ke ruangan "Senarai Nombor" di kad Hebahan WhatsApp.
+- Butang **"⬇️ Muat Turun CSV"** — muat turun fail CSV (buka dengan Excel/Google Sheets) untuk simpanan rekod.
+
+**Setup wajib sebelum ciri ini berfungsi**: tiada — berfungsi terus tanpa SQL/Edge Function/secret baharu.
+
+### 📧 Susulan Bayaran & Bebas Voucher
+Pada setiap pesanan e-dagang yang **belum/gagal bayar** (tab Tempahan → E-Dagang), dua butang baharu muncul (pemilik sahaja):
+
+- **"📧 Emel Susulan"** (kalau pesanan ada alamat emel) — hantar emel peringatan kepada pelanggan supaya selesaikan bayaran, termasuk butiran akaun bank (jika kaedah bayaran ialah transfer manual) dan pautan ke kedai online. Guna [Resend](https://resend.com) (percuma sehingga 100 emel/hari & 3000/bulan).
+- **"🔓 Bebaskan Voucher"** (kalau pesanan ada kod voucher digunakan) — padam rekod penggunaan voucher untuk pelanggan tu, supaya kod yang sama boleh **diguna semula** pada pesanan kedua kalau pesanan pertama tak jadi dibayar. Pesanan asal tidak berubah, cuma kod voucher jadi bebas semula. Ada pengesahan (confirm) sebelum bertindak — dilakukan **secara manual** oleh pemilik, bukan automatik, supaya voucher tak terlepas tanpa disedari.
+
+**Setup wajib sebelum ciri "Emel Susulan" berfungsi — 3 langkah:**
+1. Daftar akaun percuma di [resend.com](https://resend.com).
+2. Sahkan domain `wafitijarahtrading.com` di bahagian **Domains** Resend (tambah rekod DNS yang diberikan Resend — TXT/CNAME/MX ikut arahan mereka) supaya emel boleh dihantar dari alamat `no-reply@wafitijarahtrading.com`. Tanpa domain disahkan, Resend akan tolak hantar emel ke alamat pelanggan sebenar.
+3. Set secret & deploy (dari folder `wafi-app`):
+```
+npx supabase secrets set RESEND_API_KEY=<api-key-dari-resend>
+npx supabase functions deploy hantar-emel-susulan
+```
+> Jika emel gagal dihantar, semak log fungsi (`npx supabase functions logs hantar-emel-susulan`) — baris "Resend status: ### body: {...}" tunjuk sebab sebenar (cth domain belum disahkan).
+
+**Setup wajib untuk "Bebaskan Voucher"**: jalankan `SQL_TAMBAHAN_36.sql` (tambah kebenaran padam pada jadual `baucar_guna` — sebelum ini hanya boleh baca).
 
 ### 🐛 Pembetulan Bug — Pre-Order & Padam Transaksi
 Dua bug diperbetulkan:
