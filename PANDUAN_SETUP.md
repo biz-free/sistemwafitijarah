@@ -50,6 +50,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 40. Unit **"sachet (25g)"** ditambah pada pilihan Unit (Tambah/Edit Produk, tab Stok). Tiada perubahan SQL diperlukan.
 > 41. Kad baharu **"👥 Data Pembeli"** di pengurusan.html (Lebih, pemilik sahaja) — senarai pelanggan e-dagang disatukan ikut nombor telefon, untuk susulan & marketing. Tiada perubahan SQL diperlukan.
 > 42. `SQL_TAMBAHAN_36.sql` + Edge Function baharu `hantar-emel-susulan` + set secret `RESEND_API_KEY` — susulan emel untuk pesanan belum/gagal bayar, dan butang "🔓 Bebaskan Voucher" untuk guna semula kod voucher yang gagal — lihat bahagian "📧 Susulan Bayaran & Bebas Voucher" di bawah.
+> 43. `SQL_TAMBAHAN_37.sql` + Edge Function baharu `susulan-auto-cron` + set secret `CRON_SECRET` + jadual `pg_cron` — susulan emel bayaran AUTOMATIK (1 emel sehari, maksimum 3 kali) & auto-batal pesanan (data pembeli KEKAL direkod) selepas 3 kali tanpa bayaran — lihat bahagian "🔁 Susulan Bayaran Automatik (Harian)" di bawah.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -398,6 +399,39 @@ npx supabase functions deploy hantar-emel-susulan
 > Jika emel gagal dihantar, semak log fungsi (`npx supabase functions logs hantar-emel-susulan`) — baris "Resend status: ### body: {...}" tunjuk sebab sebenar (cth domain belum disahkan).
 
 **Setup wajib untuk "Bebaskan Voucher"**: jalankan `SQL_TAMBAHAN_36.sql` (tambah kebenaran padam pada jadual `baucar_guna` — sebelum ini hanya boleh baca).
+
+### 🔁 Susulan Bayaran Automatik (Harian)
+Versi automatik bagi ciri "Emel Susulan" di atas — tak perlu pemilik tekan butang setiap hari. Edge Function `susulan-auto-cron` dijadualkan jalan **sekali sehari** (10 pagi waktu Malaysia) melalui `pg_cron`:
+
+- Semak semua pesanan e-dagang **belum bayar** (`status_bayaran = 'menunggu'`) yang ada alamat emel, dan sudah **1 hari** sejak susulan terakhir (atau sejak pesanan dibuat, jika belum pernah disusuli).
+- Hantar emel susulan (template sama macam "Emel Susulan" manual, termasuk pautan checkout Billplz yang betul) — maksimum **3 kali**.
+- Selepas 3 emel dihantar & bayaran masih belum diterima, pesanan **dibatalkan automatik** (`status_pesanan = 'dibatalkan'`). **Data pembeli KEKAL direkod** — baris pesanan TIDAK dipadam, cuma statusnya bertukar (kekal kelihatan dalam "👥 Data Pembeli" & sejarah pesanan). Voucher yang digunakan (jika ada) turut **dibebaskan automatik** supaya pelanggan boleh cuba beli semula guna kod yang sama.
+- Pesanan yang dibayar (`status_bayaran = 'disahkan'`) pada bila-bila masa semasa proses ni akan berhenti disusuli secara automatik (semakan `status_bayaran` dibuat setiap kali cron jalan).
+
+**Setup wajib — 4 langkah (dari folder `wafi-app`):**
+1. Jalankan `SQL_TAMBAHAN_37.sql` (tambah lajur `bilangan_susulan`/`susulan_terakhir` pada `pesanan_edagang`, aktifkan extension `pg_cron` & `pg_net`).
+2. Set secret `CRON_SECRET` (rentetan rawak — elak sesiapa panggil fungsi ni terus dari luar tanpa kebenaran) & deploy:
+```
+npx supabase secrets set CRON_SECRET=<rentetan-rawak-anda>
+npx supabase functions deploy susulan-auto-cron --no-verify-jwt
+```
+3. Jadualkan panggilan harian (jalankan SEKALI di SQL Editor Supabase, gantikan `<CRON_SECRET>` dengan nilai yang sama seperti langkah 2):
+```sql
+select cron.schedule(
+  'susulan-bayaran-harian',
+  '0 2 * * *', -- 2am UTC = 10am waktu Malaysia
+  $$
+  select net.http_post(
+    url := 'https://<project-ref>.supabase.co/functions/v1/susulan-auto-cron',
+    headers := '{"Content-Type": "application/json", "x-cron-secret": "<CRON_SECRET>"}'::jsonb,
+    body := '{}'::jsonb
+  );
+  $$
+);
+```
+4. Guna semula secret `RESEND_API_KEY` sedia ada (dari ciri "Emel Susulan" manual) — tiada secret emel baharu diperlukan.
+
+> Untuk lihat/urus jadual cron sedia ada: `select * from cron.job;` — untuk padam jadual: `select cron.unschedule('susulan-bayaran-harian');`
 
 ### 🐛 Pembetulan Bug — Pre-Order & Padam Transaksi
 Dua bug diperbetulkan:

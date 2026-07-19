@@ -1086,3 +1086,12 @@ INSERT INTO kategori_stok (nama) VALUES ('Minuman'),('Kesihatan & Kecantikan'),(
 
 -- ═══ Mesej Promosi (Notifikasi Bergerak) untuk laman utama (index.html) ═══
 ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS promo_mesej text;
+
+-- ═══ Susulan Bayaran Automatik (1 emel sehari, maksimum 3 kali, auto-batal selepas) ═══
+ALTER TABLE pesanan_edagang ADD COLUMN IF NOT EXISTS bilangan_susulan int NOT NULL DEFAULT 0;
+ALTER TABLE pesanan_edagang ADD COLUMN IF NOT EXISTS susulan_terakhir timestamptz;
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+-- NOTA: jadual cron.schedule() sendiri TIDAK dimasukkan di sini (ia perlu URL
+-- projek + CRON_SECRET sebenar) — lihat "📧 Susulan Bayaran Automatik" dalam
+-- PANDUAN_SETUP.md untuk arahan penuh cara jadualkan selepas deploy fungsi.
