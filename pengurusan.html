@@ -627,8 +627,10 @@
     <div class="section-title">👤 Profile</div>
     <div class="section-sub">Syarikat Wafi Tijarah Trading</div>
 
+    <div id="lebih-shortcuts" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:14px;-webkit-overflow-scrolling:touch"></div>
+
     <!-- Profil Saya -->
-    <div class="card">
+    <div class="card" id="profil-saya-card">
       <div class="card-title">👤 Profil Saya</div>
       <div class="form-group"><label class="form-label">Nama</label><input type="text" class="form-input" id="profil-nama" /></div>
       <div class="form-group"><label class="form-label">No. Telefon</label><input type="tel" class="form-input" id="profil-telefon" placeholder="01x-xxxxxxx" /></div>
@@ -646,7 +648,7 @@
     </div>
 
     <!-- Status Pekerja: Mohon Cuti/MC/Off -->
-    <div class="card">
+    <div class="card" id="status-pekerja-card">
       <div class="card-title">🗓️ Status Pekerja</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Mohon cuti, MC (sakit), atau tandakan tak jalan (off) pada tarikh tertentu.</div>
       <div class="form-group"><label class="form-label">Jenis</label>
@@ -674,7 +676,7 @@
     </div>
 
     <!-- Resit -->
-    <div class="card">
+    <div class="card" id="resit-card">
       <div class="card-title">🧾 Jana & Cetak Resit</div>
       <div class="form-group">
         <label class="form-label">Pilih Transaksi</label>
@@ -763,16 +765,18 @@
       <div class="form-group"><input type="text" class="form-input" id="dp-cari" placeholder="🔍 Cari nama/telefon..." oninput="renderDataPembeli()" /></div>
       <div id="dp-jumlah" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
       <div id="dp-list"></div>
-      <div style="display:flex;gap:8px;margin-top:10px">
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" style="width:auto;flex:1" onclick="dpSalinUntukHebahan()">📋 Salin untuk Hebahan WhatsApp</button>
         <button class="btn btn-secondary btn-sm" style="width:auto;flex:1" onclick="dpMuatTurunCSV()">⬇️ Muat Turun CSV</button>
       </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="dpBukaModalEmelPukal()">📧 Emel Pukal ke Semua Pembeli</button>
     </div>
 
     <!-- Hebahan WhatsApp / Marketing (pemilik sahaja) -->
     <div class="card" id="wa-hebahan-card">
       <div class="card-title">📣 Hebahan WhatsApp (Marketing)</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Sediakan mesej promosi & senarai nombor sekali gus, sistem susun ikut batch 15 nombor. Setiap mesej tetap dihantar SECARA MANUAL oleh anda (tekan "Hantar" buka WhatsApp, anda sendiri tekan hantar) — bukan bot/automasi.</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Sediakan mesej promosi & senarai nombor sekali gus, sistem susun ikut batch 15 nombor. Setiap mesej tetap dihantar SECARA MANUAL oleh anda (tekan "Hantar" buka WhatsApp, anda sendiri tekan hantar) — bukan bot/automasi.</div>
+      <div id="wh-sync-status" style="font-size:11px;color:var(--teal);font-weight:600;margin-bottom:12px"></div>
 
       <div class="form-group">
         <label class="form-label">Senarai Nombor <span id="wh-raw-count" style="color:var(--muted);font-weight:400;font-size:11px"></span></label>
@@ -794,7 +798,7 @@
       <div id="wh-hasil" style="margin-top:14px"></div>
 
       <div style="background:#F0F7F4;border-left:3px solid var(--teal);border-radius:9px;padding:10px;margin-top:14px;font-size:11px;color:var(--muted)">
-        💡 <b>Tips elak kena sekat:</b> habiskan satu batch (15 nombor), rehat 15–30 minit sebelum batch seterusnya. Personalize dengan nama. Kekalkan ayat "Reply STOP" dalam mesej. Progress auto-save di peranti ni — boleh sambung esok dari nombor terakhir.
+        💡 <b>Tips elak kena sekat:</b> habiskan satu batch (15 nombor), rehat 15–30 minit sebelum batch seterusnya. Personalize dengan nama. Kekalkan ayat "Reply STOP" dalam mesej. Progress auto-save ke cloud — boleh sambung esok atau dari peranti/telefon lain dari nombor terakhir.
       </div>
     </div>
 
@@ -1065,13 +1069,32 @@
       </div>
       <div class="form-group"><label class="form-label">Nilai</label><input type="number" class="form-input" id="v-nilai" step="0.5" min="0" /></div>
     </div>
-    <div class="form-group"><label class="form-label">Minima Belanja (RM, optional)</label><input type="number" class="form-input" id="v-minima" step="10" min="0" placeholder="0" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Minima Belanja (RM, optional)</label><input type="number" class="form-input" id="v-minima" step="10" min="0" placeholder="0" /></div>
+      <div class="form-group"><label class="form-label">Maksima Belanja (RM, optional)</label><input type="number" class="form-input" id="v-maksima" step="10" min="0" placeholder="Tiada had" /></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:12px">Had maksima elak kod ni digunakan untuk belian bernilai terlalu besar.</div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Had Guna Keseluruhan (optional)</label><input type="number" class="form-input" id="v-had-guna" min="1" placeholder="Tiada had" /></div>
       <div class="form-group"><label class="form-label">Tarikh Luput (optional)</label><input type="date" class="form-input" id="v-luput" /></div>
     </div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:14px"><input type="checkbox" id="v-aktif" checked style="width:auto" /> Aktif</label>
     <button class="btn btn-primary" onclick="saveVoucher()">💾 Simpan Voucher</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-emel-pukal">
+  <div class="modal-box">
+    <div class="modal-title"><span>📧 Emel Pukal Pemasaran</span><button class="modal-close" onclick="closeModal('modal-emel-pukal')">✕ Tutup</button></div>
+    <div id="ep-jumlah-penerima" style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>
+    <div class="form-group"><label class="form-label">Subjek Emel</label><input type="text" class="form-input" id="ep-subjek" placeholder="cth: Promosi Istimewa Wafi Tijarah!" /></div>
+    <div class="form-group">
+      <label class="form-label">Mesej</label>
+      <textarea class="form-input" id="ep-mesej" rows="8" style="line-height:1.5" placeholder="Assalamualaikum {nama}!&#10;&#10;Kami ada promosi istimewa untuk anda..."></textarea>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Guna <code>{nama}</code> untuk masukkan nama pelanggan automatik.</div>
+    </div>
+    <div id="ep-status" style="font-size:12px;font-weight:700;margin-bottom:10px;display:none"></div>
+    <button class="btn btn-primary" id="ep-btn-hantar" onclick="dpHantarEmelPukal()">📧 Hantar ke Semua Pembeli</button>
   </div>
 </div>
 
@@ -1470,6 +1493,7 @@ async function setPage(p) {
     renderAnalisis();
   }
   if (p==='lebih') {
+    renderLebihShortcuts();
     renderResitSel(); renderLaporan();
     if (currentRole==='pemilik') renderBaucarList();
     document.getElementById('profil-nama').value = DATA.currentUser?.nama || '';
@@ -1491,6 +1515,45 @@ async function setPage(p) {
       renderSenaraiPemohon();
     }
   }
+}
+
+// ════════════════════════════════════════════════════
+//  SHORTCUT TAJUK (tab Profile) — klik terus dibawa ke bahagian dipilih
+// ════════════════════════════════════════════════════
+const LEBIH_SHORTCUTS = [
+  { id: 'profil-saya-card', icon: '👤', label: 'Profil' },
+  { id: 'upah-saya-card', icon: '💰', label: 'Upah Saya' },
+  { id: 'status-pekerja-card', icon: '🗓️', label: 'Status' },
+  { id: 'kelulusan-cuti-card', icon: '✅', label: 'Kelulusan Cuti' },
+  { id: 'resit-card', icon: '🧾', label: 'Resit' },
+  { id: 'laporan-card', icon: '📊', label: 'Laporan' },
+  { id: 'baucar-card', icon: '🧾', label: 'Baucar' },
+  { id: 'tetapan-kos-card', icon: '⚙️', label: 'Kos Operasi' },
+  { id: 'tetapan-diskaun-card', icon: '💳', label: 'Diskaun' },
+  { id: 'voucher-card', icon: '🎟️', label: 'Voucher' },
+  { id: 'data-pembeli-card', icon: '👥', label: 'Data Pembeli' },
+  { id: 'wa-hebahan-card', icon: '📣', label: 'Hebahan WA' },
+  { id: 'easyparcel-card', icon: '🚚', label: 'EasyParcel' },
+  { id: 'urus-pekerja-card', icon: '👥', label: 'Urus Pekerja' },
+  { id: 'status-live-card', icon: '📡', label: 'Status Live' },
+  { id: 'kehadiran-report-card', icon: '📍', label: 'Kehadiran' },
+];
+
+function renderLebihShortcuts() {
+  const el = document.getElementById('lebih-shortcuts');
+  if (!el) return;
+  el.innerHTML = LEBIH_SHORTCUTS
+    .filter(s => { const card = document.getElementById(s.id); return card && card.style.display !== 'none'; })
+    .map(s => `<button onclick="lebihScrollTo('${s.id}')" class="btn btn-sm" style="width:auto;flex-shrink:0;white-space:nowrap;background:transparent;color:var(--navy);border:1.5px solid var(--border);padding:6px 12px">${s.icon} ${esc(s.label)}</button>`)
+    .join('');
+}
+
+function lebihScrollTo(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const headerH = document.getElementById('app-header')?.offsetHeight || 64;
+  const y = el.getBoundingClientRect().top + window.scrollY - headerH - 10;
+  window.scrollTo({ top: y, behavior: 'smooth' });
 }
 
 // ════════════════════════════════════════════════════
@@ -3863,12 +3926,72 @@ function dpMuatTurunCSV() {
   URL.revokeObjectURL(url);
 }
 
+function dpPenerimaEmelPukal() {
+  const q = (document.getElementById('dp-cari').value || '').toLowerCase().trim();
+  const list = q ? DP_CUSTOMERS.filter(c => (c.nama||'').toLowerCase().includes(q) || (c.telefon||'').includes(q)) : DP_CUSTOMERS;
+  return list.filter(c => c.email);
+}
+
+function dpBukaModalEmelPukal() {
+  const penerima = dpPenerimaEmelPukal();
+  document.getElementById('ep-jumlah-penerima').textContent = penerima.length
+    ? `📬 ${penerima.length} pelanggan ada rekod emel${document.getElementById('dp-cari').value.trim()?' (ikut penapis semasa)':''} akan terima emel ini.`
+    : '⚠️ Tiada pelanggan dengan rekod emel dijumpai.';
+  document.getElementById('ep-subjek').value = '';
+  document.getElementById('ep-mesej').value = '';
+  document.getElementById('ep-status').style.display = 'none';
+  const btn = document.getElementById('ep-btn-hantar');
+  btn.disabled = !penerima.length;
+  btn.textContent = '📧 Hantar ke Semua Pembeli';
+  showModal('modal-emel-pukal');
+}
+
+async function dpHantarEmelPukal() {
+  const penerima = dpPenerimaEmelPukal();
+  if (!penerima.length) return toast('Tiada pelanggan dengan rekod emel','err');
+  const subjek = document.getElementById('ep-subjek').value.trim();
+  const mesej = document.getElementById('ep-mesej').value.trim();
+  if (!subjek || !mesej) return toast('Sila isi subjek dan mesej','err');
+  if (!confirm(`Hantar emel ini kepada ${penerima.length} pelanggan sebenar? Tindakan ini tidak boleh ditarik balik.`)) return;
+
+  const btn = document.getElementById('ep-btn-hantar');
+  btn.disabled = true;
+  btn.textContent = '⏳ Menghantar...';
+  const statusEl = document.getElementById('ep-status');
+  statusEl.style.display = 'none';
+
+  const { data, error } = await sb.functions.invoke('hantar-emel-pukal', {
+    body: { penerima: penerima.map(c => ({ email: c.email, nama: c.nama })), subjek, mesej },
+  });
+
+  if (error || data?.error) {
+    let pesan = data?.error || error.message;
+    if (error?.context) {
+      try { const body = await error.context.json(); if (body?.error) pesan = body.error; } catch { /* biar mesej asal */ }
+    }
+    toast('Gagal hantar emel pukal: ' + pesan, 'err');
+    btn.disabled = false;
+    btn.textContent = '📧 Hantar ke Semua Pembeli';
+    return;
+  }
+
+  statusEl.style.display = '';
+  statusEl.style.color = data.gagal?.length ? 'var(--gold)' : 'var(--teal)';
+  statusEl.textContent = data.gagal?.length
+    ? `✅ ${data.dihantar}/${data.jumlah} berjaya dihantar. ⚠️ Gagal: ${data.gagal.join(', ')}`
+    : `✅ ${data.dihantar}/${data.jumlah} emel berjaya dihantar!`;
+  toast(`${data.dihantar} emel pukal berjaya dihantar`);
+  btn.disabled = false;
+  btn.textContent = '📧 Hantar ke Semua Pembeli';
+}
+
 // ════════════════════════════════════════════════════
 //  HEBAHAN WHATSAPP (Marketing) — jana pautan wa.me per kontak, batch 15,
 //  setiap mesej tetap dihantar SECARA MANUAL (pemilik tekan hantar dalam
-//  WhatsApp sendiri) — tiada automasi/bot. Simpan progress di localStorage
-//  peranti ni sahaja (bukan cloud) — data kontak/nombor TIDAK disimpan
-//  dalam kod sumber (elak PII pelanggan sebenar termasuk dalam git).
+//  WhatsApp sendiri) — tiada automasi/bot. Progress disimpan di jadual
+//  wa_hebahan_state (Supabase) supaya peranti kedua boleh sambung tugasan
+//  yang sama, dengan localStorage sebagai cache/fallback offline — data
+//  kontak/nombor TIDAK disimpan dalam kod sumber (elak PII termasuk git).
 // ════════════════════════════════════════════════════
 const WH_KEY = 'wa_hebahan_v1';
 const WH_BATCH_SIZE = 15;
@@ -3920,25 +4043,51 @@ function whBuildLink(msg, c) {
   return `https://wa.me/${c.num}?text=${encodeURIComponent(whPersonalize(msg, c.name))}`;
 }
 
-function whLoad() {
-  try {
-    const saved = localStorage.getItem(WH_KEY);
-    if (saved) {
-      const s = JSON.parse(saved);
-      if (typeof s.raw === 'string') WH_STATE.raw = s.raw;
-      if (typeof s.msg === 'string' && s.msg.trim()) WH_STATE.msg = s.msg;
-      if (Array.isArray(s.contacts)) WH_STATE.contacts = s.contacts;
-    }
-  } catch { /* tiada data tersimpan lagi */ }
+async function whLoad() {
+  let loaded = false;
+  if (useCloud) {
+    try {
+      const { data, error } = await sb.from('wa_hebahan_state').select('*').eq('id', 1).maybeSingle();
+      if (!error && data && (data.raw || (data.msg && data.msg.trim()) || (data.contacts||[]).length)) {
+        if (typeof data.raw === 'string') WH_STATE.raw = data.raw;
+        if (typeof data.msg === 'string' && data.msg.trim()) WH_STATE.msg = data.msg;
+        if (Array.isArray(data.contacts)) WH_STATE.contacts = data.contacts;
+        loaded = true;
+      }
+    } catch { /* fallback ke localStorage di bawah */ }
+  }
+  if (!loaded) {
+    try {
+      const saved = localStorage.getItem(WH_KEY);
+      if (saved) {
+        const s = JSON.parse(saved);
+        if (typeof s.raw === 'string') WH_STATE.raw = s.raw;
+        if (typeof s.msg === 'string' && s.msg.trim()) WH_STATE.msg = s.msg;
+        if (Array.isArray(s.contacts)) WH_STATE.contacts = s.contacts;
+      }
+    } catch { /* tiada data tersimpan lagi */ }
+  }
   document.getElementById('wh-raw').value = WH_STATE.raw;
   document.getElementById('wh-msg').value = WH_STATE.msg;
+  document.getElementById('wh-sync-status').textContent = useCloud ? '☁️ Disegerak ke cloud — boleh sambung dari peranti lain' : '⚠️ Mod offline — hanya disimpan di peranti ini';
   whUpdateRawCount();
   whUpdateMsgPreview();
   whRenderHasil();
 }
 
+let WH_SAVE_TIMER = null;
 function whSave() {
   try { localStorage.setItem(WH_KEY, JSON.stringify(WH_STATE)); } catch { /* storan penuh/tak tersedia */ }
+  if (!useCloud) return;
+  clearTimeout(WH_SAVE_TIMER);
+  WH_SAVE_TIMER = setTimeout(whSaveNow, 700);
+}
+
+async function whSaveNow() {
+  const { error } = await sb.from('wa_hebahan_state').upsert({
+    id: 1, raw: WH_STATE.raw, msg: WH_STATE.msg, contacts: WH_STATE.contacts, updated_at: new Date().toISOString(),
+  });
+  if (error) console.error('Gagal simpan hebahan ke cloud:', error.message);
 }
 
 function whOnRawChange() {
@@ -4131,6 +4280,7 @@ async function renderVoucherList() {
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <span class="badge ${statusBadge}">${statusTxt}</span>
+        <button class="btn-delete-icon" style="position:static" onclick='editVoucher(${JSON.stringify(v).replace(/'/g,"&apos;")})' title="Edit voucher">✏️</button>
         <button class="btn-delete-icon" style="position:static" onclick="toggleVoucherAktif('${esc(v.kod)}',${!v.aktif})" title="${v.aktif?'Nyahaktif':'Aktifkan'}">${v.aktif?'⏸️':'▶️'}</button>
         <button class="btn-delete-icon" style="position:static" onclick="padamVoucher('${esc(v.kod)}')" title="Padam voucher">✕</button>
       </div>
@@ -4146,22 +4296,40 @@ function bukaModalVoucher() {
   document.getElementById('v-jenis').value = 'peratus';
   document.getElementById('v-nilai').value = '';
   document.getElementById('v-minima').value = '';
+  document.getElementById('v-maksima').value = '';
   document.getElementById('v-had-guna').value = '';
   document.getElementById('v-luput').value = '';
   document.getElementById('v-aktif').checked = true;
   showModal('modal-voucher');
 }
 
+function editVoucher(v) {
+  document.getElementById('voucher-modal-title').textContent = '✏️ Edit Voucher';
+  document.getElementById('v-edit-kod').value = v.kod;
+  document.getElementById('v-kod').value = v.kod;
+  document.getElementById('v-kod').disabled = true;
+  document.getElementById('v-jenis').value = v.jenis_diskaun;
+  document.getElementById('v-nilai').value = v.nilai_diskaun;
+  document.getElementById('v-minima').value = v.minima_belanja || '';
+  document.getElementById('v-maksima').value = v.maksima_belanja || '';
+  document.getElementById('v-had-guna').value = v.had_guna ?? '';
+  document.getElementById('v-luput').value = v.tarikh_luput || '';
+  document.getElementById('v-aktif').checked = v.aktif;
+  showModal('modal-voucher');
+}
+
 async function saveVoucher() {
+  const kodEdit = document.getElementById('v-edit-kod').value;
   const kodBaharu = document.getElementById('v-kod').value.trim().toUpperCase();
   if (!kodBaharu) return toast('Sila isi kod voucher','err');
   const nilai = +document.getElementById('v-nilai').value || 0;
   if (nilai <= 0) return toast('Sila isi nilai diskaun','err');
   const payload = {
-    kod: kodBaharu,
+    kod: kodEdit || kodBaharu,
     jenis_diskaun: document.getElementById('v-jenis').value,
     nilai_diskaun: nilai,
     minima_belanja: +document.getElementById('v-minima').value || 0,
+    maksima_belanja: document.getElementById('v-maksima').value ? +document.getElementById('v-maksima').value : null,
     had_guna: document.getElementById('v-had-guna').value ? +document.getElementById('v-had-guna').value : null,
     tarikh_luput: document.getElementById('v-luput').value || null,
     aktif: document.getElementById('v-aktif').checked,

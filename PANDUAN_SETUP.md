@@ -51,6 +51,10 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 41. Kad baharu **"👥 Data Pembeli"** di pengurusan.html (Lebih, pemilik sahaja) — senarai pelanggan e-dagang disatukan ikut nombor telefon, untuk susulan & marketing. Tiada perubahan SQL diperlukan.
 > 42. `SQL_TAMBAHAN_36.sql` + Edge Function baharu `hantar-emel-susulan` + set secret `RESEND_API_KEY` — susulan emel untuk pesanan belum/gagal bayar, dan butang "🔓 Bebaskan Voucher" untuk guna semula kod voucher yang gagal — lihat bahagian "📧 Susulan Bayaran & Bebas Voucher" di bawah.
 > 43. `SQL_TAMBAHAN_37.sql` + Edge Function baharu `susulan-auto-cron` + set secret `CRON_SECRET` + jadual `pg_cron` — susulan emel bayaran AUTOMATIK (1 emel sehari, maksimum 3 kali) & auto-batal pesanan (data pembeli KEKAL direkod) selepas 3 kali tanpa bayaran — lihat bahagian "🔁 Susulan Bayaran Automatik (Harian)" di bawah.
+> 44. `SQL_TAMBAHAN_38.sql` — Pembetulan bug padam voucher (FK `baucar_guna` kini `ON DELETE CASCADE`) + lajur `maksima_belanja` pada `baucar` (had maksima belian supaya kod tak disalahguna untuk belian bernilai besar) + butang "✏️ Edit Voucher" — lihat bahagian "🎟️ Voucher Diskaun" di bawah (kemaskini). Tiada bucket Storage baharu diperlukan.
+> 45. `SQL_TAMBAHAN_39.sql` — Jadual `wa_hebahan_state` supaya progress kad "📣 Hebahan WhatsApp (Marketing)" disegerak ke cloud (bukan localStorage sahaja) — peranti kedua boleh sambung tugasan hantar mesej dari nombor terakhir — lihat bahagian "📣 Hebahan WhatsApp (Marketing)" di bawah (kemaskini). Tiada bucket Storage baharu diperlukan.
+> 46. Shortcut chip di bahagian atas tab Profile (Lebih) — pemilik/pekerja klik satu shortcut terus dibawa scroll ke kad berkaitan (Profil, Voucher, Data Pembeli, dll). Tiada perubahan SQL/Edge Function diperlukan.
+> 47. Deploy Edge Function baharu `hantar-emel-pukal` (guna semula secret `RESEND_API_KEY` sedia ada) — butang "📧 Emel Pukal ke Semua Pembeli" di kad "👥 Data Pembeli" untuk hantar SATU emel pemasaran kepada semua pelanggan yang ada rekod emel — lihat bahagian "👥 Data Pembeli" di bawah (kemaskini).
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -346,9 +350,10 @@ Kad **"🎟️ Voucher Diskaun"** (Lebih, pemilik sahaja) — jana kod voucher u
 - Pelanggan masukkan kod dalam ruangan "Kod Voucher" semasa checkout di `index.html`, tekan "✅ Guna Kod" — sistem sahkan kod (aktif, belum luput, cukup minima belanja, belum cecah had guna, no. telefon belum guna kod sama) dan papar diskaun terus dalam jumlah akhir.
 - **Sekali guna sahaja setiap no. telefon** bagi setiap kod — tak boleh guna kod sama dua kali dengan no. telefon sama.
 - Diskaun **disahkan & dikira semula di server** (bukan dipercayai daripada client) semasa pesanan sebenar dihantar — jika kod jadi tak sah antara masa "Guna Kod" ditekan dan pesanan dihantar (cth kod habis had di saat akhir), pesanan akan gagal dengan mesej ralat yang jelas, pelanggan boleh cuba tanpa kod atau kod lain.
-- Butang ⏸️/▶️ pada senarai voucher untuk nyahaktif/aktifkan semula tanpa padam; butang ✕ untuk padam kekal.
+- Butang ⏸️/▶️ pada senarai voucher untuk nyahaktif/aktifkan semula tanpa padam; butang ✕ untuk padam kekal; butang ✏️ untuk **edit** voucher sedia ada (kod tak boleh ditukar, semua medan lain boleh).
+- Ruangan **"Maksima Belanja (RM, optional)"** — had atas nilai belian yang boleh guna kod ini, elak kod digunakan untuk belian bernilai terlalu besar (cth kod promosi kecil disalahguna untuk pesanan borong). Disahkan di server dalam `validasi_baucar()`, sama macam Minima Belanja.
 
-**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_29.sql`. Tiada bucket Storage baharu diperlukan.
+**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_29.sql` (pemasangan asal) dan `SQL_TAMBAHAN_38.sql` (pembetulan bug padam voucher yang pernah digunakan + lajur Maksima Belanja). Tiada bucket Storage baharu diperlukan.
 
 ### 📢 Notifikasi Promosi Bergerak (Laman Utama)
 Di bawah senarai voucher dalam kad **"🎟️ Voucher Diskaun"** (pengurusan.html), ada ruangan **"📢 Mesej Promosi (Notifikasi Bergerak di Laman Utama)"** — pemilik boleh taip SEBARANG makluman (bukan terhad kepada voucher sahaja, cth promosi am, cuti perayaan, dll.) dan tekan **"💾 Simpan Mesej Promosi"**.
@@ -366,11 +371,11 @@ Kad **"📣 Hebahan WhatsApp (Marketing)"** di pengurusan.html (Lebih, pemilik s
 - **Senarai Nombor**: satu nombor setiap baris (format apa-apa: `0123456789`, `+6012...`, `6012...` semua diterima & dinormalisasi). Letak nama selepas koma untuk personalize (cth `0123456789, Aisyah`). Duplicate & baris tak sah diabaikan automatik.
 - **Mesej Hebahan**: guna `{nama}` untuk letak nama automatik, `*bintang*` untuk **bold** dalam WhatsApp. Disyorkan letak ayat "Reply STOP" untuk pilihan berhenti terima hebahan.
 - Tekan **"⚡ Jana Batch"** — sistem susun senarai kepada batch 15 nombor. Setiap kontak ada butang "Hantar" (buka WhatsApp + tanda "dihantar") dan boleh undo ("✓ Dihantar" → tekan untuk buka semula).
-- Progress (X/Y dihantar) & status setiap batch auto-disimpan di **peranti/pelayar tu sahaja** (localStorage) — boleh tutup & sambung esok dari nombor terakhir. **Bukan disegerakkan ke cloud** — kalau tukar peranti/pelayar, senarai & progress perlu dimasukkan/jana semula.
-- ⚠️ **Elak nombor pelanggan sebenar disimpan dalam kod sumber**: senarai nombor SENGAJA tidak "hardcode" dalam fail — ia ditaip/tampal terus dalam apps semasa digunakan, supaya tiada nombor telefon pelanggan tersimpan dalam repo Git (yang boleh terdedah secara awam melalui GitHub Pages).
+- Progress (X/Y dihantar) & status setiap batch auto-disimpan ke jadual `wa_hebahan_state` (Supabase, satu baris untuk pemilik) — **boleh tutup & sambung dari peranti/pelayar LAIN** dari nombor terakhir (cth mula di komputer pejabat, sambung di telefon). localStorage kekal sebagai cache/fallback offline sahaja.
+- ⚠️ **Elak nombor pelanggan sebenar disimpan dalam kod sumber**: senarai nombor SENGAJA tidak "hardcode" dalam fail — ia ditaip/tampal terus dalam apps semasa digunakan, supaya tiada nombor telefon pelanggan tersimpan dalam repo Git (yang boleh terdedah secara awam melalui GitHub Pages). Data di `wa_hebahan_state` dilindungi RLS (`is_pemilik()` sahaja).
 - 💡 Tips dalaman kad ni: habiskan satu batch (15 nombor) dahulu, rehat 15–30 minit sebelum sambung batch seterusnya — elak akaun WhatsApp disekat kerana dianggap spam oleh sistem WhatsApp sendiri.
 
-**Setup wajib sebelum ciri ini berfungsi**: tiada — berfungsi terus tanpa SQL/Edge Function/secret baharu.
+**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_39.sql` (jadual `wa_hebahan_state` untuk sync cloud). Tiada bucket Storage/Edge Function/secret baharu diperlukan.
 
 ### 👥 Data Pembeli
 Kad **"👥 Data Pembeli"** di pengurusan.html (Lebih, pemilik sahaja) — satukan semua pesanan e-dagang (`pesanan_edagang`) ikut nombor telefon supaya pemilik nampak **senarai pelanggan** (bukan senarai pesanan), untuk susulan & marketing.
@@ -379,8 +384,12 @@ Kad **"👥 Data Pembeli"** di pengurusan.html (Lebih, pemilik sahaja) — satuk
 - Ruangan carian untuk tapis ikut nama/telefon.
 - Butang **"📋 Salin untuk Hebahan WhatsApp"** — salin senarai (format `telefon, nama`) ke clipboard, terus boleh tampal ke ruangan "Senarai Nombor" di kad Hebahan WhatsApp.
 - Butang **"⬇️ Muat Turun CSV"** — muat turun fail CSV (buka dengan Excel/Google Sheets) untuk simpanan rekod.
+- Butang **"📧 Emel Pukal ke Semua Pembeli"** — buka modal untuk taip Subjek & Mesej (guna `{nama}` untuk personalize), kemudian hantar **SATU emel pemasaran** kepada semua pelanggan yang ada rekod emel (ikut penapis carian semasa, jika ada). Ada pengesahan (confirm) sebelum hantar sebab tindakan ini terus ke pelanggan sebenar & tak boleh ditarik balik. Guna Edge Function `hantar-emel-pukal` (guna semula secret `RESEND_API_KEY` yang sama dengan "Emel Susulan") — dihantar dalam batch 100 emel setiap panggilan Resend, dengan jeda antara batch untuk elak rate-limit.
 
-**Setup wajib sebelum ciri ini berfungsi**: tiada — berfungsi terus tanpa SQL/Edge Function/secret baharu.
+**Setup wajib sebelum ciri ini berfungsi**: senarai/CSV/salin berfungsi terus tanpa apa-apa setup. Untuk **"📧 Emel Pukal"**, perlu `RESEND_API_KEY` sudah ditetapkan (lihat bahagian "📧 Susulan Bayaran & Bebas Voucher" di bawah untuk 3 langkah setup Resend) dan deploy fungsi:
+```
+npx supabase functions deploy hantar-emel-pukal
+```
 
 ### 📧 Susulan Bayaran & Bebas Voucher
 Pada setiap pesanan e-dagang yang **belum/gagal bayar** (tab Tempahan → E-Dagang), dua butang baharu muncul (pemilik sahaja):
