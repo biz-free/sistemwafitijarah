@@ -5,7 +5,9 @@
 //
 // Setup wajib: secret RESEND_API_KEY (daftar akaun percuma di resend.com, sahkan
 // domain wafitijarahtrading.com di bahagian "Domains" Resend supaya emel boleh
-// dihantar dari alamat @wafitijarahtrading.com).
+// dihantar dari alamat @wafitijarahtrading.com). Guna semula secret BILLPLZ_BASE_URL
+// sedia ada (dari billplz-create-bill) untuk bina pautan bayaran Billplz yang betul
+// (sandbox lwn production).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -38,7 +40,7 @@ Deno.serve(async (req) => {
 
     const { data: order, error: orderErr } = await adminClient
       .from("pesanan_edagang")
-      .select("id, pelanggan_nama, pelanggan_email, jumlah, items, kaedah_bayaran, status_bayaran")
+      .select("id, pelanggan_nama, pelanggan_email, jumlah, items, kaedah_bayaran, status_bayaran, billplz_bill_id")
       .eq("id", orderId)
       .single();
     if (orderErr || !order) {
@@ -57,7 +59,18 @@ Deno.serve(async (req) => {
     const bankInfo = order.kaedah_bayaran !== "billplz" && tetapan?.butiran_bank
       ? `<p><b>Butiran Akaun Bank:</b><br>${esc(tetapan.butiran_bank).replace(/\n/g, "<br>")}</p>`
       : "";
-    const linkCheckout = "https://www.wafitijarahtrading.com/";
+
+    // Pesanan Billplz: bill asal kekal boleh dibayar terus (Billplz tak lupuskan
+    // bill secara automatik) — bawa pembeli terus ke halaman bayaran bill tu,
+    // bukan halaman utama. Pesanan transfer manual: tiada "checkout" untuk
+    // disambung (butiran bank dah dipaparkan di atas), jadi kekal ke laman utama.
+    const billplzBaseUrl = Deno.env.get("BILLPLZ_BASE_URL") || "https://www.billplz-sandbox.com";
+    const linkCheckout = order.kaedah_bayaran === "billplz" && order.billplz_bill_id
+      ? `${billplzBaseUrl}/bills/${order.billplz_bill_id}`
+      : "https://www.wafitijarahtrading.com/";
+    const labelButang = order.kaedah_bayaran === "billplz" && order.billplz_bill_id
+      ? "💳 Teruskan Pembayaran Sekarang"
+      : "Layari Kedai Online";
 
     const html = `
       <div style="font-family:Arial,sans-serif;color:#16241D;max-width:480px;margin:0 auto">
@@ -66,7 +79,7 @@ Deno.serve(async (req) => {
         <p>Pesanan anda <b>${esc(order.id)}</b> (${esc(itemsStr)}) sejumlah <b>RM${Number(order.jumlah).toFixed(2)}</b> masih belum disahkan pembayarannya.</p>
         <p>Sila selesaikan pembayaran secepat mungkin supaya pesanan anda dapat diproses.</p>
         ${bankInfo}
-        <p><a href="${linkCheckout}" style="background:#0B3D2E;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block">Layari Kedai Online</a></p>
+        <p><a href="${linkCheckout}" style="background:#0B3D2E;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block">${labelButang}</a></p>
         <p style="font-size:12px;color:#5C7A6C">Jika anda sudah membuat pembayaran, sila abaikan emel ini atau hubungi kami untuk pengesahan.</p>
       </div>`;
 
