@@ -377,13 +377,13 @@
         <label class="form-label">Kod Voucher (Optional)</label>
         <div style="display:flex;gap:8px">
           <input type="text" class="form-input" id="c-kod-voucher" placeholder="cth: RAYA10" style="text-transform:uppercase;flex:1;min-width:0" />
-          <button class="btn btn-secondary btn-sm" style="width:auto;flex-shrink:0" onclick="gunaVoucher()">✅ Guna Kod</button>
+          <button class="btn btn-secondary btn-sm" style="width:auto;flex-shrink:0" onclick="gunaVoucher()">🎟️ Guna Kod</button>
         </div>
         <div id="voucher-mesej" style="font-size:12px;margin-top:6px;display:none"></div>
       </div>
       <div id="kiraan-jelas">
         <div class="kiraan-row"><span>Subjumlah</span><span id="kiraan-subtotal">RM 0.00</span></div>
-        <div class="kiraan-row" id="kiraan-diskaun-row" style="display:none;color:var(--green)"><span>Diskaun Voucher (<span id="kiraan-diskaun-kod"></span>) <button class="btn-link" style="font-size:11px" onclick="buangVoucher()">✕ Buang</button></span><span id="kiraan-diskaun">−RM 0.00</span></div>
+        <div class="kiraan-row" id="kiraan-diskaun-row" style="display:none;color:var(--green)"><span>Diskaun Voucher (<span id="kiraan-diskaun-kod"></span>) <a href="javascript:void(0)" onclick="bukaVoucherTnc()" style="font-size:11px;color:var(--green);text-decoration:underline" title="Terma & Syarat voucher ini">ℹ️ T&C</a> <button class="btn-link" style="font-size:11px" onclick="buangVoucher()">✕ Buang</button></span><span id="kiraan-diskaun">−RM 0.00</span></div>
         <div class="kiraan-row"><span>Kos Penghantaran<span id="kiraan-zon-label"></span></span><span id="kiraan-penghantaran">RM 0.00</span></div>
         <div class="kiraan-row jumlah"><span>JUMLAH AKHIR</span><span id="grand-total" style="color:var(--teal)">RM 0.00</span></div>
       </div>
@@ -470,6 +470,14 @@
       <p style="margin-bottom:10px"><strong>5. Had Liabiliti</strong><br/>Wafi Tijarah Trading tidak bertanggungjawab ke atas kerugian tidak langsung akibat kelewatan penghantaran oleh pihak kurier pihak ketiga.</p>
       <p>Terma ini tertakluk kepada undang-undang Malaysia. Sebarang pertanyaan, sila hubungi kami di wafitijarahtrading@gmail.com.</p>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="voucher-tnc-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="tutupModalInfo('voucher-tnc-modal')">✕</button>
+    <div class="section-title">🎟️ Terma & Syarat Voucher</div>
+    <div id="voucher-tnc-body" style="font-size:13px;color:var(--text);line-height:1.9"></div>
   </div>
 </div>
 
@@ -1286,7 +1294,7 @@ function kemaskiniTotal() {
   document.getElementById('grand-total').textContent = fmt(tot - diskaun + kosHantar);
 }
 
-let voucherAktif = null; // { kod, jenis_diskaun, nilai_diskaun }
+let voucherAktif = null; // { kod, jenis_diskaun, nilai_diskaun, minima_belanja, maksima_belanja, tarikh_luput, had_guna }
 
 function tunjukMesejVoucher(mesej, ok) {
   const el = document.getElementById('voucher-mesej');
@@ -1304,7 +1312,11 @@ async function gunaVoucher() {
   const hasil = Array.isArray(data) ? data[0] : data;
   if (error || !hasil) return tunjukMesejVoucher('Gagal semak kod voucher','err');
   if (!hasil.sah) { voucherAktif = null; kemaskiniTotal(); return tunjukMesejVoucher(hasil.mesej, false); }
-  voucherAktif = { kod: kod.toUpperCase(), jenis_diskaun: hasil.jenis_diskaun, nilai_diskaun: hasil.nilai_diskaun };
+  voucherAktif = {
+    kod: kod.toUpperCase(), jenis_diskaun: hasil.jenis_diskaun, nilai_diskaun: hasil.nilai_diskaun,
+    minima_belanja: hasil.minima_belanja, maksima_belanja: hasil.maksima_belanja,
+    tarikh_luput: hasil.tarikh_luput, had_guna: hasil.had_guna,
+  };
   tunjukMesejVoucher(`Kod voucher "${voucherAktif.kod}" diguna pakai`, true);
   kemaskiniTotal();
 }
@@ -1314,6 +1326,22 @@ function buangVoucher() {
   document.getElementById('c-kod-voucher').value = '';
   document.getElementById('voucher-mesej').style.display = 'none';
   kemaskiniTotal();
+}
+
+function bukaVoucherTnc() {
+  if (!voucherAktif) return;
+  const v = voucherAktif;
+  const nilaiTxt = v.jenis_diskaun === 'tetap' ? `RM${v.nilai_diskaun}` : `${v.nilai_diskaun}%`;
+  const syarat = [`Diskaun: <strong>${nilaiTxt}</strong>`];
+  syarat.push(v.minima_belanja > 0 ? `Minima belanja: <strong>RM${Number(v.minima_belanja).toFixed(2)}</strong>` : 'Tiada minima belanja');
+  syarat.push(v.maksima_belanja ? `Maksima belian sah: <strong>RM${Number(v.maksima_belanja).toFixed(2)}</strong>` : 'Tiada had maksima belian');
+  syarat.push(v.tarikh_luput ? `Tarikh luput: <strong>${new Date(v.tarikh_luput).toLocaleDateString('ms-MY',{day:'2-digit',month:'short',year:'numeric'})}</strong>` : 'Tiada tarikh luput');
+  syarat.push(v.had_guna ? `Had guna keseluruhan: <strong>${v.had_guna} kali</strong>` : 'Tiada had guna keseluruhan');
+  syarat.push('Hanya <strong>1 kali</strong> guna setiap nombor telefon.');
+  document.getElementById('voucher-tnc-body').innerHTML =
+    `<p style="margin-bottom:10px">Kod <strong>${v.kod}</strong> tertakluk kepada syarat berikut:</p><ul style="padding-left:18px;margin:0">` +
+    syarat.map(s => `<li style="margin-bottom:6px">${s}</li>`).join('') + '</ul>';
+  document.getElementById('voucher-tnc-modal').classList.add('show');
 }
 
 async function hantarPesanan() {

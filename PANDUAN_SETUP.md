@@ -55,6 +55,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 45. `SQL_TAMBAHAN_39.sql` — Jadual `wa_hebahan_state` supaya progress kad "📣 Hebahan WhatsApp (Marketing)" disegerak ke cloud (bukan localStorage sahaja) — peranti kedua boleh sambung tugasan hantar mesej dari nombor terakhir — lihat bahagian "📣 Hebahan WhatsApp (Marketing)" di bawah (kemaskini). Tiada bucket Storage baharu diperlukan.
 > 46. Shortcut chip di bahagian atas tab Profile (Lebih) — pemilik/pekerja klik satu shortcut terus dibawa scroll ke kad berkaitan (Profil, Voucher, Data Pembeli, dll). Tiada perubahan SQL/Edge Function diperlukan.
 > 47. Deploy Edge Function baharu `hantar-emel-pukal` (guna semula secret `RESEND_API_KEY` sedia ada) — butang "📧 Emel Pukal ke Semua Pembeli" di kad "👥 Data Pembeli" untuk hantar SATU emel pemasaran kepada semua pelanggan yang ada rekod emel — lihat bahagian "👥 Data Pembeli" di bawah (kemaskini).
+> 48. `SQL_TAMBAHAN_40.sql` — Butang kod voucher di checkout index.html ditukar kepada "🎟️ Guna Kod" (lebih jelas berbanding ✅ sebelum ini), dan pautan "ℹ️ T&C" baharu pada baris "Diskaun Voucher" yang papar modal Terma & Syarat khusus untuk kod yang berjaya digunakan (minima/maksima belanja, tarikh luput, had guna) — `validasi_baucar()` dikemaskini untuk pulangkan medan tambahan ini. Tiada bucket Storage/Edge Function baharu diperlukan.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -347,13 +348,14 @@ Borang **Rekod Baru** (tab Penghantaran) kini ada pilihan kaedah bayaran ke-4: *
 Kad **"🎟️ Voucher Diskaun"** (Lebih, pemilik sahaja) — jana kod voucher untuk pelanggan storefront `index.html` guna semasa checkout.
 
 - Tekan **"+ Voucher Baru"** — isi Kod (cth `RAYA10`), Jenis Diskaun (Peratus % atau Tetap RM), Nilai, dan pilihan tambahan: Minima Belanja, Had Guna Keseluruhan, Tarikh Luput. Tekan simpan.
-- Pelanggan masukkan kod dalam ruangan "Kod Voucher" semasa checkout di `index.html`, tekan "✅ Guna Kod" — sistem sahkan kod (aktif, belum luput, cukup minima belanja, belum cecah had guna, no. telefon belum guna kod sama) dan papar diskaun terus dalam jumlah akhir.
+- Pelanggan masukkan kod dalam ruangan "Kod Voucher" semasa checkout di `index.html`, tekan **"🎟️ Guna Kod"** — sistem sahkan kod (aktif, belum luput, cukup minima belanja, belum cecah had guna, no. telefon belum guna kod sama) dan papar diskaun terus dalam jumlah akhir.
 - **Sekali guna sahaja setiap no. telefon** bagi setiap kod — tak boleh guna kod sama dua kali dengan no. telefon sama.
 - Diskaun **disahkan & dikira semula di server** (bukan dipercayai daripada client) semasa pesanan sebenar dihantar — jika kod jadi tak sah antara masa "Guna Kod" ditekan dan pesanan dihantar (cth kod habis had di saat akhir), pesanan akan gagal dengan mesej ralat yang jelas, pelanggan boleh cuba tanpa kod atau kod lain.
+- Selepas kod berjaya digunakan, pautan **"ℹ️ T&C"** muncul di sebelah baris "Diskaun Voucher" — pelanggan tekan untuk papar modal **Terma & Syarat** kod tersebut (minima/maksima belanja, tarikh luput, had guna keseluruhan), supaya jelas kenapa/bila kod itu sah.
 - Butang ⏸️/▶️ pada senarai voucher untuk nyahaktif/aktifkan semula tanpa padam; butang ✕ untuk padam kekal; butang ✏️ untuk **edit** voucher sedia ada (kod tak boleh ditukar, semua medan lain boleh).
 - Ruangan **"Maksima Belanja (RM, optional)"** — had atas nilai belian yang boleh guna kod ini, elak kod digunakan untuk belian bernilai terlalu besar (cth kod promosi kecil disalahguna untuk pesanan borong). Disahkan di server dalam `validasi_baucar()`, sama macam Minima Belanja.
 
-**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_29.sql` (pemasangan asal) dan `SQL_TAMBAHAN_38.sql` (pembetulan bug padam voucher yang pernah digunakan + lajur Maksima Belanja). Tiada bucket Storage baharu diperlukan.
+**Setup wajib sebelum ciri ini berfungsi**: jalankan `SQL_TAMBAHAN_29.sql` (pemasangan asal), `SQL_TAMBAHAN_38.sql` (pembetulan bug padam voucher yang pernah digunakan + lajur Maksima Belanja), dan `SQL_TAMBAHAN_40.sql` (medan tambahan untuk modal T&C). Tiada bucket Storage baharu diperlukan.
 
 ### 📢 Notifikasi Promosi Bergerak (Laman Utama)
 Di bawah senarai voucher dalam kad **"🎟️ Voucher Diskaun"** (pengurusan.html), ada ruangan **"📢 Mesej Promosi (Notifikasi Bergerak di Laman Utama)"** — pemilik boleh taip SEBARANG makluman (bukan terhad kepada voucher sahaja, cth promosi am, cuti perayaan, dll.) dan tekan **"💾 Simpan Mesej Promosi"**.
