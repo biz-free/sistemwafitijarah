@@ -794,7 +794,52 @@ async function kongsiLinkProduk(produkId, event) {
     .catch(()=>toast('Gagal salin pautan','err'));
 }
 
+// Jejak kunjungan sendiri (tanpa perlu buka Google Analytics) — hantar sekali
+// setiap kali halaman dibuka, tak pernah simpan nama/telefon/IP, cuma
+// halaman + saluran (dikesan dari UTM/referrer) + session id rawak.
+function kesanSaluran(referrer, utmSource) {
+  if (utmSource) {
+    const s = utmSource.toLowerCase();
+    if (s.includes('facebook') || s === 'fb') return 'Facebook';
+    if (s.includes('instagram') || s === 'ig') return 'Instagram';
+    if (s.includes('whatsapp') || s === 'wa') return 'WhatsApp';
+    if (s.includes('tiktok')) return 'TikTok';
+    if (s.includes('google')) return 'Google';
+    return utmSource;
+  }
+  if (!referrer) return 'Direct/Lain';
+  try {
+    const host = new URL(referrer).hostname.toLowerCase();
+    if (host.includes('facebook.com') || host.includes('fb.me')) return 'Facebook';
+    if (host.includes('instagram.com')) return 'Instagram';
+    if (host.includes('whatsapp.com') || host.includes('wa.me')) return 'WhatsApp';
+    if (host.includes('tiktok.com')) return 'TikTok';
+    if (host.includes('google.')) return 'Google';
+    if (host.includes('wafitijarahtrading.com')) return 'Dalaman';
+    return host;
+  } catch { return 'Direct/Lain'; }
+}
+
+function jejakKunjungan(halaman) {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const utmSource = params.get('utm_source');
+    const utmCampaign = params.get('utm_campaign');
+    let sid = sessionStorage.getItem('wt_sid');
+    if (!sid) {
+      sid = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+      sessionStorage.setItem('wt_sid', sid);
+    }
+    sb.from('kunjungan_web').insert({
+      halaman, saluran: kesanSaluran(document.referrer, utmSource),
+      utm_source: utmSource || null, utm_campaign: utmCampaign || null,
+      referrer: document.referrer || null, session_id: sid,
+    }).then(()=>{}, ()=>{});
+  } catch { /* jangan pecahkan halaman jika gagal jejak */ }
+}
+
 async function initHalaman() {
+  jejakKunjungan('index');
   muatDataPoskod(); // lazy, tak perlu tunggu — auto-isi bandar/negeri sekadar bonus
   const [{ data: produk, error: e1 }, { data: tetapan }, { data: zon }] = await Promise.all([
     sb.rpc('senarai_produk_awam'),
@@ -1413,6 +1458,20 @@ async function hantarPesanan() {
   };
   const { error } = await sb.from('pesanan_edagang').insert(payload);
   if (error) return toast('Gagal buat pesanan: '+error.message,'err');
+
+  if (typeof gtag === 'function') {
+    gtag('event', 'purchase', {
+      transaction_id: id,
+      value: sub + kosHantar,
+      currency: 'MYR',
+      shipping: kosHantar,
+      coupon: voucherAktif?.kod || undefined,
+      items: entries.map(([pid, qty]) => {
+        const p = PRODUK.find(p => p.id === pid);
+        return { item_id: pid, item_name: p?.nama || '?', price: p?.harga_jual || 0, quantity: qty };
+      }),
+    });
+  }
 
   if (currentCustomer && document.getElementById('c-simpan-alamat').checked) {
     await sb.from('alamat_pelanggan').insert({

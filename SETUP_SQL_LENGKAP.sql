@@ -1190,3 +1190,22 @@ BEGIN
   v_diskaun := LEAST(v_diskaun, p_subjumlah);
   RETURN QUERY SELECT true, 'Kod voucher sah', v_diskaun, v_baucar.jenis_diskaun, v_baucar.nilai_diskaun, v_baucar.minima_belanja, v_baucar.maksima_belanja, v_baucar.tarikh_luput, v_baucar.had_guna;
 END; $$;
+
+-- ═══ Jejak kunjungan website sendiri (tanpa perlu buka Google Analytics) ═══
+CREATE TABLE IF NOT EXISTS kunjungan_web (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  halaman text NOT NULL,
+  saluran text NOT NULL DEFAULT 'Direct/Lain',
+  utm_source text,
+  utm_campaign text,
+  referrer text,
+  session_id text,
+  created_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_kunjungan_web_created_at ON kunjungan_web(created_at);
+
+ALTER TABLE kunjungan_web ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "sesiapa boleh rekod kunjungan" ON kunjungan_web;
+CREATE POLICY "sesiapa boleh rekod kunjungan" ON kunjungan_web FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "pemilik boleh baca kunjungan" ON kunjungan_web;
+CREATE POLICY "pemilik boleh baca kunjungan" ON kunjungan_web FOR SELECT USING (is_pemilik());

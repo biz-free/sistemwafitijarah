@@ -56,6 +56,8 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 46. Shortcut chip di bahagian atas tab Profile (Lebih) — pemilik/pekerja klik satu shortcut terus dibawa scroll ke kad berkaitan (Profil, Voucher, Data Pembeli, dll). Tiada perubahan SQL/Edge Function diperlukan.
 > 47. Deploy Edge Function baharu `hantar-emel-pukal` (guna semula secret `RESEND_API_KEY` sedia ada) — butang "📧 Emel Pukal ke Semua Pembeli" di kad "👥 Data Pembeli" untuk hantar SATU emel pemasaran kepada semua pelanggan yang ada rekod emel — lihat bahagian "👥 Data Pembeli" di bawah (kemaskini).
 > 48. `SQL_TAMBAHAN_40.sql` — Butang kod voucher di checkout index.html ditukar kepada "🎟️ Guna Kod" (lebih jelas berbanding ✅ sebelum ini), dan pautan "ℹ️ T&C" baharu pada baris "Diskaun Voucher" yang papar modal Terma & Syarat khusus untuk kod yang berjaya digunakan (minima/maksima belanja, tarikh luput, had guna) — `validasi_baucar()` dikemaskini untuk pulangkan medan tambahan ini. Tiada bucket Storage/Edge Function baharu diperlukan.
+> 49. Google Analytics 4 (GA4) dipasang pada index.html & pesan.html (tag `gtag.js`), termasuk event `purchase` dihantar setiap kali pesanan berjaya dibuat — untuk aktifkan Key Event "Drive Sales" dalam GA4 Admin → Events. Tiada perubahan SQL/Edge Function diperlukan (cuma tukar Measurement ID di dalam tag jika akaun GA berbeza).
+> 50. `SQL_TAMBAHAN_41.sql` — Jadual `kunjungan_web` + kad baharu **"🌐 Trafik Website"** di tab "📈 Analisis" (pengurusan.html, pemilik sahaja) — jejak kunjungan & saluran (Facebook/Instagram/WhatsApp/Google/Direct, dikesan dari UTM param atau referrer) terus dalam apps, tanpa perlu buka Google Analytics — lihat bahagian "🌐 Trafik Website" di bawah.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -392,6 +394,19 @@ Kad **"👥 Data Pembeli"** di pengurusan.html (Lebih, pemilik sahaja) — satuk
 ```
 npx supabase functions deploy hantar-emel-pukal
 ```
+
+### 🌐 Trafik Website & Google Analytics
+Dua lapisan berasingan untuk jawab soalan "berapa ramai orang singgah website kami, dan dari mana (media sosial/direct)?":
+
+**1. Google Analytics 4 (GA4)** — tag `gtag.js` dipasang pada `index.html` & `pesan.html`. Setiap kali pesanan berjaya dibuat (`hantarPesanan()`), event `purchase` dihantar (jumlah RM, produk, kod voucher jika ada). Dalam GA4 dashboard sendiri (analytics.google.com), pergi **Admin → Events**, cari `purchase`, toggle "Mark as key event" supaya ia dikira sebagai conversion rasmi. Measurement ID semasa: `G-V70WHNCLMY` — jika akaun GA bertukar, cari & ganti ID ini di kedua-dua fail (`<script async src="...?id=G-...">` dan `gtag('config', 'G-...')`).
+
+**2. Kad "🌐 Trafik Website"** (tab "📈 Analisis", pengurusan.html, pemilik sahaja) — jejak kunjungan **sendiri** (bukan tarik dari GA) supaya pemilik boleh lihat statistik terus dalam apps tanpa buka Google Analytics:
+- Setiap kali `index.html`/`pesan.html` dibuka, satu rekod ringkas disimpan dalam jadual `kunjungan_web` (halaman, saluran, session id rawak) — **tiada nama/telefon/IP disimpan**, hanya cukup untuk statistik agregat.
+- **Saluran** dikesan secara automatik: kalau link ada `?utm_source=facebook` (atau `instagram`/`whatsapp`/`tiktok`/`google`), sistem guna itu; kalau tiada, sistem cuba teka dari `document.referrer` (header rujukan pelayar). **Disyorkan** tambah `?utm_source=facebook&utm_campaign=promo_julai` (contoh) pada link yang dikongsi ke media sosial supaya saluran dikesan dengan tepat — referrer selalunya hilang bila link dibuka dari dalam app Facebook/Instagram/WhatsApp.
+- Kad papar: Jumlah Kunjungan, Pelawat Unik (ikut session), pecahan ikut saluran (%), dan pecahan ikut halaman (Kedai Online vs Borang Pesan) — boleh tapis ikut julat tarikh.
+- Rekod kunjungan boleh **dibaca hanya oleh pemilik** (RLS `is_pemilik()`); sesiapa sahaja (pelawat awam, tanpa log masuk) boleh **tulis** rekod kunjungan (perlu, sebab pelawat belum login).
+
+**Setup wajib**: jalankan `SQL_TAMBAHAN_41.sql` (jadual `kunjungan_web`). GA4 sudah aktif serta-merta (tiada setup tambahan) kecuali jika Measurement ID bertukar.
 
 ### 📧 Susulan Bayaran & Bebas Voucher
 Pada setiap pesanan e-dagang yang **belum/gagal bayar** (tab Tempahan → E-Dagang), dua butang baharu muncul (pemilik sahaja):

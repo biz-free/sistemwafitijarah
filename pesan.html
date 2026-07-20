@@ -329,7 +329,52 @@ let cart = {}; // { stokId: qty }
 let bayarMetod = 'cod';
 const kedaiIdDariQR = new URLSearchParams(location.search).get('kedai');
 
+// Jejak kunjungan sendiri (tanpa perlu buka Google Analytics) — hantar sekali
+// setiap kali halaman dibuka, tak pernah simpan nama/telefon/IP, cuma
+// halaman + saluran (dikesan dari UTM/referrer) + session id rawak.
+function kesanSaluran(referrer, utmSource) {
+  if (utmSource) {
+    const s = utmSource.toLowerCase();
+    if (s.includes('facebook') || s === 'fb') return 'Facebook';
+    if (s.includes('instagram') || s === 'ig') return 'Instagram';
+    if (s.includes('whatsapp') || s === 'wa') return 'WhatsApp';
+    if (s.includes('tiktok')) return 'TikTok';
+    if (s.includes('google')) return 'Google';
+    return utmSource;
+  }
+  if (!referrer) return 'Direct/Lain';
+  try {
+    const host = new URL(referrer).hostname.toLowerCase();
+    if (host.includes('facebook.com') || host.includes('fb.me')) return 'Facebook';
+    if (host.includes('instagram.com')) return 'Instagram';
+    if (host.includes('whatsapp.com') || host.includes('wa.me')) return 'WhatsApp';
+    if (host.includes('tiktok.com')) return 'TikTok';
+    if (host.includes('google.')) return 'Google';
+    if (host.includes('wafitijarahtrading.com')) return 'Dalaman';
+    return host;
+  } catch { return 'Direct/Lain'; }
+}
+
+function jejakKunjungan(halaman) {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const utmSource = params.get('utm_source');
+    const utmCampaign = params.get('utm_campaign');
+    let sid = sessionStorage.getItem('wt_sid');
+    if (!sid) {
+      sid = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+      sessionStorage.setItem('wt_sid', sid);
+    }
+    sb.from('kunjungan_web').insert({
+      halaman, saluran: kesanSaluran(document.referrer, utmSource),
+      utm_source: utmSource || null, utm_campaign: utmCampaign || null,
+      referrer: document.referrer || null, session_id: sid,
+    }).then(()=>{}, ()=>{});
+  } catch { /* jangan pecahkan halaman jika gagal jejak */ }
+}
+
 async function initHalaman() {
+  jejakKunjungan('pesan');
   const [{ data: produk, error: e1 }, { data: tetapan, error: e2 }] = await Promise.all([
     sb.rpc('senarai_produk_awam'),
     sb.from('tetapan').select('*').eq('id', 1).single(),

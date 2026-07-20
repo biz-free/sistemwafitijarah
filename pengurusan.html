@@ -592,6 +592,23 @@
     <div class="section-title">📈 Analisis Perniagaan</div>
     <div class="section-sub">Jualan, modal, untung & hutang keseluruhan</div>
 
+    <div class="card" id="trafik-web-card">
+      <div class="card-title">🌐 Trafik Website (Tanpa Perlu Buka GA)</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Kunjungan ke kedai online (index.html) & borang pesan (pesan.html), dan saluran/sumber pelawat datang — dikesan sendiri, tak perlu buka Google Analytics.</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Dari Tarikh</label><input type="date" class="form-input" id="tw-dari" onchange="renderTrafikWeb()" /></div>
+        <div class="form-group"><label class="form-label">Hingga Tarikh</label><input type="date" class="form-input" id="tw-hingga" onchange="renderTrafikWeb()" /></div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-box"><div class="stat-icon">👁️</div><div class="stat-label">Jumlah Kunjungan</div><div class="stat-val" id="tw-kunjungan" style="color:var(--teal)">—</div></div>
+        <div class="stat-box"><div class="stat-icon">🧑</div><div class="stat-label">Pelawat Unik</div><div class="stat-val" id="tw-unik" style="color:var(--green)">—</div></div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 6px">PECAHAN IKUT SALURAN</div>
+      <div id="tw-saluran-list"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin:14px 0 6px">PECAHAN IKUT HALAMAN</div>
+      <div id="tw-halaman-list"></div>
+    </div>
+
     <div class="card">
       <div class="form-row">
         <div class="form-group"><label class="form-label">Dari Bulan</label><input type="month" class="form-input" id="an-dari" onchange="renderAnalisis()" /></div>
@@ -1491,6 +1508,13 @@ async function setPage(p) {
       document.getElementById('an-hingga').value = bulanIni;
     }
     renderAnalisis();
+    if (!document.getElementById('tw-dari').value) {
+      const hariIni = new Date();
+      const sebulanLalu = new Date(hariIni); sebulanLalu.setDate(hariIni.getDate() - 30);
+      document.getElementById('tw-dari').value = sebulanLalu.toISOString().slice(0,10);
+      document.getElementById('tw-hingga').value = hariIni.toISOString().slice(0,10);
+    }
+    renderTrafikWeb();
   }
   if (p==='lebih') {
     renderLebihShortcuts();
@@ -3619,6 +3643,36 @@ function analisisJulatBulan() {
     const bln = (t.tarikh_masa||'').slice(0,7);
     return bln >= dari && bln <= hingga;
   });
+}
+
+async function renderTrafikWeb() {
+  const el = document.getElementById('tw-saluran-list');
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const dari = document.getElementById('tw-dari').value;
+  const hingga = document.getElementById('tw-hingga').value;
+  let q = sb.from('kunjungan_web').select('halaman, saluran, session_id');
+  if (dari) q = q.gte('created_at', dari + 'T00:00:00');
+  if (hingga) q = q.lte('created_at', hingga + 'T23:59:59');
+  const { data, error } = await q;
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+
+  const rows = data || [];
+  document.getElementById('tw-kunjungan').textContent = rows.length;
+  document.getElementById('tw-unik').textContent = new Set(rows.map(r=>r.session_id).filter(Boolean)).size;
+
+  const bySaluran = {};
+  rows.forEach(r => { const s = r.saluran || 'Direct/Lain'; bySaluran[s] = (bySaluran[s]||0) + 1; });
+  const totalSaluran = rows.length || 1;
+  el.innerHTML = Object.entries(bySaluran).sort((a,b)=>b[1]-a[1]).map(([s,n])=>
+    `<div class="list-item"><div class="list-item-title">${esc(s)}</div><div class="list-item-val">${n} (${Math.round(n/totalSaluran*100)}%)</div></div>`
+  ).join('') || '<div class="empty"><div class="empty-text">Tiada kunjungan dalam julat ini</div></div>';
+
+  const HALAMAN_LABEL = { index: 'Kedai Online (index.html)', pesan: 'Borang Pesan (pesan.html)' };
+  const byHalaman = {};
+  rows.forEach(r => { const h = HALAMAN_LABEL[r.halaman] || r.halaman; byHalaman[h] = (byHalaman[h]||0) + 1; });
+  document.getElementById('tw-halaman-list').innerHTML = Object.entries(byHalaman).sort((a,b)=>b[1]-a[1]).map(([h,n])=>
+    `<div class="list-item"><div class="list-item-title">${esc(h)}</div><div class="list-item-val">${n}</div></div>`
+  ).join('') || '<div class="empty"><div class="empty-text">Tiada data</div></div>';
 }
 
 function renderAnalisis() {
