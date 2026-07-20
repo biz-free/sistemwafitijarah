@@ -795,6 +795,26 @@
       <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Sediakan mesej promosi & senarai nombor sekali gus, sistem susun ikut batch 15 nombor. Setiap mesej tetap dihantar SECARA MANUAL oleh anda (tekan "Hantar" buka WhatsApp, anda sendiri tekan hantar) — bukan bot/automasi.</div>
       <div id="wh-sync-status" style="font-size:11px;color:var(--teal);font-weight:600;margin-bottom:12px"></div>
 
+      <div style="border:1px dashed var(--border);border-radius:9px;padding:10px;margin-bottom:14px">
+        <div class="form-group" style="margin-bottom:8px">
+          <label class="form-label">📂 Batch Tersimpan</label>
+          <div style="display:flex;gap:8px">
+            <select class="form-input" id="wh-batch-sel" onchange="whMuatBatch()" style="flex:1;min-width:0">
+              <option value="">-- Pilih batch tersimpan --</option>
+            </select>
+            <button class="btn-delete-icon" style="position:static" onclick="whPadamBatch()" title="Padam batch dipilih">✕</button>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Nama Batch (untuk simpan)</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" class="form-input" id="wh-batch-nama" placeholder="cth: Promosi Raya Julai" style="flex:1;min-width:0" />
+            <button class="btn btn-secondary btn-sm" style="width:auto;flex-shrink:0" onclick="whSimpanBatch()">💾 Simpan Batch</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Simpan senarai nombor + mesej semasa di bawah sebagai satu batch bernama — lain kali cukup pilih batch di atas untuk terus buat hebahan.</div>
+        </div>
+      </div>
+
       <div class="form-group">
         <label class="form-label">Senarai Nombor <span id="wh-raw-count" style="color:var(--muted);font-weight:400;font-size:11px"></span></label>
         <textarea class="form-input" id="wh-raw" rows="6" style="font-family:monospace;font-size:12px" placeholder="0123456789&#10;0198765432, Aisyah&#10;+6017 123 4567, Encik Amir" oninput="whOnRawChange()"></textarea>
@@ -4127,6 +4147,7 @@ async function whLoad() {
   whUpdateRawCount();
   whUpdateMsgPreview();
   whRenderHasil();
+  whLoadBatchList();
 }
 
 let WH_SAVE_TIMER = null;
@@ -4142,6 +4163,64 @@ async function whSaveNow() {
     id: 1, raw: WH_STATE.raw, msg: WH_STATE.msg, contacts: WH_STATE.contacts, updated_at: new Date().toISOString(),
   });
   if (error) console.error('Gagal simpan hebahan ke cloud:', error.message);
+}
+
+// ── Batch Tersimpan (senarai nombor + mesej bernama, boleh dimuat semula
+// bila-bila untuk hebahan berulang) — BERBEZA dari "batch 15 nombor" di
+// atas, yang cuma pecahan hantaran dalam satu sesi.
+let WH_BATCHES = [];
+
+async function whLoadBatchList() {
+  const sel = document.getElementById('wh-batch-sel');
+  if (!useCloud) { sel.innerHTML = '<option value="">-- Perlu Supabase --</option>'; return; }
+  const { data, error } = await sb.from('wa_hebahan_batch').select('id,nama,updated_at').order('updated_at', { ascending: false });
+  if (error) { console.error('Gagal muat senarai batch:', error.message); return; }
+  WH_BATCHES = data || [];
+  const semasa = sel.value;
+  sel.innerHTML = '<option value="">-- Pilih batch tersimpan --</option>' +
+    WH_BATCHES.map(b => `<option value="${b.id}">${esc(b.nama)}</option>`).join('');
+  sel.value = semasa;
+}
+
+async function whSimpanBatch() {
+  const nama = document.getElementById('wh-batch-nama').value.trim();
+  if (!nama) return toast('Sila isi nama batch','err');
+  if (!WH_STATE.contacts.length) return toast('Jana senarai nombor dahulu (tekan "⚡ Jana Batch") sebelum simpan','err');
+  const { error } = await sb.from('wa_hebahan_batch').upsert(
+    { nama, raw: WH_STATE.raw, msg: WH_STATE.msg, contacts: WH_STATE.contacts, updated_at: new Date().toISOString() },
+    { onConflict: 'nama' }
+  );
+  if (error) return toast('Gagal simpan batch: '+error.message,'err');
+  toast(`Batch "${nama}" disimpan`);
+  whLoadBatchList();
+}
+
+async function whMuatBatch() {
+  const id = document.getElementById('wh-batch-sel').value;
+  if (!id) return;
+  const { data, error } = await sb.from('wa_hebahan_batch').select('*').eq('id', id).single();
+  if (error || !data) return toast('Gagal muat batch: '+(error?.message||''),'err');
+  WH_STATE = { raw: data.raw || '', msg: (data.msg && data.msg.trim()) ? data.msg : WH_DEFAULT_MSG, contacts: data.contacts || [] };
+  document.getElementById('wh-batch-nama').value = data.nama;
+  document.getElementById('wh-raw').value = WH_STATE.raw;
+  document.getElementById('wh-msg').value = WH_STATE.msg;
+  whUpdateRawCount();
+  whUpdateMsgPreview();
+  whRenderHasil();
+  whSave();
+  toast(`Batch "${data.nama}" dimuatkan — sedia untuk hebahan`);
+}
+
+async function whPadamBatch() {
+  const id = document.getElementById('wh-batch-sel').value;
+  if (!id) return toast('Pilih batch untuk dipadam','err');
+  const b = WH_BATCHES.find(x => String(x.id) === String(id));
+  if (!confirm(`Padam batch "${b?.nama||''}" secara kekal?`)) return;
+  const { error } = await sb.from('wa_hebahan_batch').delete().eq('id', id);
+  if (error) return toast('Gagal padam batch: '+error.message,'err');
+  toast('Batch dipadam');
+  document.getElementById('wh-batch-nama').value = '';
+  whLoadBatchList();
 }
 
 function whOnRawChange() {

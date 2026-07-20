@@ -1209,3 +1209,17 @@ DROP POLICY IF EXISTS "sesiapa boleh rekod kunjungan" ON kunjungan_web;
 CREATE POLICY "sesiapa boleh rekod kunjungan" ON kunjungan_web FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "pemilik boleh baca kunjungan" ON kunjungan_web;
 CREATE POLICY "pemilik boleh baca kunjungan" ON kunjungan_web FOR SELECT USING (is_pemilik());
+
+-- ═══ Batch Tersimpan Hebahan WhatsApp (senarai nombor + mesej bernama) ═══
+CREATE TABLE IF NOT EXISTS wa_hebahan_batch (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  nama text NOT NULL UNIQUE,
+  raw text,
+  msg text,
+  contacts jsonb DEFAULT '[]'::jsonb,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE wa_hebahan_batch ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "pemilik urus wa_hebahan_batch" ON wa_hebahan_batch;
+CREATE POLICY "pemilik urus wa_hebahan_batch" ON wa_hebahan_batch FOR ALL USING (is_pemilik()) WITH CHECK (is_pemilik());
