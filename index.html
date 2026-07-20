@@ -1336,6 +1336,8 @@ function kemaskiniTotal() {
 
   const zonId = zonUntukNegeri(document.getElementById('c-negeri').value);
   const kosHantar = kosPenghantaranSemasa();
+  const hantarPercuma = !!voucherAktif?.percuma_penghantaran;
+  const kosHantarFinal = hantarPercuma ? 0 : kosHantar;
   const diskaun = voucherAktif ? Math.min(voucherAktif.jenis_diskaun==='tetap' ? voucherAktif.nilai_diskaun : tot*voucherAktif.nilai_diskaun/100, tot) : 0;
   document.getElementById('kiraan-subtotal').textContent = fmt(tot);
   document.getElementById('kiraan-diskaun-row').style.display = voucherAktif ? '' : 'none';
@@ -1343,9 +1345,11 @@ function kemaskiniTotal() {
     document.getElementById('kiraan-diskaun-kod').textContent = voucherAktif.kod;
     document.getElementById('kiraan-diskaun').textContent = '−' + fmt(diskaun);
   }
-  document.getElementById('kiraan-penghantaran').textContent = fmt(kosHantar);
+  document.getElementById('kiraan-penghantaran').innerHTML = hantarPercuma
+    ? `<s style="color:var(--muted)">${fmt(kosHantar)}</s> <span style="color:var(--green);font-weight:800">PERCUMA</span>`
+    : fmt(kosHantar);
   document.getElementById('kiraan-zon-label').textContent = zonId ? ` (${ZON[zonId]?.nama||''})` : '';
-  document.getElementById('grand-total').textContent = fmt(tot - diskaun + kosHantar);
+  document.getElementById('grand-total').textContent = fmt(tot - diskaun + kosHantarFinal);
 }
 
 let voucherAktif = null; // { kod, jenis_diskaun, nilai_diskaun, minima_belanja, maksima_belanja, tarikh_luput, had_guna }
@@ -1370,8 +1374,9 @@ async function gunaVoucher() {
     kod: kod.toUpperCase(), jenis_diskaun: hasil.jenis_diskaun, nilai_diskaun: hasil.nilai_diskaun,
     minima_belanja: hasil.minima_belanja, maksima_belanja: hasil.maksima_belanja,
     tarikh_luput: hasil.tarikh_luput, had_guna: hasil.had_guna,
+    percuma_penghantaran: hasil.percuma_penghantaran,
   };
-  tunjukMesejVoucher(`Kod voucher "${voucherAktif.kod}" diguna pakai`, true);
+  tunjukMesejVoucher(`Kod voucher "${voucherAktif.kod}" diguna pakai${voucherAktif.percuma_penghantaran ? ' — 🚚 Percuma Penghantaran!' : ''}`, true);
   kemaskiniTotal();
 }
 
@@ -1391,6 +1396,7 @@ function bukaVoucherTnc() {
   syarat.push(v.maksima_belanja ? `Maksima belian sah: <strong>RM${Number(v.maksima_belanja).toFixed(2)}</strong>` : 'Tiada had maksima belian');
   syarat.push(v.tarikh_luput ? `Tarikh luput: <strong>${new Date(v.tarikh_luput).toLocaleDateString('ms-MY',{day:'2-digit',month:'short',year:'numeric'})}</strong>` : 'Tiada tarikh luput');
   syarat.push(v.had_guna ? `Had guna keseluruhan: <strong>${v.had_guna} kali</strong>` : 'Tiada had guna keseluruhan');
+  if (v.percuma_penghantaran) syarat.push('🚚 Termasuk <strong>Percuma Penghantaran</strong> (kos penghantaran diwaive sepenuhnya).');
   syarat.push('Hanya <strong>1 kali</strong> guna setiap nombor telefon.');
   document.getElementById('voucher-tnc-body').innerHTML =
     `<p style="margin-bottom:10px">Kod <strong>${v.kod}</strong> tertakluk kepada syarat berikut:</p><ul style="padding-left:18px;margin:0">` +
@@ -1430,7 +1436,7 @@ async function hantarPesanan() {
   }
 
   const zonId = zonUntukNegeri(negeri);
-  const kosHantar = kosPenghantaranSemasa();
+  const kosHantar = voucherAktif?.percuma_penghantaran ? 0 : kosPenghantaranSemasa();
   const sub = subtotal();
 
   const payload = {

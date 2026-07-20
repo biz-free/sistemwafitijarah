@@ -1115,6 +1115,7 @@
       <div class="form-group"><label class="form-label">Had Guna Keseluruhan (optional)</label><input type="number" class="form-input" id="v-had-guna" min="1" placeholder="Tiada had" /></div>
       <div class="form-group"><label class="form-label">Tarikh Luput (optional)</label><input type="date" class="form-input" id="v-luput" /></div>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:10px"><input type="checkbox" id="v-percuma-hantar" style="width:auto" /> 🚚 Percuma Penghantaran (Free Shipping)</label>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:14px"><input type="checkbox" id="v-aktif" checked style="width:auto" /> Aktif</label>
     <button class="btn btn-primary" onclick="saveVoucher()">💾 Simpan Voucher</button>
   </div>
@@ -4408,7 +4409,7 @@ async function renderVoucherList() {
     const nilaiTxt = v.jenis_diskaun==='tetap' ? `RM${v.nilai_diskaun} diskaun` : `${v.nilai_diskaun}% diskaun`;
     return `<div class="list-item">
       <div>
-        <div class="list-item-title">${esc(v.kod)}</div>
+        <div class="list-item-title">${esc(v.kod)}${v.percuma_penghantaran?' <span class="badge badge-green" style="font-size:9px">🚚 Free Shipping</span>':''}</div>
         <div class="list-item-sub">${nilaiTxt}${v.minima_belanja>0?` · min. ${fmt(v.minima_belanja)}`:''} · guna ${v.bilangan_guna}/${v.had_guna??'∞'}${v.tarikh_luput?` · luput ${fmtD(v.tarikh_luput)}`:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px">
@@ -4432,6 +4433,7 @@ function bukaModalVoucher() {
   document.getElementById('v-maksima').value = '';
   document.getElementById('v-had-guna').value = '';
   document.getElementById('v-luput').value = '';
+  document.getElementById('v-percuma-hantar').checked = false;
   document.getElementById('v-aktif').checked = true;
   showModal('modal-voucher');
 }
@@ -4447,6 +4449,7 @@ function editVoucher(v) {
   document.getElementById('v-maksima').value = v.maksima_belanja || '';
   document.getElementById('v-had-guna').value = v.had_guna ?? '';
   document.getElementById('v-luput').value = v.tarikh_luput || '';
+  document.getElementById('v-percuma-hantar').checked = !!v.percuma_penghantaran;
   document.getElementById('v-aktif').checked = v.aktif;
   showModal('modal-voucher');
 }
@@ -4465,6 +4468,7 @@ async function saveVoucher() {
     maksima_belanja: document.getElementById('v-maksima').value ? +document.getElementById('v-maksima').value : null,
     had_guna: document.getElementById('v-had-guna').value ? +document.getElementById('v-had-guna').value : null,
     tarikh_luput: document.getElementById('v-luput').value || null,
+    percuma_penghantaran: document.getElementById('v-percuma-hantar').checked,
     aktif: document.getElementById('v-aktif').checked,
   };
   const { error } = await sb.from('baucar').upsert(payload);
