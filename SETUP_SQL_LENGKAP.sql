@@ -1323,3 +1323,27 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
+
+-- ═══ Kempen Win-Back Automatik (emel mingguan kepada pelanggan lama tak aktif) ═══
+ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS winback_aktif boolean NOT NULL DEFAULT false;
+ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS winback_hari_tidak_aktif int NOT NULL DEFAULT 60;
+ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS winback_cooldown_hari int NOT NULL DEFAULT 90;
+ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS winback_kod_voucher text;
+
+CREATE TABLE IF NOT EXISTS winback_log (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  telefon text NOT NULL,
+  email text,
+  nama text,
+  tarikh_pesanan_terakhir timestamptz,
+  kod_voucher text,
+  dihantar_pada timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_winback_log_telefon ON winback_log(telefon);
+CREATE INDEX IF NOT EXISTS idx_winback_log_dihantar ON winback_log(dihantar_pada);
+ALTER TABLE winback_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "pemilik baca winback_log" ON winback_log;
+CREATE POLICY "pemilik baca winback_log" ON winback_log FOR SELECT USING (is_pemilik());
+-- NOTA: jadual cron.schedule() sendiri TIDAK dimasukkan di sini (ia perlu URL
+-- projek + CRON_SECRET sebenar) — lihat "🔁 Kempen Win-Back Automatik" dalam
+-- PANDUAN_SETUP.md untuk arahan penuh cara jadualkan selepas deploy fungsi.

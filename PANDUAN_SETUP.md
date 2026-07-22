@@ -61,6 +61,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 51. `SQL_TAMBAHAN_42.sql` — Jadual `wa_hebahan_batch` + ruangan **"📂 Batch Tersimpan"** & **"💾 Simpan Batch"** di kad "📣 Hebahan WhatsApp" (Lebih, pemilik sahaja) — simpan senarai nombor + mesej sebagai satu batch bernama (cth "Promosi Raya Julai"), pilih semula bila-bila untuk terus buat hebahan tanpa perlu susun semula senarai — lihat bahagian "📣 Hebahan WhatsApp (Marketing)" di bawah (kemaskini).
 > 52. `SQL_TAMBAHAN_43.sql` — Tanda kotak **"🚚 Percuma Penghantaran (Free Shipping)"** baharu bila cipta/edit voucher (kad "🎟️ Voucher Diskaun") — bila ditandakan, kos penghantaran diwaive sepenuhnya untuk pesanan yang guna kod tersebut. Dikuatkuasakan di **server** (trigger `validasi_harga_pesanan_edagang` + `validasi_baucar()`), bukan client sahaja — lihat bahagian "🎟️ Voucher Diskaun" di bawah (kemaskini).
 > 53. **Pembetulan logik Bonus Kedai Baru** (pengurusan.html) — bonus kini hanya sah selepas kedai buat penghantaran/transaksi PERTAMA (bukan sekadar didaftarkan), dengan kadar berbeza ikut kaedah bayaran transaksi pertama itu: Tunai/Transfer = kadar penuh (default RM10), Consignment/Hutang = kadar rendah (default RM2) + **top-up automatik** (default RM8) bila kedai tu kemudian buat belian tunai/transfer buat kali pertama, supaya jumlah keseluruhan cecah maksimum RM10 (tak lebih). Sebelum ini bonus dibayar serta-merta bila kedai didaftarkan tanpa mengira sama ada kedai itu pernah/akan bertransaksi. Tetapan "Bonus Kedai Baru" dipecahkan kepada 2 medan di Tetapan Kos Operasi. Tiada perubahan SQL diperlukan (logik client-side sahaja) — lihat bahagian "🏪 Bonus Kedai Baru" di bawah (kemaskini besar).
+> 54. `SQL_TAMBAHAN_44.sql` + Edge Function baharu `winback-auto-cron` + jadual `pg_cron` mingguan — kad baharu **"🔁 Kempen Win-Back Automatik"** (Lebih → Data Pembeli, pemilik sahaja) hantar emel "kami rindu awak" automatik setiap Isnin kepada pelanggan yang pernah beli tapi sudah lama tak beli lagi, dengan kod voucher pilihan pemilik. **Dimatikan (OFF) secara default** — pemilik perlu aktifkan sendiri di Tetapan. Guna semula secret `RESEND_API_KEY` & `CRON_SECRET` sedia ada — lihat bahagian "🔁 Kempen Win-Back Automatik" di bawah.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -474,6 +475,38 @@ select cron.schedule(
 4. Guna semula secret `RESEND_API_KEY` sedia ada (dari ciri "Emel Susulan" manual) — tiada secret emel baharu diperlukan.
 
 > Untuk lihat/urus jadual cron sedia ada: `select * from cron.job;` — untuk padam jadual: `select cron.unschedule('susulan-bayaran-harian');`
+
+### 🔁 Kempen Win-Back Automatik
+Kad **"🔁 Kempen Win-Back Automatik"** (Lebih → dekat "👥 Data Pembeli", pemilik sahaja) — hantar emel "kami rindu awak" automatik setiap **Isnin, 11 pagi waktu Malaysia** (melalui `pg_cron`) kepada pelanggan yang **pernah beli** (ada pesanan `status_bayaran = disahkan`) tapi sudah lama tidak beli lagi.
+
+- **⚠️ Dimatikan (OFF) secara default** — pemilik WAJIB tandakan checkbox "Aktifkan Kempen Win-Back Automatik" dan tekan "💾 Simpan Tetapan" dahulu sebelum sebarang emel dihantar. Ini sengaja, supaya tiada emel pemasaran dihantar tanpa kelulusan eksplisit pemilik.
+- **Had Hari Tidak Aktif** (default 60) — berapa lama sejak pembelian terakhir sebelum pelanggan dianggap "tak aktif" dan layak terima emel win-back.
+- **Cooldown Hantar Semula** (default 90 hari) — elak pelanggan sama terima emel win-back berulang-ulang setiap minggu; sekali dihantar, tak akan dihantar lagi sehingga cooldown tamat.
+- **Kod Voucher untuk Disertakan** (optional) — kod voucher sedia ada (buat dahulu di kad "🎟️ Voucher Diskaun") yang akan disebut dalam emel sebagai galakan untuk beli semula. Sistem semak automatik kod tu masih aktif & belum luput sebelum disebut — kalau kod dah luput/dipadam, emel tetap dihantar tanpa sebut kod (bukan ralat).
+- Butang **"🔁 Jana Sekarang (Ujian/Manual)"** — jalankan kempen serta-merta tanpa tunggu Isnin (berguna untuk uji atau kempen segera). Guna log masuk pemilik semasa untuk sahkan kebenaran (bukan `CRON_SECRET`).
+- **⚠️ Kali pertama diaktifkan**, sistem akan proses SEMUA pelanggan tak aktif yang terkumpul sejak dulu (bukan hanya yang baru jadi tak aktif minggu ni) — mungkin jumlah besar buat pertama kali. Had keselamatan **maksimum 300 emel setiap kali kempen jalan** (yang paling lama tak aktif diutamakan dahulu); baki akan disambung pada jadual mingguan seterusnya.
+- **Sejarah Kempen Terkini** — senarai 15 emel win-back terkini yang dihantar, dipaparkan bawah kad (jadual `winback_log`).
+
+**Setup wajib — 3 langkah (dari folder `wafi-app`):**
+1. Jalankan `SQL_TAMBAHAN_44.sql` (lajur tetapan win-back pada `tetapan` + jadual `winback_log`).
+2. Deploy fungsi (guna semula secret `RESEND_API_KEY` & `CRON_SECRET` sedia ada — tiada secret baharu diperlukan):
+```
+npx supabase functions deploy winback-auto-cron --no-verify-jwt
+```
+3. Jadualkan panggilan mingguan (jalankan SEKALI di SQL Editor Supabase, gantikan `<CRON_SECRET>` dengan nilai sama seperti `susulan-bayaran-harian`):
+```sql
+select cron.schedule(
+  'kempen-winback-mingguan',
+  '0 3 * * 1', -- 3am UTC Isnin = 11am waktu Malaysia
+  $$
+  select net.http_post(
+    url := 'https://<project-ref>.supabase.co/functions/v1/winback-auto-cron',
+    headers := '{"Content-Type": "application/json", "x-cron-secret": "<CRON_SECRET>"}'::jsonb,
+    body := '{}'::jsonb
+  );
+  $$
+);
+```
 
 ### 🐛 Pembetulan Bug — Pre-Order & Padam Transaksi
 Dua bug diperbetulkan:

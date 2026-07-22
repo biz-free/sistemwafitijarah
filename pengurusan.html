@@ -791,6 +791,24 @@
       <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="dpBukaModalEmelPukal()">📧 Emel Pukal ke Semua Pembeli</button>
     </div>
 
+    <!-- Kempen Win-Back Automatik (pemilik sahaja) -->
+    <div class="card" id="winback-card">
+      <div class="card-title">🔁 Kempen Win-Back Automatik</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Emel "kami rindu awak" dihantar automatik setiap Isnin (11 pagi) kepada pelanggan yang pernah beli tapi sudah lama tidak beli lagi — tak perlu tekan butang setiap minggu.</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:14px"><input type="checkbox" id="wb-aktif" style="width:auto" onchange="simpanTetapanWinback()" /> Aktifkan Kempen Win-Back Automatik</label>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Had Hari Tidak Aktif</label><input type="number" class="form-input" id="wb-hari-tidak-aktif" min="1" step="1" /></div>
+        <div class="form-group"><label class="form-label">Cooldown Hantar Semula (hari)</label><input type="number" class="form-input" id="wb-cooldown" min="1" step="1" /></div>
+      </div>
+      <div class="form-group"><label class="form-label">Kod Voucher untuk Disertakan (optional)</label><input type="text" class="form-input" id="wb-kod-voucher" placeholder="cth: RINDU10" style="text-transform:uppercase" /></div>
+      <button class="btn btn-primary" onclick="simpanTetapanWinback()">💾 Simpan Tetapan</button>
+      <button class="btn btn-secondary" style="margin-top:8px" onclick="janaWinbackSekarang()" id="wb-btn-jana">🔁 Jana Sekarang (Ujian/Manual)</button>
+      <div id="wb-status" style="font-size:12px;font-weight:700;margin-top:10px;display:none"></div>
+      <div class="divider"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SEJARAH KEMPEN TERKINI</div>
+      <div id="wb-log-list"></div>
+    </div>
+
     <!-- Hebahan WhatsApp / Marketing (pemilik sahaja) -->
     <div class="card" id="wa-hebahan-card">
       <div class="card-title">📣 Hebahan WhatsApp (Marketing)</div>
@@ -1483,7 +1501,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card'];
+  const pemilikOnly = ['laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -1555,6 +1573,7 @@ async function setPage(p) {
       loadTetapanDiskaun();
       renderVoucherList();
       loadDataPembeli();
+      loadTetapanWinback();
       whLoad();
       renderSenaraiCutiSemua();
       renderStatusLive();
@@ -1579,6 +1598,7 @@ const LEBIH_SHORTCUTS = [
   { id: 'tetapan-diskaun-card', icon: '💳', label: 'Diskaun' },
   { id: 'voucher-card', icon: '🎟️', label: 'Voucher' },
   { id: 'data-pembeli-card', icon: '👥', label: 'Data Pembeli' },
+  { id: 'winback-card', icon: '🔁', label: 'Win-Back' },
   { id: 'wa-hebahan-card', icon: '📣', label: 'Hebahan WA' },
   { id: 'easyparcel-card', icon: '🚚', label: 'EasyParcel' },
   { id: 'urus-pekerja-card', icon: '👥', label: 'Urus Pekerja' },
@@ -4093,6 +4113,81 @@ async function dpHantarEmelPukal() {
   toast(`${data.dihantar} emel pukal berjaya dihantar`);
   btn.disabled = false;
   btn.textContent = '📧 Hantar ke Semua Pembeli';
+}
+
+// ════════════════════════════════════════════════════
+//  KEMPEN WIN-BACK AUTOMATIK — emel "kami rindu awak" mingguan (pg_cron)
+//  kepada pelanggan lama tak aktif, guna Edge Function winback-auto-cron.
+// ════════════════════════════════════════════════════
+async function loadTetapanWinback() {
+  if (!useCloud) return;
+  const { data, error } = await sb.from('tetapan')
+    .select('winback_aktif, winback_hari_tidak_aktif, winback_cooldown_hari, winback_kod_voucher')
+    .eq('id', 1).single();
+  if (error || !data) return;
+  document.getElementById('wb-aktif').checked = !!data.winback_aktif;
+  document.getElementById('wb-hari-tidak-aktif').value = data.winback_hari_tidak_aktif ?? 60;
+  document.getElementById('wb-cooldown').value = data.winback_cooldown_hari ?? 90;
+  document.getElementById('wb-kod-voucher').value = data.winback_kod_voucher || '';
+  renderWinbackLog();
+}
+
+async function simpanTetapanWinback() {
+  const payload = {
+    winback_aktif: document.getElementById('wb-aktif').checked,
+    winback_hari_tidak_aktif: +document.getElementById('wb-hari-tidak-aktif').value || 60,
+    winback_cooldown_hari: +document.getElementById('wb-cooldown').value || 90,
+    winback_kod_voucher: document.getElementById('wb-kod-voucher').value.trim().toUpperCase() || null,
+  };
+  const { error } = await sb.from('tetapan').update(payload).eq('id', 1);
+  if (error) return toast('Gagal simpan tetapan win-back: '+error.message,'err');
+  toast(payload.winback_aktif ? 'Kempen win-back diaktifkan — jalan automatik setiap Isnin' : 'Tetapan win-back disimpan');
+}
+
+async function janaWinbackSekarang() {
+  const btn = document.getElementById('wb-btn-jana');
+  const statusEl = document.getElementById('wb-status');
+  if (!document.getElementById('wb-aktif').checked) {
+    if (!confirm('Kempen win-back belum diaktifkan (checkbox "Aktifkan" tak ditanda) — jana sekarang tetap tidak akan hantar apa-apa emel. Nak simpan & aktifkan dahulu sebelum jana?')) return;
+  }
+  btn.disabled = true;
+  btn.textContent = '⏳ Menjana...';
+  statusEl.style.display = 'none';
+
+  const { data, error } = await sb.functions.invoke('winback-auto-cron', { body: {} });
+
+  btn.disabled = false;
+  btn.textContent = '🔁 Jana Sekarang (Ujian/Manual)';
+  if (error || data?.error) {
+    let pesan = data?.error || error.message;
+    if (error?.context) {
+      try { const body = await error.context.json(); if (body?.error) pesan = body.error; } catch { /* biar mesej asal */ }
+    }
+    statusEl.style.display = '';
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '⚠️ ' + pesan;
+    return;
+  }
+
+  statusEl.style.display = '';
+  statusEl.style.color = 'var(--teal)';
+  statusEl.textContent = data.mesej || `✅ ${data.dihantar} emel dihantar (${data.jumlahCalonTidakAktif} calon tidak aktif, ${data.dilangkauCooldown} dilangkau kerana cooldown).`;
+  toast(`Kempen win-back: ${data.dihantar||0} emel dihantar`);
+  renderWinbackLog();
+}
+
+async function renderWinbackLog() {
+  const el = document.getElementById('wb-log-list');
+  if (!useCloud) { el.innerHTML = ''; return; }
+  const { data, error } = await sb.from('winback_log').select('*').order('dihantar_pada', { ascending: false }).limit(15);
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  el.innerHTML = (data||[]).map(l => `
+    <div class="list-item">
+      <div>
+        <div class="list-item-title">${esc(l.nama||l.telefon)}</div>
+        <div class="list-item-sub">${esc(l.telefon)}${l.kod_voucher?` · kod ${esc(l.kod_voucher)}`:''} · ${fmtD(l.dihantar_pada)}</div>
+      </div>
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Belum ada kempen win-back dihantar lagi</div></div>';
 }
 
 // ════════════════════════════════════════════════════
