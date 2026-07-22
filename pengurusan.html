@@ -735,7 +735,9 @@
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Kadar ini digunakan untuk kira untung bersih sebenar dalam Laporan Bulanan. Upah pekerja kini ditetapkan per-produk (lihat Edit Produk di tab Stok).</div>
       <div class="form-group"><label class="form-label">Minyak Kenderaan (RM per km)</label><input type="number" class="form-input" id="set-minyak" step="0.10" min="0" onchange="saveSettings()" /></div>
       <div class="form-group"><label class="form-label">Duit Makan (RM sehari seorang pekerja)</label><input type="number" class="form-input" id="set-makan" step="0.50" min="0" onchange="saveSettings()" /></div>
-      <div class="form-group"><label class="form-label">Bonus Kedai Baru (RM setiap kedai didaftarkan)</label><input type="number" class="form-input" id="set-upah-kedai-baru" step="1" min="0" onchange="saveSettings()" /></div>
+      <div class="form-group"><label class="form-label">Bonus Kedai Baru — Beli & Bayar (RM)</label><input type="number" class="form-input" id="set-upah-kedai-baru-bayar" step="1" min="0" onchange="saveSettings()" /></div>
+      <div class="form-group"><label class="form-label">Bonus Kedai Baru — Consignment/Hutang (RM)</label><input type="number" class="form-input" id="set-upah-kedai-baru-consignment" step="1" min="0" onchange="saveSettings()" /></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:-8px">Bonus hanya masuk Kiraan Upah selepas kedai buat penghantaran/transaksi PERTAMA — Tunai/Transfer terus dapat kadar penuh; Consignment/Hutang dapat kadar rendah dahulu, kemudian dapat top-up automatik (sehingga cecah kadar penuh, tak lebih) bila kedai buat belian tunai/transfer buat kali pertama. Kedai berdaftar tanpa transaksi langsung tidak dapat bonus.</div>
     </div>
 
     <!-- Tetapan Pre-Order & Diskaun Online Transfer (pemilik sahaja) -->
@@ -2451,7 +2453,7 @@ async function saveKedai() {
   closeModal('modal-tambah-kedai'); renderKedai();
   document.getElementById('edit-kedai-id').value='';
   document.getElementById('kedai-modal-title').textContent='Daftar Kedai Baru';
-  toast(adalahBaru?`Kedai baru didaftarkan — bonus ${fmt(SETTINGS.upahKedaiBaru)} akan masuk Kiraan Upah anda`:'Kedai dikemaskini');
+  toast(adalahBaru?'Kedai baru didaftarkan — bonus akan masuk Kiraan Upah selepas penghantaran/transaksi pertama':'Kedai dikemaskini');
 }
 
 async function rekodBayaran() {
@@ -2709,7 +2711,7 @@ async function submitHantar() {
     if (kErr) return toast('Gagal daftar kedai dari pre-order: '+kErr.message,'err');
     await loadData();
     kedaiId = kedaiObj.id;
-    toast(`Kedai "${po.kedai_nama}" berjaya didaftarkan automatik — bonus ${fmt(SETTINGS.upahKedaiBaru)} akan masuk Kiraan Upah anda`);
+    toast(`Kedai "${po.kedai_nama}" berjaya didaftarkan automatik — bonus akan masuk Kiraan Upah selepas penghantaran/transaksi pertama`);
   }
   for(const it of hItems){
     const s=DATA.stok.find(s=>s.id===it.stokId);
@@ -3440,8 +3442,15 @@ async function renderLaporan() {
   const kosUpah = fil.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
   const kosMinyak = jumlahKm*SETTINGS.minyak;
   const kosMakan = hariKerja*SETTINGS.makan;
-  const kedaiBulanIni = DATA.kedai.filter(k=>(k.created_at||'').slice(0,7)===bulan);
-  const kosKedaiBaru = kedaiBulanIni.length*SETTINGS.upahKedaiBaru;
+  // Bonus kedai baru kini terikat kepada TRANSAKSI SEBENAR kedai (bukan tarikh
+  // didaftarkan) — kedai yang berdaftar tapi tak pernah bertransaksi TAK dapat bonus.
+  // Boleh jadi 2 acara berasingan (asas + top-up) — lihat bonusKedaiEvents().
+  const kedaiBonusList = DATA.kedai
+    .filter(k => k.didaftarkan_oleh)
+    .flatMap(k => bonusKedaiEvents(k.id).map(ev => ({ kedai: k, ...ev })))
+    .filter(x => (x.tarikh_masa||'').slice(0,7) === bulan);
+  const kosKedaiBaru = kedaiBonusList.reduce((a,x)=>a+x.jumlah,0);
+  const kedaiBonusKedaiUnik = new Set(kedaiBonusList.map(x=>x.kedai.id)).size;
 
   // Pesanan e-dagang yang ditugaskan & dah dihantar/selesai — upah dikira sama macam
   // penghantaran biasa (ikut upah_pekerja per produk), bukan lump-sum berasingan.
@@ -3457,7 +3466,7 @@ async function renderLaporan() {
   // Pecahan upah ikut pekerja — setiap pekerja beza jumlahnya ikut penghantaran sendiri.
   // Sertakan juga pekerja yang HANYA daftar kedai baru atau HANYA urus e-dagang (tiada
   // penghantaran) supaya upah/bonus dia tak hilang.
-  const pekerjaIds = [...new Set([...fil.map(t=>t.created_by), ...kedaiBulanIni.map(k=>k.didaftarkan_oleh), ...edagangLayakUpah.map(o=>o.assigned_pekerja_id)].filter(Boolean))];
+  const pekerjaIds = [...new Set([...fil.map(t=>t.created_by), ...kedaiBonusList.map(x=>x.kedai.didaftarkan_oleh), ...edagangLayakUpah.map(o=>o.assigned_pekerja_id)].filter(Boolean))];
   let profilMap = {};
   if (useCloud && pekerjaIds.length) {
     const { data } = await sb.from('profiles').select('id,nama');
@@ -3468,8 +3477,9 @@ async function renderLaporan() {
     const upahPekerja = filPekerja.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
     const kmPekerja = kmIkutPekerja[pid] || 0;
     const hariPekerja = new Set(filPekerja.map(t=>(t.tarikh_masa||'').slice(0,10))).size;
-    const kedaiPekerja = kedaiBulanIni.filter(k=>k.didaftarkan_oleh===pid).length;
-    const bonusKedaiPekerja = kedaiPekerja*SETTINGS.upahKedaiBaru;
+    const kedaiListPekerja = kedaiBonusList.filter(x=>x.kedai.didaftarkan_oleh===pid);
+    const kedaiPekerja = new Set(kedaiListPekerja.map(x=>x.kedai.id)).size;
+    const bonusKedaiPekerja = kedaiListPekerja.reduce((a,x)=>a+x.jumlah,0);
     const edagangPekerja = edagangLayakUpah.filter(o=>o.assigned_pekerja_id===pid);
     const upahEdagangPekerja = edagangPekerja.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
     const petrolJumlah = kmPekerja*SETTINGS.minyak;
@@ -3495,7 +3505,7 @@ async function renderLaporan() {
     <div class="list-item"><div class="list-item-title">Upah Pekerja</div><div class="list-item-val">${fmt(kosUpah)}</div></div>
     <div class="list-item"><div class="list-item-title">Minyak Kenderaan (${jumlahKm} km)</div><div class="list-item-val">${fmt(kosMinyak)}</div></div>
     <div class="list-item"><div class="list-item-title">Duit Makan (${hariKerja} hari-kerja)</div><div class="list-item-val">${fmt(kosMakan)}</div></div>
-    ${kedaiBulanIni.length?`<div class="list-item"><div class="list-item-title">Bonus Kedai Baru (${kedaiBulanIni.length} kedai)</div><div class="list-item-val">${fmt(kosKedaiBaru)}</div></div>`:''}
+    ${kedaiBonusList.length?`<div class="list-item"><div class="list-item-title">Bonus Kedai Baru (${kedaiBonusKedaiUnik} kedai)</div><div class="list-item-val">${fmt(kosKedaiBaru)}</div></div>`:''}
     ${edagangLayakUpah.length?`<div class="list-item"><div class="list-item-title">Upah E-Dagang (${edagangLayakUpah.length} pesanan)</div><div class="list-item-val">${fmt(kosUpahEdagang)}</div></div>`:''}
     <div class="total-box" style="margin-top:10px">
       <span class="total-label">UNTUNG BERSIH</span>
@@ -3758,23 +3768,48 @@ function muatTurunCSV() {
 // ════════════════════════════════════════════════════
 //  TETAPAN KOS OPERASI
 // ════════════════════════════════════════════════════
-const SETTINGS_DEF = { minyak:0.50, makan:10.00, upahKedaiBaru:10.00 };
+const SETTINGS_DEF = { minyak:0.50, makan:10.00, upahKedaiBaruBayar:10.00, upahKedaiBaruConsignment:2.00 };
 let SETTINGS = {...SETTINGS_DEF};
 
+// Bonus kedai baru — dikira daripada transaksi SEBENAR kedai (bukan tarikh didaftarkan):
+// - Transaksi pertama Tunai/Transfer → bonus penuh (upahKedaiBaruBayar) terus.
+// - Transaksi pertama Consignment/Hutang → bonus asas rendah (upahKedaiBaruConsignment) dahulu;
+//   bila kedai tu buat belian SETERUSNYA secara Tunai/Transfer (bayar terus buat kali pertama),
+//   top-up dibayar supaya jumlah keseluruhan cecah upahKedaiBaruBayar (maksimum) — tak lebih.
+const KAEDAH_BAYAR_TERUS = new Set(['tunai', 'transfer']);
+
+function bonusKedaiEvents(kedaiId) {
+  const semua = DATA.transaksi.filter(t => t.kedai_id === kedaiId).sort((a,b) => a.tarikh_masa < b.tarikh_masa ? -1 : (a.tarikh_masa > b.tarikh_masa ? 1 : 0));
+  if (!semua.length) return [];
+  const pertama = semua[0];
+  if (KAEDAH_BAYAR_TERUS.has(pertama.kaedah_bayaran)) {
+    return [{ tarikh_masa: pertama.tarikh_masa, jumlah: SETTINGS.upahKedaiBaruBayar, label: 'Bonus Kedai Baru' }];
+  }
+  const events = [{ tarikh_masa: pertama.tarikh_masa, jumlah: SETTINGS.upahKedaiBaruConsignment, label: 'Bonus Kedai Baru (Consignment/Hutang)' }];
+  const belianKedua = semua.slice(1).find(t => KAEDAH_BAYAR_TERUS.has(t.kaedah_bayaran));
+  if (belianKedua) {
+    const tambahan = Math.max(0, SETTINGS.upahKedaiBaruBayar - SETTINGS.upahKedaiBaruConsignment);
+    if (tambahan > 0) events.push({ tarikh_masa: belianKedua.tarikh_masa, jumlah: tambahan, label: 'Bonus Kedai Baru (Top-up Belian Tunai)' });
+  }
+  return events;
+}
+
 function loadSettings() {
-  // Gabung dengan default — supaya medan BAHARU (cth: upahKedaiBaru) tetap ada
-  // nilai munasabah walaupun localStorage peranti ini simpan tetapan versi lama.
+  // Gabung dengan default — supaya medan BAHARU tetap ada nilai munasabah walaupun
+  // localStorage peranti ini simpan tetapan versi lama.
   SETTINGS = { ...SETTINGS_DEF, ...(JSON.parse(localStorage.getItem('wafi_settings') || 'null') || {}) };
   document.getElementById('set-minyak').value = SETTINGS.minyak;
   document.getElementById('set-makan').value = SETTINGS.makan;
-  document.getElementById('set-upah-kedai-baru').value = SETTINGS.upahKedaiBaru;
+  document.getElementById('set-upah-kedai-baru-bayar').value = SETTINGS.upahKedaiBaruBayar;
+  document.getElementById('set-upah-kedai-baru-consignment').value = SETTINGS.upahKedaiBaruConsignment;
 }
 
 function saveSettings() {
   SETTINGS = {
     minyak: +document.getElementById('set-minyak').value || 0,
     makan: +document.getElementById('set-makan').value || 0,
-    upahKedaiBaru: +document.getElementById('set-upah-kedai-baru').value || 0,
+    upahKedaiBaruBayar: +document.getElementById('set-upah-kedai-baru-bayar').value || 0,
+    upahKedaiBaruConsignment: +document.getElementById('set-upah-kedai-baru-consignment').value || 0,
   };
   localStorage.setItem('wafi_settings', JSON.stringify(SETTINGS));
   renderLaporan();
@@ -4582,18 +4617,24 @@ async function renderUpahSaya() {
   const fil = DATA.transaksi.filter(t => t.tarikh_masa?.startsWith(bulan) && (t.created_by===DATA.currentUser?.id || t.created_by===DATA.currentUser?.email));
   const jumlahStok = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
   const { totalKm: jumlahKm, kmIkutHari } = await kiraJarakKehadiranJulat(bulan+'-01T00:00:00', akhirBulanISO(bulan), DATA.currentUser.id);
-  const kedaiSaya = DATA.kedai.filter(k=>k.didaftarkan_oleh===DATA.currentUser?.id && (k.created_at||'').slice(0,7)===bulan);
+  // Bonus kedai baru kini terikat kepada TRANSAKSI SEBENAR kedai (bukan tarikh
+  // didaftarkan) — boleh jadi 2 acara (asas + top-up) — lihat renderLaporan()/bonusKedaiEvents().
+  const kedaiSayaBonus = DATA.kedai
+    .filter(k => k.didaftarkan_oleh===DATA.currentUser?.id)
+    .flatMap(k => bonusKedaiEvents(k.id).map(ev => ({ kedai:k, ...ev })))
+    .filter(x => (x.tarikh_masa||'').slice(0,7) === bulan);
+  const kedaiSayaBonusUnik = new Set(kedaiSayaBonus.map(x=>x.kedai.id)).size;
   // RLS hadkan query ni kepada pesanan yang ditugaskan kepada saya sahaja.
   const { data: edagangData } = await sb.from('pesanan_edagang').select('*');
   const edagangSaya = (edagangData||[]).filter(o=>(o.created_at||'').slice(0,7)===bulan && ['dihantar','selesai'].includes(o.status_pesanan));
-  // Sertakan hari kedai baru didaftarkan & hari pesanan e-dagang diselesaikan juga — walaupun
-  // tiada penghantaran hari tu, supaya bonus/upah dia tak hilang dari pecahan harian.
-  const hariList = [...new Set([...fil.map(t=>(t.tarikh_masa||'').slice(0,10)), ...kedaiSaya.map(k=>(k.created_at||'').slice(0,10)), ...edagangSaya.map(o=>(o.updated_at||o.created_at||'').slice(0,10))])].sort();
+  // Sertakan hari kedai baru bertransaksi & hari pesanan e-dagang diselesaikan juga —
+  // walaupun tiada penghantaran hari tu, supaya bonus/upah dia tak hilang dari pecahan harian.
+  const hariList = [...new Set([...fil.map(t=>(t.tarikh_masa||'').slice(0,10)), ...kedaiSayaBonus.map(x=>(x.tarikh_masa||'').slice(0,10)), ...edagangSaya.map(o=>(o.updated_at||o.created_at||'').slice(0,10))])].sort();
   const hariKerja = hariList.length;
   const kosUpah = fil.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
   const kosMinyak = jumlahKm*SETTINGS.minyak;
   const kosMakan = hariKerja*SETTINGS.makan;
-  const kosKedaiBaru = kedaiSaya.length*SETTINGS.upahKedaiBaru;
+  const kosKedaiBaru = kedaiSayaBonus.reduce((a,x)=>a+x.jumlah,0);
   const kosUpahEdagang = edagangSaya.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
   const jumlahUpah = kosUpah+kosMinyak+kosMakan+kosKedaiBaru+kosUpahEdagang;
 
@@ -4602,10 +4643,12 @@ async function renderUpahSaya() {
     const filHari = fil.filter(t=>(t.tarikh_masa||'').slice(0,10)===tarikh);
     const upahHari = filHari.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
     const kmHari = kmIkutHari[`${DATA.currentUser.id}|${tarikh}`] || 0;
-    const kedaiHari = kedaiSaya.filter(k=>(k.created_at||'').slice(0,10)===tarikh).length;
+    const kedaiListHari = kedaiSayaBonus.filter(x=>(x.tarikh_masa||'').slice(0,10)===tarikh);
+    const kedaiHari = new Set(kedaiListHari.map(x=>x.kedai.id)).size;
+    const bonusKedaiHari = kedaiListHari.reduce((a,x)=>a+x.jumlah,0);
     const edagangHari = edagangSaya.filter(o=>(o.updated_at||o.created_at||'').slice(0,10)===tarikh);
     const upahEdagangHari = edagangHari.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
-    const jumlahHari = upahHari + kmHari*SETTINGS.minyak + SETTINGS.makan + kedaiHari*SETTINGS.upahKedaiBaru + upahEdagangHari;
+    const jumlahHari = upahHari + kmHari*SETTINGS.minyak + SETTINGS.makan + bonusKedaiHari + upahEdagangHari;
     return { tarikh, bil: filHari.length, kedaiHari, edagangBil: edagangHari.length, jumlahHari };
   }).sort((a,b)=>b.tarikh.localeCompare(a.tarikh));
 
@@ -4614,7 +4657,7 @@ async function renderUpahSaya() {
     <div class="list-item"><div class="list-item-title">Upah (${jumlahStok} unit dihantar)</div><div class="list-item-val">${fmt(kosUpah)}</div></div>
     <div class="list-item"><div class="list-item-title">Minyak (${jumlahKm.toFixed(1)} km × ${fmt(SETTINGS.minyak)})</div><div class="list-item-val">${fmt(kosMinyak)}</div></div>
     <div class="list-item"><div class="list-item-title">Duit Makan (${hariKerja} hari)</div><div class="list-item-val">${fmt(kosMakan)}</div></div>
-    ${kedaiSaya.length?`<div class="list-item"><div class="list-item-title">Bonus Kedai Baru (${kedaiSaya.length} kedai)</div><div class="list-item-val">${fmt(kosKedaiBaru)}</div></div>`:''}
+    ${kedaiSayaBonus.length?`<div class="list-item"><div class="list-item-title">Bonus Kedai Baru (${kedaiSayaBonusUnik} kedai)</div><div class="list-item-val">${fmt(kosKedaiBaru)}</div></div>`:''}
     ${edagangSaya.length?`<div class="list-item"><div class="list-item-title">Upah E-Dagang (${edagangSaya.length} pesanan)</div><div class="list-item-val">${fmt(kosUpahEdagang)}</div></div>`:''}
     <div class="total-box" style="margin-top:10px"><span class="total-label">JUMLAH UPAH ANDA</span><span class="total-val">${fmt(jumlahUpah)}</span></div>
     <div class="divider" style="margin:14px 0"></div>

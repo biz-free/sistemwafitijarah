@@ -60,6 +60,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 50. `SQL_TAMBAHAN_41.sql` — Jadual `kunjungan_web` + kad baharu **"🌐 Trafik Website"** di tab "📈 Analisis" (pengurusan.html, pemilik sahaja) — jejak kunjungan & saluran (Facebook/Instagram/WhatsApp/Google/Direct, dikesan dari UTM param atau referrer) terus dalam apps, tanpa perlu buka Google Analytics — lihat bahagian "🌐 Trafik Website" di bawah.
 > 51. `SQL_TAMBAHAN_42.sql` — Jadual `wa_hebahan_batch` + ruangan **"📂 Batch Tersimpan"** & **"💾 Simpan Batch"** di kad "📣 Hebahan WhatsApp" (Lebih, pemilik sahaja) — simpan senarai nombor + mesej sebagai satu batch bernama (cth "Promosi Raya Julai"), pilih semula bila-bila untuk terus buat hebahan tanpa perlu susun semula senarai — lihat bahagian "📣 Hebahan WhatsApp (Marketing)" di bawah (kemaskini).
 > 52. `SQL_TAMBAHAN_43.sql` — Tanda kotak **"🚚 Percuma Penghantaran (Free Shipping)"** baharu bila cipta/edit voucher (kad "🎟️ Voucher Diskaun") — bila ditandakan, kos penghantaran diwaive sepenuhnya untuk pesanan yang guna kod tersebut. Dikuatkuasakan di **server** (trigger `validasi_harga_pesanan_edagang` + `validasi_baucar()`), bukan client sahaja — lihat bahagian "🎟️ Voucher Diskaun" di bawah (kemaskini).
+> 53. **Pembetulan logik Bonus Kedai Baru** (pengurusan.html) — bonus kini hanya sah selepas kedai buat penghantaran/transaksi PERTAMA (bukan sekadar didaftarkan), dengan kadar berbeza ikut kaedah bayaran transaksi pertama itu: Tunai/Transfer = kadar penuh (default RM10), Consignment/Hutang = kadar rendah (default RM2) + **top-up automatik** (default RM8) bila kedai tu kemudian buat belian tunai/transfer buat kali pertama, supaya jumlah keseluruhan cecah maksimum RM10 (tak lebih). Sebelum ini bonus dibayar serta-merta bila kedai didaftarkan tanpa mengira sama ada kedai itu pernah/akan bertransaksi. Tetapan "Bonus Kedai Baru" dipecahkan kepada 2 medan di Tetapan Kos Operasi. Tiada perubahan SQL diperlukan (logik client-side sahaja) — lihat bahagian "🏪 Bonus Kedai Baru" di bawah (kemaskini besar).
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -292,10 +293,21 @@ Borang **Rekod Baru** (Penghantaran → Rekod Baru) kini ada 3 kaedah bayaran: *
 Jumlah pada resit akan papar pecahan Subjumlah/Diskaun/Jumlah Akhir bila diskaun terpakai, serta kaedah bayaran yang digunakan.
 
 ### 🏪 Bonus Kedai Baru
-Setiap kali pekerja mendaftarkan kedai baru (borang manual **Kedai → Daftar Kedai Baru**, atau auto-daftar dari pre-order semasa Rekod Baru), pekerja tersebut layak menerima bonus **RM10 sekali** (boleh ubah di **Lebih → Tetapan Kos Operasi → "Bonus Kedai Baru"**). Bonus ini:
-- Dipaparkan dalam **Lebih → Kiraan Upah Saya** (pekerja) sebagai baris "Bonus Kedai Baru", termasuk dalam pecahan harian pada tarikh kedai itu didaftarkan — walaupun tiada penghantaran pada hari tersebut.
-- Dipaparkan dalam **Laporan** (pemilik) sebagai sebahagian Kos Operasi, dengan pecahan bilangan kedai baru bagi setiap pekerja.
-- **Pekerja hanya boleh daftar kedai baru selepas Thumb In** — ini mengelakkan pendaftaran kedai (dan tuntutan bonus) semasa tidak bertugas. Pemilik tidak tertakluk sekatan ini.
+Bonus ini **TIDAK dibayar semata-mata kerana kedai didaftarkan** — ia hanya sah selepas kedai itu buat **penghantaran/transaksi PERTAMA sebenar** (borang **Hantar**), dan jumlahnya bergantung kaedah bayaran transaksi pertama itu:
+
+- **🚚 Transaksi pertama Tunai atau Transfer** (beli & bayar terus) — bonus penuh terus, default **RM10** (boleh ubah di **Lebih → Tetapan Kos Operasi → "Bonus Kedai Baru — Beli & Bayar"**).
+- **🤝 Transaksi pertama Consignment atau 📋 Hutang** — bonus asas lebih rendah dahulu, default **RM2** (boleh ubah di **"Bonus Kedai Baru — Consignment/Hutang"**), sebab hasil jualan sebenar belum pasti/tertangguh.
+  - **Top-up automatik**: bila kedai itu KEMUDIAN buat **belian seterusnya secara Tunai/Transfer** (bayar terus buat kali pertama), sistem bayar tambahan (default **RM8**) supaya jumlah keseluruhan bonus kedai tu cecah kadar penuh (RM2+RM8=RM10) — **tak pernah lebih** daripada kadar "Beli & Bayar". Tambahan dikira automatik (`Bayar − Consignment`), jadi kalau kadar tetapan diubah, top-up turut sesuai sendiri.
+  - Top-up ini **acara berasingan**, dikreditkan pada **tarikh belian tunai/transfer itu berlaku** (bukan tarikh transaksi pertama) — kalau ia jatuh bulan lain, ia masuk Laporan/Kiraan Upah bulan tersebut, bukan bulan transaksi pertama.
+  - Kalau kedai terus consignment/hutang sahaja (tak pernah bayar tunai/transfer), bonus kekal RM2 — tiada top-up dibayar.
+- Kedai yang **berdaftar tapi tak pernah bertransaksi langsung TIDAK dapat bonus apa-apa** — elak pekerja daftar kedai "kosong" semata-mata untuk kutip bonus.
+- Kalau mana-mana transaksi yang jadi asas bonus (pertama atau top-up) kemudian **dipadam**, sistem automatik kira semula ikut transaksi yang tinggal — tiada rekod "cache" berasingan.
+
+Bonus ini:
+- Dipaparkan dalam **Lebih → Kiraan Upah Saya** (pekerja) sebagai baris "Bonus Kedai Baru", termasuk dalam pecahan harian pada tarikh setiap acara bonus (transaksi pertama DAN/ATAU tarikh top-up, jika berkenaan) — walaupun tiada penghantaran lain pada hari tersebut.
+- Dipaparkan dalam **Laporan** (pemilik) sebagai sebahagian Kos Operasi, dengan pecahan bilangan kedai unik & jumlah bonus bagi setiap pekerja, pada bulan setiap acara bonus berlaku (bukan bulan kedai didaftarkan).
+- **Pekerja hanya boleh daftar kedai baru selepas Thumb In** — ini mengelakkan pendaftaran kedai semasa tidak bertugas. Pemilik tidak tertakluk sekatan ini.
+- ⚠️ Bonus ini **belum** ada kategori Baucar Bayaran rasmi tersendiri (setakat ini cuma dipaparkan dalam Laporan/Kiraan Upah, bukan dokumen audit LHDN bernombor siri seperti petrol/upah/makan) — beritahu jika perlu ditambah.
 
 Kedai yang didaftarkan juga dipaparkan nama pekerja pendaftarnya di **Senarai Kedai** (kelihatan untuk akaun pemilik sahaja).
 
