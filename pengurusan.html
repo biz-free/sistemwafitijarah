@@ -825,6 +825,9 @@
       <div class="divider"></div>
       <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SEJARAH GANJARAN RUJUKAN</div>
       <div id="rj-log-list"></div>
+      <div class="divider"></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Option tambahan: daftar terus mana-mana nombor telefon (cth staf, influencer, rakan niaga) sebagai kod rujukan sah — TANPA perlu nombor itu pernah membeli.</div>
+      <button class="btn btn-secondary" onclick="bukaModalRujukanManual()">➕ Daftar No. Telefon Rujukan Manual</button>
     </div>
 
     <!-- Hebahan WhatsApp / Marketing (pemilik sahaja) -->
@@ -1171,6 +1174,20 @@
     </div>
     <div id="ep-status" style="font-size:12px;font-weight:700;margin-bottom:10px;display:none"></div>
     <button class="btn btn-primary" id="ep-btn-hantar" onclick="dpHantarEmelPukal()">📧 Hantar ke Semua Pembeli</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-rujukan-manual">
+  <div class="modal-box">
+    <div class="modal-title"><span>➕ Daftar No. Telefon Rujukan Manual</span><button class="modal-close" onclick="closeModal('modal-rujukan-manual')">✕ Tutup</button></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Nombor yang didaftar di sini boleh terus digunakan sebagai kod rujukan "Bawa Kawan" — TANPA perlu nombor itu pernah membeli (cth staf, influencer, rakan niaga).</div>
+    <div class="form-group"><label class="form-label">No. Telefon</label><input type="tel" class="form-input" id="rm-telefon" placeholder="cth: 0123456789" /></div>
+    <div class="form-group"><label class="form-label">Nama</label><input type="text" class="form-input" id="rm-nama" placeholder="cth: Along (Influencer IG)" /></div>
+    <div class="form-group"><label class="form-label">Emel (optional — untuk terima notifikasi ganjaran automatik)</label><input type="email" class="form-input" id="rm-emel" placeholder="cth: along@email.com" /></div>
+    <button class="btn btn-primary" onclick="tambahRujukanManual()">+ Daftar</button>
+    <div class="divider"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SENARAI NOMBOR RUJUKAN MANUAL</div>
+    <div id="rm-senarai"></div>
   </div>
 </div>
 
@@ -4282,6 +4299,65 @@ async function renderRujukanLog() {
       </div>
       <div class="list-item-val" style="color:var(--teal)">${fmt(r.nilai_ganjaran)}</div>
     </div>`).join('') || '<div class="empty"><div class="empty-text">Belum ada ganjaran rujukan dijana lagi</div></div>';
+}
+
+// ── Daftar No. Telefon Rujukan Manual (option tambahan, tanpa perlu pernah membeli) ──
+function bukaModalRujukanManual() {
+  document.getElementById('rm-telefon').value = '';
+  document.getElementById('rm-nama').value = '';
+  document.getElementById('rm-emel').value = '';
+  showModal('modal-rujukan-manual');
+  renderRujukanManualSenarai();
+}
+
+async function tambahRujukanManual() {
+  const telefon = document.getElementById('rm-telefon').value.trim();
+  const nama = document.getElementById('rm-nama').value.trim();
+  const emel = document.getElementById('rm-emel').value.trim();
+  if (!telefon) return toast('Sila isi no. telefon','err');
+  const { error } = await sb.from('rujukan_manual').upsert(
+    { telefon, nama: nama || null, emel: emel || null, aktif: true },
+    { onConflict: 'telefon' }
+  );
+  if (error) return toast('Gagal daftar nombor rujukan: '+error.message,'err');
+  toast(`Nombor ${telefon} didaftarkan sebagai kod rujukan`);
+  document.getElementById('rm-telefon').value = '';
+  document.getElementById('rm-nama').value = '';
+  document.getElementById('rm-emel').value = '';
+  renderRujukanManualSenarai();
+}
+
+async function toggleRujukanManualAktif(id, aktif) {
+  const { error } = await sb.from('rujukan_manual').update({ aktif }).eq('id', id);
+  if (error) return toast('Gagal kemaskini: '+error.message,'err');
+  renderRujukanManualSenarai();
+}
+
+async function padamRujukanManual(id, telefon) {
+  if (!confirm(`Padam nombor rujukan manual "${telefon}"?`)) return;
+  const { error } = await sb.from('rujukan_manual').delete().eq('id', id);
+  if (error) return toast('Gagal padam: '+error.message,'err');
+  toast('Nombor rujukan manual dipadam');
+  renderRujukanManualSenarai();
+}
+
+async function renderRujukanManualSenarai() {
+  const el = document.getElementById('rm-senarai');
+  if (!useCloud) { el.innerHTML = ''; return; }
+  const { data, error } = await sb.from('rujukan_manual').select('*').order('created_at', { ascending: false });
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  el.innerHTML = (data||[]).map(r => `
+    <div class="list-item">
+      <div>
+        <div class="list-item-title">${esc(r.telefon)}</div>
+        <div class="list-item-sub">${esc(r.nama||'—')}${r.emel?' · '+esc(r.emel):''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="badge ${r.aktif?'badge-green':'badge-gold'}">${r.aktif?'✅ Aktif':'⏸️ Tidak Aktif'}</span>
+        <button class="btn-delete-icon" style="position:static" onclick="toggleRujukanManualAktif(${r.id},${!r.aktif})" title="${r.aktif?'Nyahaktif':'Aktifkan'}">${r.aktif?'⏸️':'▶️'}</button>
+        <button class="btn-delete-icon" style="position:static" onclick="padamRujukanManual(${r.id},'${esc(r.telefon)}')" title="Padam">✕</button>
+      </div>
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Belum ada nombor rujukan manual didaftar</div></div>';
 }
 
 // ════════════════════════════════════════════════════

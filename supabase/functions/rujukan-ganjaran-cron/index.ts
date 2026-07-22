@@ -90,14 +90,26 @@ Deno.serve(async (req) => {
     for (const pesanan of calon) {
       const telefonPerujuk = pesanan.kod_rujukan!;
 
-      // Cari nama & emel terkini perujuk daripada pesanan lepas mereka.
-      const { data: dataPerujuk } = await adminClient
+      // Cari nama & emel perujuk — pesanan lepas mereka dahulu (pelanggan sedia
+      // ada), atau jadual rujukan_manual (nombor didaftar terus oleh pemilik,
+      // cth staf/influencer yang tak pernah membeli).
+      let dataPerujuk: { pelanggan_nama?: string | null; pelanggan_email?: string | null } | null = null;
+      const { data: dariPesanan } = await adminClient
         .from("pesanan_edagang")
         .select("pelanggan_nama, pelanggan_email, created_at")
         .eq("pelanggan_telefon", telefonPerujuk)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      dataPerujuk = dariPesanan;
+      if (!dataPerujuk) {
+        const { data: dariManual } = await adminClient
+          .from("rujukan_manual")
+          .select("nama, emel")
+          .eq("telefon", telefonPerujuk)
+          .maybeSingle();
+        if (dariManual) dataPerujuk = { pelanggan_nama: dariManual.nama, pelanggan_email: dariManual.emel };
+      }
 
       const kodGanjaran = janaKodGanjaran();
       const tarikhLuput = new Date(Date.now() + luputHari * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);

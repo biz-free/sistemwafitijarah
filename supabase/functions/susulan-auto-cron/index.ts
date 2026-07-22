@@ -76,7 +76,15 @@ Deno.serve(async (req) => {
 
     const { data: tetapan } = await adminClient.from("tetapan").select("butiran_bank").eq("id", 1).single();
 
-    const sehariLalu = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // Guna 20 jam (bukan 24 tepat) sebagai ambang — cron jalan sekali sehari pada
+    // waktu yang hampir sama, tapi setiap pesanan dalam gelung diproses beberapa
+    // saat SELEPAS cron mula (bergantung kelewatan panggilan Resend), jadi
+    // susulan_terakhir sentiasa beberapa saat SELEPAS masa mula cron hari itu.
+    // Jika ambang ditetapkan tepat 24 jam, potongan masa mula cron hari esok
+    // (yang hampir sama setiap hari) akan sentiasa SEBELUM stem masa tersebut,
+    // menyebabkan pesanan tersekat kekal terlangkau (bug sebenar dijumpai).
+    // Beri ruang toleransi 4 jam supaya turun naik kelewatan tak sebabkan susulan tersekat.
+    const sehariLalu = new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString();
     const { data: pesananList, error: qErr } = await adminClient
       .from("pesanan_edagang")
       .select("id, pelanggan_nama, pelanggan_email, pelanggan_telefon, jumlah, items, kaedah_bayaran, kod_baucar, bilangan_susulan, susulan_terakhir, billplz_bill_id, created_at")
