@@ -256,6 +256,10 @@
   <div id="voucher-marquee-track"></div>
 </div>
 
+<div id="rujukan-teaser" onclick="bukaModalInfo('rujukan-info-modal')" style="background:var(--gold);color:var(--navy);text-align:center;font-size:12px;font-weight:800;padding:8px 12px;cursor:pointer">
+  🎁 Rujuk kawan & dapat ganjaran voucher! Kod rujukan = no. telefon anda sendiri — ketik untuk tahu lebih lanjut
+</div>
+
 <div id="main">
   <div id="form-card">
    <div id="view-produk">
@@ -516,6 +520,28 @@
       <p style="margin-bottom:10px"><strong>Penyimpanan Data</strong><br/>Data disimpan secara selamat menggunakan infrastruktur Supabase dengan kawalan akses ketat — hanya staf dibenarkan boleh mengakses maklumat pesanan.</p>
       <p><strong>Hak Anda</strong><br/>Anda boleh memohon akses, pembetulan, atau pemadaman maklumat peribadi anda pada bila-bila masa dengan menghubungi wafitijarahtrading@gmail.com.</p>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="rujukan-info-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="tutupModalInfo('rujukan-info-modal')">✕</button>
+    <div class="section-title">🎁 Rujuk Kawan, Dapat Ganjaran!</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.7">
+      <p style="margin-bottom:10px">Senang je — kod rujukan anda ialah <strong>nombor telefon anda sendiri</strong>. Tiada kod berasingan perlu diingati.</p>
+      <p style="margin-bottom:10px"><strong>1. Kongsi</strong><br/>Selepas buat pesanan pertama, kongsi nombor telefon anda dengan kawan yang belum pernah membeli di sini.</p>
+      <p style="margin-bottom:10px"><strong>2. Kawan Dapat Diskaun</strong><br/>Kawan anda masukkan nombor tu dalam ruangan "🎁 Kod Rujukan Kawan" semasa checkout pesanan PERTAMA mereka — terus dapat diskaun.</p>
+      <p style="margin-bottom:10px"><strong>3. Anda Dapat Ganjaran</strong><br/>Bila pembayaran pesanan kawan anda disahkan, anda automatik terima emel dengan kod baucar ganjaran — guna kod tu untuk diskaun pada pesanan seterusnya!</p>
+      <p style="font-size:11px;color:var(--muted)">Nota: hanya untuk pelanggan baharu (pesanan pertama). Sebarang pertanyaan, hubungi kami di wafitijarahtrading@gmail.com.</p>
+    </div>
+    <div class="divider"></div>
+    <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px">🔍 Dah Rujuk Kawan? Semak Ganjaran Anda</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Tak terima emel ganjaran, atau nak semak semula kod anda? Masukkan nombor telefon anda (kod rujukan anda sendiri) di bawah.</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <input type="tel" class="form-input" id="rj-semak-tel" placeholder="No. telefon anda" onkeydown="if(event.key==='Enter')semakGanjaranRujukanSaya()" />
+      <button class="btn btn-primary btn-sm" style="flex-shrink:0;width:auto" onclick="semakGanjaranRujukanSaya()">🔍 Semak</button>
+    </div>
+    <div id="rj-semak-hasil"></div>
   </div>
 </div>
 
@@ -966,6 +992,30 @@ async function jejakPesanan() {
   if (o.no_tracking && !['selesai','dibatalkan'].includes(o.status_pesanan)) {
     semakStatusLiveKurier(o.id);
   }
+}
+
+async function semakGanjaranRujukanSaya() {
+  const tel = document.getElementById('rj-semak-tel').value.trim();
+  const hasilEl = document.getElementById('rj-semak-hasil');
+  if (!tel) return toast('Sila masukkan no. telefon anda','err');
+  hasilEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Mencari...</div>';
+  const { data, error } = await sb.rpc('semak_ganjaran_rujukan_saya', { p_telefon: tel });
+  if (error) { hasilEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--red);font-size:12px">⚠️ Gagal semak. Sila cuba lagi.</div>'; return; }
+  if (!data || !data.length) {
+    hasilEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px">Tiada ganjaran rujukan dijumpai untuk nombor ini lagi.</div>';
+    return;
+  }
+  hasilEl.innerHTML = data.map(r => {
+    const luput = r.tarikh_luput ? new Date(r.tarikh_luput).toLocaleDateString('ms-MY',{day:'2-digit',month:'short',year:'numeric'}) : '';
+    const statusTxt = r.sudah_guna ? '✅ Sudah digunakan' : (r.masih_aktif ? '🎁 Belum digunakan' : '⏰ Luput/Tidak aktif');
+    return `<div style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:800;font-size:15px;letter-spacing:1px;color:var(--teal)">${esc(r.kod_ganjaran)}</div>
+        <div style="font-weight:800;color:var(--navy)">${fmt(r.nilai_ganjaran)}</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${statusTxt}${luput?' · sah sehingga '+luput:''}</div>
+    </div>`;
+  }).join('');
 }
 
 async function semakStatusLiveKurier(orderId) {
@@ -1569,7 +1619,13 @@ async function semakBalikanBillplz() {
   if (error || !s) {
     box.innerHTML = `<div class="section-title">⚠️ Tidak dapat sahkan status pesanan</div><p style="font-size:13px;color:var(--muted)">Sila hubungi kami dengan nombor pesanan <strong>${esc(id)}</strong> untuk semakan.</p>`;
   } else if (s.status_bayaran === 'disahkan') {
-    box.innerHTML = `<div class="section-title">✅ Bayaran Berjaya!</div><p style="font-size:13px;color:var(--muted)">Terima kasih! Pesanan <strong>${esc(id)}</strong> (${fmt(s.jumlah)}) telah disahkan. Pihak kami akan mula proses penghantaran tidak lama lagi.</p>`;
+    const kodRujukanSaya = (s.pelanggan_telefon || '').replace(/\D/g,'').replace(/^60/, '0');
+    box.innerHTML = `<div class="section-title">✅ Bayaran Berjaya!</div><p style="font-size:13px;color:var(--muted)">Terima kasih! Pesanan <strong>${esc(id)}</strong> (${fmt(s.jumlah)}) telah disahkan. Pihak kami akan mula proses penghantaran tidak lama lagi.</p>
+      ${kodRujukanSaya ? `<div style="background:#F0FFF4;border:1px solid #1D7A4A;border-radius:10px;padding:14px;margin-top:16px;text-align:center">
+        <div style="font-weight:800;color:#0B3D2E;margin-bottom:4px">🎁 Kongsi & Dapat Ganjaran!</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Kongsi kod rujukan anda (no. telefon anda) dengan kawan — bila kawan buat pesanan pertama guna kod ni, dia dapat diskaun & anda dapat ganjaran voucher!</div>
+        <div style="font-size:18px;font-weight:800;letter-spacing:1px;color:var(--teal)">${esc(kodRujukanSaya)}</div>
+      </div>` : ''}`;
   } else if (s.status_bayaran === 'gagal') {
     box.innerHTML = `<div class="section-title">❌ Bayaran Gagal</div><p style="font-size:13px;color:var(--muted)">Bayaran untuk pesanan <strong>${esc(id)}</strong> tidak berjaya. Sila hubungi kami untuk cuba semula.</p>`;
   } else {
