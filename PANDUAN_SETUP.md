@@ -62,6 +62,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 52. `SQL_TAMBAHAN_43.sql` — Tanda kotak **"🚚 Percuma Penghantaran (Free Shipping)"** baharu bila cipta/edit voucher (kad "🎟️ Voucher Diskaun") — bila ditandakan, kos penghantaran diwaive sepenuhnya untuk pesanan yang guna kod tersebut. Dikuatkuasakan di **server** (trigger `validasi_harga_pesanan_edagang` + `validasi_baucar()`), bukan client sahaja — lihat bahagian "🎟️ Voucher Diskaun" di bawah (kemaskini).
 > 53. **Pembetulan logik Bonus Kedai Baru** (pengurusan.html) — bonus kini hanya sah selepas kedai buat penghantaran/transaksi PERTAMA (bukan sekadar didaftarkan), dengan kadar berbeza ikut kaedah bayaran transaksi pertama itu: Tunai/Transfer = kadar penuh (default RM10), Consignment/Hutang = kadar rendah (default RM2) + **top-up automatik** (default RM8) bila kedai tu kemudian buat belian tunai/transfer buat kali pertama, supaya jumlah keseluruhan cecah maksimum RM10 (tak lebih). Sebelum ini bonus dibayar serta-merta bila kedai didaftarkan tanpa mengira sama ada kedai itu pernah/akan bertransaksi. Tetapan "Bonus Kedai Baru" dipecahkan kepada 2 medan di Tetapan Kos Operasi. Tiada perubahan SQL diperlukan (logik client-side sahaja) — lihat bahagian "🏪 Bonus Kedai Baru" di bawah (kemaskini besar).
 > 54. `SQL_TAMBAHAN_44.sql` + Edge Function baharu `winback-auto-cron` + jadual `pg_cron` mingguan — kad baharu **"🔁 Kempen Win-Back Automatik"** (Lebih → Data Pembeli, pemilik sahaja) hantar emel "kami rindu awak" automatik setiap Isnin kepada pelanggan yang pernah beli tapi sudah lama tak beli lagi, dengan kod voucher pilihan pemilik. **Dimatikan (OFF) secara default** — pemilik perlu aktifkan sendiri di Tetapan. Guna semula secret `RESEND_API_KEY` & `CRON_SECRET` sedia ada — lihat bahagian "🔁 Kempen Win-Back Automatik" di bawah.
+> 55. `SQL_TAMBAHAN_45.sql` + Edge Function baharu `rujukan-ganjaran-cron` + jadual `pg_cron` (setiap 15 minit) — **Kod Referral "Bawa Kawan"**: pelanggan kongsi no. telefon sendiri sebagai kod rujukan; kawan yang buat pesanan PERTAMA guna kod tu dapat diskaun (default 10%, disahkan & dikira di server melalui trigger `validasi_harga_pesanan_edagang`), dan bila pesanan kawan itu **disahkan bayar**, perujuk automatik dapat baucar ganjaran (default RM10) via emel. Kad tetapan baharu **"🎁 Kod Referral 'Bawa Kawan'"** (Lebih → dekat Data Pembeli, pemilik sahaja). **Aktif (ON) secara default** (beza dari Win-Back) sebab tiada risiko emel pukal tanpa kelulusan — cuma diskaun/ganjaran ikut tindakan pelanggan sebenar. Guna semula secret `RESEND_API_KEY` & `CRON_SECRET` sedia ada — lihat bahagian "🎁 Kod Referral 'Bawa Kawan'" di bawah.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -501,6 +502,41 @@ select cron.schedule(
   $$
   select net.http_post(
     url := 'https://<project-ref>.supabase.co/functions/v1/winback-auto-cron',
+    headers := '{"Content-Type": "application/json", "x-cron-secret": "<CRON_SECRET>"}'::jsonb,
+    body := '{}'::jsonb
+  );
+  $$
+);
+```
+
+### 🎁 Kod Referral "Bawa Kawan"
+Kad **"🎁 Kod Referral 'Bawa Kawan'"** (Lebih → dekat "👥 Data Pembeli", pemilik sahaja) — program rujukan viral: setiap pelanggan kongsi **nombor telefon mereka sendiri** sebagai "kod rujukan" (tiada kod berasingan perlu dijana/diingati — mudah kongsi).
+
+**Bagaimana ia berfungsi:**
+1. Selepas pesanan pertama berjaya (checkout `index.html`), pelanggan nampak paparan "🎁 Kongsi & Dapat Ganjaran!" dengan nombor telefon mereka sebagai kod rujukan — mereka kongsi ni dengan kawan (WhatsApp, dsb).
+2. Kawan yang **pesanan PERTAMA** masukkan nombor tu dalam ruangan "🎁 Kod Rujukan Kawan" semasa checkout, tekan "✅ Guna Kod" — sistem sahkan (nombor tu memang pelanggan sedia ada yang pernah bayar, bukan nombor sendiri, dan pembeli ni memang pelanggan baharu) lalu papar diskaun (default **10%**) terus dalam jumlah akhir.
+3. Diskaun **disahkan & dikira semula di server** (trigger `validasi_harga_pesanan_edagang`, sama pattern macam voucher) — bukan dipercayai daripada client.
+4. Bila pesanan kawan tu **disahkan bayar** (bukan serta-merta semasa checkout — elak ganjaran untuk pesanan yang tak jadi dibayar), sistem automatik jana **baucar ganjaran** (default **RM10**, sah 90 hari) untuk perujuk, dan hantar emel pemberitahuan (jika perujuk ada alamat emel berdaftar) — diproses oleh `rujukan-ganjaran-cron` setiap **15 minit** (pg_cron).
+5. Kalau perujuk tiada emel berdaftar, ganjaran tetap dijana (boleh dilihat pemilik dalam "Sejarah Ganjaran Rujukan") tapi kod perlu diberitahu secara manual (WhatsApp/panggilan).
+
+**Tetapan boleh ubah**: Diskaun Kawan (%), Ganjaran Perujuk (RM), Tempoh Luput Ganjaran (hari) — semua di kad ni. Toggle "Aktifkan Program Rujukan" — **AKTIF (ON) secara default** (berbeza dari Win-Back) sebab tiada risiko emel pukal tanpa kelulusan; diskaun/ganjaran cuma berlaku hasil tindakan pelanggan sebenar (bukan hantaran pukal automatik).
+
+Butang **"🎁 Jana Ganjaran Sekarang (Ujian/Manual)"** — jalankan serta-merta tanpa tunggu 15 minit (berguna untuk uji atau proses segera lepas sahkan bayaran manual).
+
+**Setup wajib — 3 langkah (dari folder `wafi-app`):**
+1. Jalankan `SQL_TAMBAHAN_45.sql` (lajur `kod_rujukan`/`rujukan_diskaun` pada `pesanan_edagang`, lajur tetapan pada `tetapan`, jadual `rujukan_ganjaran`, RPC `validasi_rujukan`, kemaskini trigger `validasi_harga_pesanan_edagang`).
+2. Deploy fungsi (guna semula secret `RESEND_API_KEY` & `CRON_SECRET` sedia ada):
+```
+npx supabase functions deploy rujukan-ganjaran-cron --no-verify-jwt
+```
+3. Jadualkan panggilan setiap 15 minit (jalankan SEKALI di SQL Editor Supabase, gantikan `<CRON_SECRET>`):
+```sql
+select cron.schedule(
+  'rujukan-ganjaran-setiap-15-minit',
+  '*/15 * * * *',
+  $$
+  select net.http_post(
+    url := 'https://<project-ref>.supabase.co/functions/v1/rujukan-ganjaran-cron',
     headers := '{"Content-Type": "application/json", "x-cron-secret": "<CRON_SECRET>"}'::jsonb,
     body := '{}'::jsonb
   );

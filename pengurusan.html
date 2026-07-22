@@ -809,6 +809,24 @@
       <div id="wb-log-list"></div>
     </div>
 
+    <!-- Kod Referral "Bawa Kawan" (pemilik sahaja) -->
+    <div class="card" id="rujukan-card">
+      <div class="card-title">🎁 Kod Referral "Bawa Kawan"</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Setiap pelanggan kongsi NO. TELEFON mereka sendiri sebagai kod rujukan. Kawan yang buat pesanan PERTAMA guna kod tu dapat diskaun; bila pesanan kawan disahkan bayar, perujuk automatik dapat baucar ganjaran (dihantar via emel, setiap 15 minit — pg_cron).</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:14px"><input type="checkbox" id="rj-aktif" style="width:auto" onchange="simpanTetapanRujukan()" /> Aktifkan Program Rujukan</label>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Diskaun Kawan (%)</label><input type="number" class="form-input" id="rj-diskaun-peratus" min="0" max="100" step="1" /></div>
+        <div class="form-group"><label class="form-label">Ganjaran Perujuk (RM)</label><input type="number" class="form-input" id="rj-ganjaran-rm" min="0" step="1" /></div>
+      </div>
+      <div class="form-group"><label class="form-label">Tempoh Luput Ganjaran (hari)</label><input type="number" class="form-input" id="rj-luput-hari" min="1" step="1" /></div>
+      <button class="btn btn-primary" onclick="simpanTetapanRujukan()">💾 Simpan Tetapan</button>
+      <button class="btn btn-secondary" style="margin-top:8px" onclick="janaRujukanSekarang()" id="rj-btn-jana">🎁 Jana Ganjaran Sekarang (Ujian/Manual)</button>
+      <div id="rj-status" style="font-size:12px;font-weight:700;margin-top:10px;display:none"></div>
+      <div class="divider"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SEJARAH GANJARAN RUJUKAN</div>
+      <div id="rj-log-list"></div>
+    </div>
+
     <!-- Hebahan WhatsApp / Marketing (pemilik sahaja) -->
     <div class="card" id="wa-hebahan-card">
       <div class="card-title">📣 Hebahan WhatsApp (Marketing)</div>
@@ -1501,7 +1519,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card'];
+  const pemilikOnly = ['laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -1574,6 +1592,7 @@ async function setPage(p) {
       renderVoucherList();
       loadDataPembeli();
       loadTetapanWinback();
+      loadTetapanRujukan();
       whLoad();
       renderSenaraiCutiSemua();
       renderStatusLive();
@@ -1599,6 +1618,7 @@ const LEBIH_SHORTCUTS = [
   { id: 'voucher-card', icon: '🎟️', label: 'Voucher' },
   { id: 'data-pembeli-card', icon: '👥', label: 'Data Pembeli' },
   { id: 'winback-card', icon: '🔁', label: 'Win-Back' },
+  { id: 'rujukan-card', icon: '🎁', label: 'Referral' },
   { id: 'wa-hebahan-card', icon: '📣', label: 'Hebahan WA' },
   { id: 'easyparcel-card', icon: '🚚', label: 'EasyParcel' },
   { id: 'urus-pekerja-card', icon: '👥', label: 'Urus Pekerja' },
@@ -4188,6 +4208,80 @@ async function renderWinbackLog() {
         <div class="list-item-sub">${esc(l.telefon)}${l.kod_voucher?` · kod ${esc(l.kod_voucher)}`:''} · ${fmtD(l.dihantar_pada)}</div>
       </div>
     </div>`).join('') || '<div class="empty"><div class="empty-text">Belum ada kempen win-back dihantar lagi</div></div>';
+}
+
+// ════════════════════════════════════════════════════
+//  KOD REFERRAL "BAWA KAWAN" — pelanggan kongsi no. telefon sendiri sebagai
+//  kod rujukan; kawan yang buat pesanan pertama dapat diskaun, perujuk dapat
+//  baucar ganjaran automatik guna Edge Function rujukan-ganjaran-cron.
+// ════════════════════════════════════════════════════
+async function loadTetapanRujukan() {
+  if (!useCloud) return;
+  const { data, error } = await sb.from('tetapan')
+    .select('rujukan_aktif, rujukan_diskaun_kawan_peratus, rujukan_ganjaran_rm, rujukan_luput_hari')
+    .eq('id', 1).single();
+  if (error || !data) return;
+  document.getElementById('rj-aktif').checked = !!data.rujukan_aktif;
+  document.getElementById('rj-diskaun-peratus').value = data.rujukan_diskaun_kawan_peratus ?? 10;
+  document.getElementById('rj-ganjaran-rm').value = data.rujukan_ganjaran_rm ?? 10;
+  document.getElementById('rj-luput-hari').value = data.rujukan_luput_hari ?? 90;
+  renderRujukanLog();
+}
+
+async function simpanTetapanRujukan() {
+  const payload = {
+    rujukan_aktif: document.getElementById('rj-aktif').checked,
+    rujukan_diskaun_kawan_peratus: +document.getElementById('rj-diskaun-peratus').value || 0,
+    rujukan_ganjaran_rm: +document.getElementById('rj-ganjaran-rm').value || 0,
+    rujukan_luput_hari: +document.getElementById('rj-luput-hari').value || 90,
+  };
+  const { error } = await sb.from('tetapan').update(payload).eq('id', 1);
+  if (error) return toast('Gagal simpan tetapan rujukan: '+error.message,'err');
+  toast(payload.rujukan_aktif ? 'Program rujukan diaktifkan' : 'Tetapan rujukan disimpan');
+}
+
+async function janaRujukanSekarang() {
+  const btn = document.getElementById('rj-btn-jana');
+  const statusEl = document.getElementById('rj-status');
+  btn.disabled = true;
+  btn.textContent = '⏳ Menjana...';
+  statusEl.style.display = 'none';
+
+  const { data, error } = await sb.functions.invoke('rujukan-ganjaran-cron', { body: {} });
+
+  btn.disabled = false;
+  btn.textContent = '🎁 Jana Ganjaran Sekarang (Ujian/Manual)';
+  if (error || data?.error) {
+    let pesan = data?.error || error.message;
+    if (error?.context) {
+      try { const body = await error.context.json(); if (body?.error) pesan = body.error; } catch { /* biar mesej asal */ }
+    }
+    statusEl.style.display = '';
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '⚠️ ' + pesan;
+    return;
+  }
+
+  statusEl.style.display = '';
+  statusEl.style.color = 'var(--teal)';
+  statusEl.textContent = `✅ ${data.dijana} ganjaran dijana (${data.emelDihantar} emel dihantar, ${data.jumlahCalon} calon diperiksa).`;
+  toast(`${data.dijana} ganjaran rujukan dijana`);
+  renderRujukanLog();
+}
+
+async function renderRujukanLog() {
+  const el = document.getElementById('rj-log-list');
+  if (!useCloud) { el.innerHTML = ''; return; }
+  const { data, error } = await sb.from('rujukan_ganjaran').select('*').order('created_at', { ascending: false }).limit(15);
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  el.innerHTML = (data||[]).map(r => `
+    <div class="list-item">
+      <div>
+        <div class="list-item-title">${esc(r.telefon_perujuk)} <span class="badge badge-green" style="font-size:9px">${r.emel_dihantar?'✉️ Emel dihantar':'⚠️ Tiada emel'}</span></div>
+        <div class="list-item-sub">Rujuk ${esc(r.telefon_kawan)} · kod ${esc(r.kod_ganjaran)} · ${fmtD(r.created_at)}</div>
+      </div>
+      <div class="list-item-val" style="color:var(--teal)">${fmt(r.nilai_ganjaran)}</div>
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Belum ada ganjaran rujukan dijana lagi</div></div>';
 }
 
 // ════════════════════════════════════════════════════

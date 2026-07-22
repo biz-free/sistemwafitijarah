@@ -390,9 +390,18 @@
         </div>
         <div id="voucher-mesej" style="font-size:12px;margin-top:6px;display:none"></div>
       </div>
+      <div class="form-group" id="rujukan-wrap">
+        <label class="form-label">🎁 Kod Rujukan Kawan (Optional — untuk pelanggan baharu)</label>
+        <div style="display:flex;gap:8px">
+          <input type="tel" class="form-input" id="c-kod-rujukan" placeholder="No. telefon kawan yang rujuk anda" style="flex:1;min-width:0" />
+          <button class="btn btn-secondary btn-sm" style="width:auto;flex-shrink:0" onclick="gunaRujukan()">✅ Guna Kod</button>
+        </div>
+        <div id="rujukan-mesej" style="font-size:12px;margin-top:6px;display:none"></div>
+      </div>
       <div id="kiraan-jelas">
         <div class="kiraan-row"><span>Subjumlah</span><span id="kiraan-subtotal">RM 0.00</span></div>
         <div class="kiraan-row" id="kiraan-diskaun-row" style="display:none;color:var(--green)"><span>Diskaun Voucher (<span id="kiraan-diskaun-kod"></span>) <a href="javascript:void(0)" onclick="bukaVoucherTnc()" style="font-size:11px;color:var(--green);text-decoration:underline" title="Terma & Syarat voucher ini">ℹ️ T&C</a> <button class="btn-link" style="font-size:11px" onclick="buangVoucher()">✕ Buang</button></span><span id="kiraan-diskaun">−RM 0.00</span></div>
+        <div class="kiraan-row" id="kiraan-rujukan-row" style="display:none;color:var(--green)"><span>Diskaun Rujukan Kawan <button class="btn-link" style="font-size:11px" onclick="buangRujukan()">✕ Buang</button></span><span id="kiraan-rujukan">−RM 0.00</span></div>
         <div class="kiraan-row"><span>Kos Penghantaran<span id="kiraan-zon-label"></span></span><span id="kiraan-penghantaran">RM 0.00</span></div>
         <div class="kiraan-row jumlah"><span>JUMLAH AKHIR</span><span id="grand-total" style="color:var(--teal)">RM 0.00</span></div>
       </div>
@@ -405,6 +414,11 @@
     <div class="icon">✅</div>
     <h2>Pesanan Diterima!</h2>
     <p>Terima kasih atas pembelian anda. Pihak kami akan sahkan pesanan & mula proses penghantaran tidak lama lagi.</p>
+    <div style="background:#F0FFF4;border:1px solid #1D7A4A;border-radius:10px;padding:14px;margin-top:16px;text-align:center">
+      <div style="font-weight:800;color:#0B3D2E;margin-bottom:4px">🎁 Kongsi & Dapat Ganjaran!</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Kongsi kod rujukan anda (no. telefon anda) dengan kawan — bila kawan buat pesanan pertama guna kod ni, dia dapat diskaun & anda dapat ganjaran voucher!</div>
+      <div id="success-kod-rujukan" style="font-size:18px;font-weight:800;letter-spacing:1px;color:var(--teal)"></div>
+    </div>
   </div>
 
 </div>
@@ -1339,20 +1353,24 @@ function kemaskiniTotal() {
   const hantarPercuma = !!voucherAktif?.percuma_penghantaran;
   const kosHantarFinal = hantarPercuma ? 0 : kosHantar;
   const diskaun = voucherAktif ? Math.min(voucherAktif.jenis_diskaun==='tetap' ? voucherAktif.nilai_diskaun : tot*voucherAktif.nilai_diskaun/100, tot) : 0;
+  const rujukanDiskaun = rujukanAktif ? tot * rujukanAktif.diskaun_peratus / 100 : 0;
   document.getElementById('kiraan-subtotal').textContent = fmt(tot);
   document.getElementById('kiraan-diskaun-row').style.display = voucherAktif ? '' : 'none';
   if (voucherAktif) {
     document.getElementById('kiraan-diskaun-kod').textContent = voucherAktif.kod;
     document.getElementById('kiraan-diskaun').textContent = '−' + fmt(diskaun);
   }
+  document.getElementById('kiraan-rujukan-row').style.display = rujukanAktif ? '' : 'none';
+  if (rujukanAktif) document.getElementById('kiraan-rujukan').textContent = '−' + fmt(rujukanDiskaun);
   document.getElementById('kiraan-penghantaran').innerHTML = hantarPercuma
     ? `<s style="color:var(--muted)">${fmt(kosHantar)}</s> <span style="color:var(--green);font-weight:800">PERCUMA</span>`
     : fmt(kosHantar);
   document.getElementById('kiraan-zon-label').textContent = zonId ? ` (${ZON[zonId]?.nama||''})` : '';
-  document.getElementById('grand-total').textContent = fmt(tot - diskaun + kosHantarFinal);
+  document.getElementById('grand-total').textContent = fmt(tot - diskaun - rujukanDiskaun + kosHantarFinal);
 }
 
 let voucherAktif = null; // { kod, jenis_diskaun, nilai_diskaun, minima_belanja, maksima_belanja, tarikh_luput, had_guna }
+let rujukanAktif = null; // { kod, diskaun_peratus }
 
 function tunjukMesejVoucher(mesej, ok) {
   const el = document.getElementById('voucher-mesej');
@@ -1384,6 +1402,34 @@ function buangVoucher() {
   voucherAktif = null;
   document.getElementById('c-kod-voucher').value = '';
   document.getElementById('voucher-mesej').style.display = 'none';
+  kemaskiniTotal();
+}
+
+function tunjukMesejRujukan(mesej, ok) {
+  const el = document.getElementById('rujukan-mesej');
+  el.style.display = 'block';
+  el.style.color = ok ? 'var(--green)' : 'var(--red)';
+  el.textContent = (ok ? '✅ ' : '⚠️ ') + mesej;
+}
+
+async function gunaRujukan() {
+  const kod = document.getElementById('c-kod-rujukan').value.trim();
+  if (!kod) return toast('Sila isi kod rujukan','err');
+  const tel = document.getElementById('c-tel').value.trim();
+  if (!tel) return tunjukMesejRujukan('Sila isi no. telefon anda dahulu sebelum guna kod rujukan', false);
+  const { data, error } = await sb.rpc('validasi_rujukan', { p_kod_rujukan: kod, p_telefon_pembeli: tel });
+  const hasil = Array.isArray(data) ? data[0] : data;
+  if (error || !hasil) return tunjukMesejRujukan('Gagal semak kod rujukan','err');
+  if (!hasil.sah) { rujukanAktif = null; kemaskiniTotal(); return tunjukMesejRujukan(hasil.mesej, false); }
+  rujukanAktif = { kod: kod.replace(/\D/g,''), diskaun_peratus: hasil.diskaun_peratus };
+  tunjukMesejRujukan(hasil.mesej, true);
+  kemaskiniTotal();
+}
+
+function buangRujukan() {
+  rujukanAktif = null;
+  document.getElementById('c-kod-rujukan').value = '';
+  document.getElementById('rujukan-mesej').style.display = 'none';
   kemaskiniTotal();
 }
 
@@ -1449,6 +1495,7 @@ async function hantarPesanan() {
     subjumlah: sub,
     kos_penghantaran: kosHantar,
     kod_baucar: voucherAktif?.kod || null,
+    kod_rujukan: rujukanAktif?.kod || null,
     jumlah: sub + kosHantar,
     alamat, poskod, bandar: bandar || null, negeri,
     zon_penghantaran: zonId,
@@ -1502,8 +1549,10 @@ async function hantarPesanan() {
   }
 
   voucherAktif = null;
+  rujukanAktif = null;
   document.getElementById('form-card').style.display='none';
   document.getElementById('cart-bar').className='';
+  document.getElementById('success-kod-rujukan').textContent = telNormalized.replace(/^60/, '0');
   document.getElementById('success-box').style.display='block';
 }
 
