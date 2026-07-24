@@ -561,10 +561,10 @@
         </div>
 
         <div class="form-group" id="h-resit-bukti-wrap">
-          <label class="form-label">📸 Gambar Resit/Bukti Transaksi (Wajib)</label>
+          <label class="form-label">📸 Gambar Resit/Bukti Transaksi <span id="h-resit-wajib-label">(Pilihan)</span></label>
           <img id="h-resit-bukti-preview" style="display:none;width:100%;max-width:200px;border-radius:9px;margin-bottom:8px" />
           <input type="file" accept="image/*" capture="environment" class="form-input" id="h-resit-bukti-file" onchange="previewResitBukti()" />
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">Snap gambar resit/bukti serahan stok — wajib sebelum boleh sahkan penghantaran.</div>
+          <div id="h-resit-bukti-nota" style="font-size:11px;color:var(--muted);margin-top:4px">Snap gambar resit/bukti serahan stok jika perlu — pilihan sahaja untuk kaedah bayaran ini.</div>
         </div>
 
         <div class="form-group">
@@ -2807,6 +2807,18 @@ function setBayar(v) {
   } else {
     qrWrap.style.display = 'none';
   }
+  // Resit/bukti transaksi WAJIB hanya untuk Transfer — kaedah lain (tunai/hutang/consignment) pilihan sahaja.
+  const wajibLabel = document.getElementById('h-resit-wajib-label');
+  const notaEl = document.getElementById('h-resit-bukti-nota');
+  if (wajibLabel && notaEl) {
+    if (v === 'transfer') {
+      wajibLabel.textContent = '(Wajib)';
+      notaEl.textContent = 'Snap gambar resit/bukti serahan stok — wajib sebelum boleh sahkan penghantaran.';
+    } else {
+      wajibLabel.textContent = '(Pilihan)';
+      notaEl.textContent = 'Snap gambar resit/bukti serahan stok jika perlu — pilihan sahaja untuk kaedah bayaran ini.';
+    }
+  }
   calcTotal();
 }
 
@@ -2851,7 +2863,7 @@ function previewResitBukti() {
 async function submitHantar() {
   if (hJenis==='rosak') return submitPelupusan();
   const peribadi = hJenis==='peribadi';
-  if (!peribadi && !resitBuktiFilePilihan) return toast('Sila snap & lampir gambar resit/bukti transaksi dahulu','err');
+  if (!peribadi && hBayar==='transfer' && !resitBuktiFilePilihan) return toast('Sila snap & lampir gambar resit/bukti transaksi dahulu','err');
   let kedaiId = peribadi ? null : document.getElementById('h-kedai').value;
   const namaPembeli = peribadi ? document.getElementById('h-nama-pembeli').value.trim() : null;
   if(!peribadi && !kedaiId) return toast('Sila pilih kedai','err');
