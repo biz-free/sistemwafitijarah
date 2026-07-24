@@ -162,6 +162,13 @@
     .qty-btn { width:28px;height:28px;border-radius:7px;border:1.5px solid var(--border);background:#fff;font-size:16px;font-weight:800;cursor:pointer;color:var(--teal);display:flex;align-items:center;justify-content:center; }
     .qty-btn:active { transform:scale(0.92); }
     .qty-val { flex:1;text-align:center;font-weight:800;font-size:14px; }
+    .laris-card { flex-shrink:0;width:120px;background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;cursor:pointer;position:relative;transition:transform 0.2s; }
+    .laris-card:hover { transform:translateY(-3px); }
+    .laris-badge { position:absolute;top:5px;left:5px;background:var(--gold);color:var(--navy);font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px;z-index:2; }
+    .laris-img { width:100%;height:90px;object-fit:contain;background:#F0F4F7;display:flex;align-items:center;justify-content:center;font-size:24px; }
+    .laris-info { padding:7px 8px; }
+    .laris-nama { font-size:10.5px;font-weight:700;line-height:1.25;height:26px;overflow:hidden; }
+    .laris-harga { font-size:11.5px;font-weight:800;color:var(--teal);margin-top:3px; }
 
     /* ── CART BAR ── */
     #cart-bar { position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,#0F4A32,var(--navy));color:#fff;padding:22px 22px;min-height:76px;display:none;align-items:center;justify-content:space-between;z-index:500;box-shadow:0 -10px 30px -8px rgba(0,0,0,0.35);border-radius:20px 20px 0 0;border-top:1px solid rgba(201,162,39,0.3); }
@@ -263,6 +270,10 @@
 <div id="main">
   <div id="form-card">
    <div id="view-produk">
+    <div class="card" id="paling-laris-card" style="display:none">
+      <div class="section-title">🏆 Produk Paling Laris</div>
+      <div id="paling-laris-strip" style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px"></div>
+    </div>
     <div class="card">
       <div class="section-title">🛍️ Katalog Produk</div>
       <div class="form-group">
@@ -902,6 +913,7 @@ async function initHalaman() {
   }
   renderKategoriPills();
   renderProdukGrid();
+  renderPalingLaris();
   suntikItemListSchema();
   const produkParam = new URLSearchParams(location.search).get('produk');
   if (produkParam) kemaskiniSEOProduk(produkParam);
@@ -1262,6 +1274,42 @@ function renderProdukGrid() {
     </div>`;
   }).join('') || '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:20px">Tiada produk dijumpai</div>';
   kemaskiniTotal();
+}
+
+// Showcase produk paling laris (ikut jumlah_terjual sebenar) di atas katalog —
+// klik satu kad bawa terus ke kad penuh produk tu dalam katalog di bawah.
+function renderPalingLaris() {
+  const kad = document.getElementById('paling-laris-card');
+  const top = PRODUK.filter(p => (p.jumlah_terjual||0) > 0).slice(0, 8);
+  if (!top.length) { kad.style.display = 'none'; return; }
+  kad.style.display = '';
+  document.getElementById('paling-laris-strip').innerHTML = top.map(p => {
+    const gambar = gambarProduk(p);
+    return `<div class="laris-card" onclick="soroKeProduk('${p.id}')">
+      <div class="laris-badge">🔥 Laris</div>
+      ${gambar.length ? `<img class="laris-img" src="${esc(gambar[0])}" alt="${esc(p.nama)}" />` : `<div class="laris-img">📦</div>`}
+      <div class="laris-info">
+        <div class="laris-nama">${esc(p.nama)}</div>
+        <div class="laris-harga">${fmt(p.harga_jual)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Scroll & sorot kad produk penuh dalam katalog — guna bila pengguna klik dari
+// showcase "Paling Laris" (mungkin perlu reset carian/kategori dulu supaya kad tu kelihatan).
+function soroKeProduk(produkId) {
+  document.getElementById('cari-produk').value = '';
+  kategoriAktif = '';
+  renderKategoriPills();
+  renderProdukGrid();
+  setTimeout(() => {
+    const kad = document.querySelector(`[data-produk-id="${CSS.escape(produkId)}"]`);
+    if (!kad) return;
+    kad.scrollIntoView({ behavior:'smooth', block:'center' });
+    kad.classList.add('produk-highlight');
+    setTimeout(()=>kad.classList.remove('produk-highlight'), 2200);
+  }, 50);
 }
 
 // ── Auto-zoom mengapung semasa hover atas gambar produk (berasingan dari lightbox klik) ──
