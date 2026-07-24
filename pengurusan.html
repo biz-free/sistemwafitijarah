@@ -5281,7 +5281,6 @@ async function renderSenaraiPekerja() {
     const tidakAktif = p.status==='tidak_aktif';
     return `
     <div class="list-item">
-      ${tidakAktif?`<button class="btn-delete-icon" onclick="padamPekerja('${p.id}','${esc(p.nama||p.email)}')" title="Padam pekerja">✕</button>`:''}
       <div>
         <div class="list-item-title">${esc(p.nama||'-')}</div>
         <div class="list-item-sub">${esc(p.email||'')}${p.telefon?' · '+esc(p.telefon):''}</div>
@@ -5293,6 +5292,7 @@ async function renderSenaraiPekerja() {
       <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
         <button class="btn btn-secondary btn-sm" onclick="resetKeAdmin123('${p.id}','${esc(p.nama||p.email)}')">🔑 Reset abc123</button>
         <button class="btn btn-secondary btn-sm" onclick="togglStatusPekerja('${p.id}','${tidakAktif?'aktif':'tidak_aktif'}')">${tidakAktif?'✅ Aktifkan Semula':'🚫 Tidak Aktif'}</button>
+        <button class="btn btn-danger btn-sm" onclick="padamPekerja('${p.id}','${esc(p.nama||p.email)}')" title="Padam pekerja">🗑️ Padam Pekerja</button>
       </div>
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-text">Tiada pekerja didaftarkan lagi</div></div>';
