@@ -328,6 +328,7 @@ let TETAPAN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 
 let cart = {}; // { stokId: qty }
 let bayarMetod = 'cod';
 const kedaiIdDariQR = new URLSearchParams(location.search).get('kedai');
+const pekerjaIdDariLink = new URLSearchParams(location.search).get('pekerja');
 
 // Jejak kunjungan sendiri (tanpa perlu buka Google Analytics) — hantar sekali
 // setiap kali halaman dibuka, tak pernah simpan nama/telefon/IP, cuma
@@ -590,6 +591,7 @@ async function hantarPesanan() {
     bayar_tarikh: bayarTarikh,
     bayar_masa: bayarMasa,
     bukti_bayaran_url: buktiUrl,
+    assigned_pekerja_id: pekerjaIdDariLink || null,
   };
   const { error } = await sb.from('pre_order').insert(payload);
   if (error) return toast('Gagal hantar pesanan: '+error.message,'err');

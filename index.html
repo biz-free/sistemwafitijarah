@@ -1492,7 +1492,15 @@ async function gunaVoucher() {
     tarikh_luput: hasil.tarikh_luput, had_guna: hasil.had_guna,
     percuma_penghantaran: hasil.percuma_penghantaran,
   };
-  tunjukMesejVoucher(`Kod voucher "${voucherAktif.kod}" diguna pakai${voucherAktif.percuma_penghantaran ? ' — 🚚 Percuma Penghantaran!' : ''}`, true);
+  // Hanya satu promosi (voucher ATAU rujukan) dibenarkan setiap pesanan — elak double claim.
+  let notaGabung = '';
+  if (rujukanAktif) {
+    rujukanAktif = null;
+    document.getElementById('c-kod-rujukan').value = '';
+    document.getElementById('rujukan-mesej').style.display = 'none';
+    notaGabung = ' (kod rujukan kawan digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
+  }
+  tunjukMesejVoucher(`Kod voucher "${voucherAktif.kod}" diguna pakai${voucherAktif.percuma_penghantaran ? ' — 🚚 Percuma Penghantaran!' : ''}${notaGabung}`, true);
   kemaskiniTotal();
 }
 
@@ -1520,7 +1528,15 @@ async function gunaRujukan() {
   if (error || !hasil) return tunjukMesejRujukan('Gagal semak kod rujukan','err');
   if (!hasil.sah) { rujukanAktif = null; kemaskiniTotal(); return tunjukMesejRujukan(hasil.mesej, false); }
   rujukanAktif = { kod: kod.replace(/\D/g,''), diskaun_peratus: hasil.diskaun_peratus };
-  tunjukMesejRujukan(hasil.mesej, true);
+  // Hanya satu promosi (voucher ATAU rujukan) dibenarkan setiap pesanan — elak double claim.
+  let notaGabung = '';
+  if (voucherAktif) {
+    voucherAktif = null;
+    document.getElementById('c-kod-voucher').value = '';
+    document.getElementById('voucher-mesej').style.display = 'none';
+    notaGabung = ' (kod voucher digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
+  }
+  tunjukMesejRujukan(hasil.mesej + notaGabung, true);
   kemaskiniTotal();
 }
 

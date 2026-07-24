@@ -5,15 +5,20 @@
 // semasa label dijana di easyparcel-book-shipment, dan tak pernah dikemaskini
 // selepas itu — lihat komen dalam fungsi tu).
 //
-// ⚠️ NOTA PENTING: Endpoint EasyParcel untuk query status/tracking TIDAK dapat
-// disahkan sepenuhnya daripada dokumentasi rasmi semasa fungsi ni dibina.
-// Endpoint di bawah dianggarkan mengikut corak URL yang SAMA & DISAHKAN
-// berfungsi untuk shipment/submit_orders (easyparcel-book-shipment). Jika
-// panggilan gagal, semak log fungsi ni ("EasyParcel track_orders status: ###
-// body: {...}") — respons ralat EasyParcel akan tunjuk endpoint/parameter
-// yang betul untuk dilaraskan. Client (index.html) direka supaya SENYAP
-// sembunyikan bahagian status live jika panggilan ni gagal — pautan "Jejak di
-// Laman Kurier" kekal sebagai jalan fallback yang sentiasa berfungsi.
+// NOTA: Endpoint asal fungsi ni (`shipment/track_orders` dengan body
+// `{ awb_number: [...] }`) disahkan PECAH — panggilan terus ke EasyParcel
+// pulangkan 404 Not Found (diuji secara langsung semasa pembaikan). Endpoint
+// & bentuk data/respons betul disahkan terus daripada HTML statik rasmi
+// EasyParcel Open API docs (easyparcel.github.io/OpenAPI, bahagian
+// "HTTP Request (Tracking Status) 2026-06"):
+//   POST https://api.easyparcel.com/open_api/2026-06/shipment/tracking_status
+//   body:     { "awb_numbers": ["...", ...] }
+//   respons:  { status_code, message, data: { results: [ { status, awb_number,
+//              shipment_number, order_number, latest_shipment_status_code,
+//              latest_tracking_status, latest_event_date, ... } ] } }
+// Client (index.html) direka supaya SENYAP sembunyikan bahagian status live
+// jika panggilan ni gagal — pautan "Jejak di Laman Kurier" kekal sebagai
+// jalan fallback yang sentiasa berfungsi.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -77,23 +82,23 @@ Deno.serve(async (req) => {
 
     const accessToken = await ambilTokenSah(adminClient);
 
-    const trackRes = await fetch("https://api.easyparcel.com/open_api/2026-06/shipment/track_orders", {
+    const trackRes = await fetch("https://api.easyparcel.com/open_api/2026-06/shipment/tracking_status", {
       method: "POST",
       headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ awb_number: [order.no_tracking] }),
+      body: JSON.stringify({ awb_numbers: [order.no_tracking] }),
     });
     const trackBodyText = await trackRes.text();
-    console.log("EasyParcel track_orders status:", trackRes.status, "body:", trackBodyText);
+    console.log("EasyParcel shipment/tracking_status status:", trackRes.status, "body:", trackBodyText);
     let trackData: any = {};
     try { trackData = JSON.parse(trackBodyText); } catch { /* biar kosong */ }
 
-    const hasil = trackData?.data?.[0];
+    const hasil = trackData?.data?.results?.[0];
     if (!trackRes.ok || !hasil) {
       return new Response(JSON.stringify({ error: "Gagal dapatkan status tracking terkini", detail: trackBodyText }), { status: 502, headers: corsHeaders });
     }
 
     return new Response(JSON.stringify({
-      status: hasil.status || hasil.tracking_status || hasil.latest_status || null,
+      status: hasil.latest_tracking_status || hasil.status || null,
       nama_kurier: order.nama_kurier,
       no_tracking: order.no_tracking,
     }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });

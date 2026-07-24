@@ -111,14 +111,49 @@ Deno.serve(async (req) => {
         if (dariManual) dataPerujuk = { pelanggan_nama: dariManual.nama, pelanggan_email: dariManual.emel };
       }
 
+      // Perujuk mungkin dah ada voucher ganjaran BELUM DIGUNA dari rujukan lepas —
+      // kumpulkan (padam yang lama, keluarkan SATU voucher baharu bernilai gabungan)
+      // supaya perujuk tak terkumpul banyak kod berasingan.
+      const hariIni = new Date().toISOString().slice(0, 10);
+      const { data: logTerkini } = await adminClient
+        .from("rujukan_ganjaran")
+        .select("kod_ganjaran")
+        .eq("telefon_perujuk", telefonPerujuk)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const kodSediaAda = logTerkini?.[0]?.kod_ganjaran;
+      let baucarSediaAda: { kod: string; nilai_diskaun: number } | null = null;
+      if (kodSediaAda) {
+        const { data: bSedia } = await adminClient
+          .from("baucar")
+          .select("kod, nilai_diskaun, bilangan_guna, aktif, tarikh_luput")
+          .eq("kod", kodSediaAda)
+          .maybeSingle();
+        if (bSedia && bSedia.aktif && bSedia.bilangan_guna === 0 && (!bSedia.tarikh_luput || bSedia.tarikh_luput >= hariIni)) {
+          baucarSediaAda = bSedia;
+        }
+      }
+
       const kodGanjaran = janaKodGanjaran();
       const tarikhLuput = new Date(Date.now() + luputHari * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const nilaiTerkumpul = (baucarSediaAda?.nilai_diskaun ?? 0) + ganjaranRm;
+
+      if (baucarSediaAda) {
+        await adminClient.from("baucar").delete().eq("kod", baucarSediaAda.kod);
+      }
 
       const { error: baucarErr } = await adminClient.from("baucar").insert({
-        kod: kodGanjaran, jenis_diskaun: "tetap", nilai_diskaun: ganjaranRm,
+        kod: kodGanjaran, jenis_diskaun: "tetap", nilai_diskaun: nilaiTerkumpul,
         had_guna: 1, aktif: true, tarikh_luput: tarikhLuput,
       });
       if (baucarErr) { console.error(`[rujukan ${pesanan.id}] Gagal cipta baucar:`, baucarErr.message); continue; }
+
+      // Kemaskini log rujukan lama supaya rujuk kod baharu (elak kod usang/terpadam
+      // terus dipaparkan dalam sejarah "Semak Ganjaran Rujukan Saya" pelanggan).
+      if (baucarSediaAda) {
+        await adminClient.from("rujukan_ganjaran").update({ kod_ganjaran: kodGanjaran })
+          .eq("telefon_perujuk", telefonPerujuk).eq("kod_ganjaran", baucarSediaAda.kod);
+      }
 
       const { error: logErr } = await adminClient.from("rujukan_ganjaran").insert({
         pesanan_id: pesanan.id, telefon_perujuk: telefonPerujuk, telefon_kawan: pesanan.pelanggan_telefon,
@@ -133,7 +168,7 @@ Deno.serve(async (req) => {
             <h2 style="color:#0B3D2E">Wafi Tijarah Trading</h2>
             <p>Assalamualaikum ${esc(dataPerujuk.pelanggan_nama || "")},</p>
             <p>Terima kasih rujuk kawan anda kepada kami! 🎉 Kawan anda baru sahaja membuat pesanan pertama guna kod rujukan anda.</p>
-            <p style="background:#F0FFF4;border:1px solid #1D7A4A;border-radius:8px;padding:10px 14px;text-align:center"><b>Ganjaran anda: RM${ganjaranRm.toFixed(2)}</b><br>Kod: <span style="font-size:16px;letter-spacing:1px">${esc(kodGanjaran)}</span></p>
+            <p style="background:#F0FFF4;border:1px solid #1D7A4A;border-radius:8px;padding:10px 14px;text-align:center"><b>Ganjaran terbaharu: RM${ganjaranRm.toFixed(2)}</b><br>${baucarSediaAda ? `Digabung dengan baki lama — jumlah voucher anda sekarang: <b>RM${nilaiTerkumpul.toFixed(2)}</b><br>` : ""}Kod: <span style="font-size:16px;letter-spacing:1px">${esc(kodGanjaran)}</span></p>
             <p>Guna kod ini semasa checkout untuk pesanan seterusnya (sah sehingga ${tarikhLuput}).</p>
             <p><a href="https://www.wafitijarahtrading.com/" style="background:#0B3D2E;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block">🛍️ Layari Kedai Online</a></p>
           </div>`;

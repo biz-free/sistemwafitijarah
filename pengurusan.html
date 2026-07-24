@@ -371,8 +371,8 @@
 
     <!-- Link Pre-Order Kedai -->
     <div class="card" style="border-left:4px solid var(--gold);background:#FFFBF0">
-      <div class="card-title" style="color:var(--gold)">🔗 Link Pre-Order Kedai</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Kongsi link ini dengan kedai supaya mereka boleh repeat order sendiri bila-bila masa (tiada log masuk diperlukan).</div>
+      <div class="card-title" style="color:var(--gold)">🔗 Link Pre-Order Kedai Saya</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Link peribadi anda — kongsi dengan kedai supaya mereka boleh repeat order sendiri bila-bila masa (tiada log masuk diperlukan). Pesanan yang masuk melalui link ini akan <strong>ditugaskan terus kepada anda</strong> secara automatik.</div>
       <div style="display:flex;gap:8px">
         <input type="text" class="form-input" id="link-preorder" readonly style="font-size:12px" />
         <button class="btn btn-secondary btn-sm" onclick="salinLinkPreorder()" style="flex-shrink:0">📋 Salin</button>
@@ -384,6 +384,13 @@
     <div class="card" id="tugasan-baru-card">
       <div class="card-title">🆕 Tugasan Baru</div>
       <div id="tugasan-baru-list"></div>
+    </div>
+
+    <!-- Pre-Order Saya Perlu Dihantar (pekerja sahaja) -->
+    <div class="card" id="preorder-saya-card" style="border-left:4px solid var(--teal);display:none">
+      <div class="card-title" style="color:var(--teal)">📦 Pre-Order Perlu Dihantar</div>
+      <div id="preorder-saya-ringkasan" style="display:flex;gap:8px;margin-bottom:10px"></div>
+      <div id="preorder-saya-stok-list"></div>
     </div>
 
     <div class="stat-grid" id="stat-grid">
@@ -426,6 +433,7 @@
     <div id="stok-mobile" style="display:none">
       <div class="card" style="border-left:4px solid var(--purple)">
         <div class="card-title" style="color:var(--purple)">🎒 Stok Bawaan Saya</div>
+        <div id="stok-bawaan-ringkasan" style="display:flex;gap:8px;margin-bottom:10px"></div>
         <div id="stok-bawaan-list"></div>
         <div class="btn-row">
           <button class="btn btn-secondary btn-sm" onclick="showModal('modal-ambil-stok')">📥 Ambil Stok</button>
@@ -435,6 +443,7 @@
       </div>
       <div class="card" id="stok-mobile-semua-card">
         <div class="card-title">👥 Stok Bawaan Semua Pekerja</div>
+        <div id="stok-mobile-semua-ringkasan" style="display:flex;gap:8px;margin-bottom:10px"></div>
         <div id="stok-mobile-semua-list"></div>
       </div>
     </div>
@@ -545,6 +554,19 @@
           </div>
         </div>
 
+        <div id="h-qr-wrap" style="display:none;background:var(--bg);border-radius:10px;padding:14px;text-align:center;margin-bottom:14px">
+          <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">🏦 Tunjuk QR Ini Kepada Kedai Untuk Bayar</div>
+          <img id="h-qr-img" style="display:none;width:100%;max-width:220px;border-radius:9px;margin:0 auto 8px" />
+          <div id="h-qr-butiran" style="font-size:12px;color:var(--text);white-space:pre-line"></div>
+        </div>
+
+        <div class="form-group" id="h-resit-bukti-wrap">
+          <label class="form-label">📸 Gambar Resit/Bukti Transaksi (Wajib)</label>
+          <img id="h-resit-bukti-preview" style="display:none;width:100%;max-width:200px;border-radius:9px;margin-bottom:8px" />
+          <input type="file" accept="image/*" capture="environment" class="form-input" id="h-resit-bukti-file" onchange="previewResitBukti()" />
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Snap gambar resit/bukti serahan stok — wajib sebelum boleh sahkan penghantaran.</div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Nota (Optional)</label>
           <textarea class="form-input" id="h-nota" placeholder="Nota tambahan..."></textarea>
@@ -583,7 +605,13 @@
     </div>
     <div id="tp-tempahan-wrap"><div id="tempahan-list"></div></div>
     <div id="tp-transaksi-wrap" style="display:none"><div id="transaksi-kedai-list"></div></div>
-    <div id="tp-edagang-wrap" style="display:none"><div id="edagang-list"></div></div>
+    <div id="tp-edagang-wrap" style="display:none">
+      <div class="card" id="edagang-diproses-card" style="display:none;border-left:4px solid var(--gold)">
+        <div class="card-title" style="color:var(--gold)">📦 Jumlah Produk — Status Diproses</div>
+        <div id="edagang-diproses-list"></div>
+      </div>
+      <div id="edagang-list"></div>
+    </div>
   </div>
 
   <!-- ── LEBIH ── -->
@@ -1565,7 +1593,7 @@ async function setPage(p) {
   if (useCloud) await loadData(); // tarik data terkini supaya semua pekerja nampak perubahan terbaru
   if (p==='dashboard') {
     renderDashboard();
-    document.getElementById('link-preorder').value = location.href.replace(/pengurusan\.html.*$/,'').replace(/\/$/,'') + '/pesan.html';
+    document.getElementById('link-preorder').value = location.href.replace(/pengurusan\.html.*$/,'').replace(/\/$/,'') + '/pesan.html' + (DATA.currentUser?.id ? '?pekerja='+DATA.currentUser.id : '');
   }
   if (p==='stok') renderStok();
   if (p==='kedai') renderKedai();
@@ -1677,6 +1705,7 @@ function initAll() {
 function renderDashboard() {
   renderKehadiranStatus();
   renderTugasanBaru();
+  renderPreorderSaya();
   kemaskiniNotifikasi();
   const aktif = DATA.kedai.filter(k=>k.status==='aktif').length;
   const hutang = DATA.kedai.reduce((a,k)=>a+k.hutang,0);
@@ -2332,6 +2361,27 @@ async function carianAlamatPeta() {
   });
 }
 
+// Padan nama negeri dari Google (cth "Penang", "Pulau Pinang") ke kunci STATE_DAERAH kita
+const NEGERI_ALIAS = { 'penang': 'Pulau Pinang', 'pulau pinang': 'Pulau Pinang', 'kedah': 'Kedah', 'perlis': 'Perlis', 'perak': 'Perak' };
+
+function padankanNegeriDaerah(addressComponents) {
+  if (!addressComponents || !addressComponents.length) return { negeri: null, daerah: null };
+  const cari = (type) => addressComponents.find(c => (c.types||[]).includes(type));
+  const compNegeri = cari('administrative_area_level_1');
+  const compDaerah = cari('administrative_area_level_2') || cari('locality');
+  const negeriMentah = (compNegeri?.longText || compNegeri?.long_name || '').trim();
+  const negeri = NEGERI_ALIAS[negeriMentah.toLowerCase()] || (STATE_DAERAH[negeriMentah] ? negeriMentah : null);
+  let daerah = null;
+  if (negeri && compDaerah) {
+    const daerahMentah = (compDaerah.longText || compDaerah.long_name || '').trim().toLowerCase();
+    daerah = (STATE_DAERAH[negeri]||[]).find(d => {
+      const dLower = d.toLowerCase();
+      return dLower.includes(daerahMentah) || daerahMentah.includes(dLower.replace(/\s*\(.*\)/,'').trim());
+    }) || null;
+  }
+  return { negeri, daerah };
+}
+
 async function cariKedaiIkutNama() {
   const nama = document.getElementById('f-kedai-nama').value.trim();
   if (!nama) return toast('Masukkan nama kedai dahulu','err');
@@ -2340,12 +2390,17 @@ async function cariKedaiIkutNama() {
   toast('Mencari lokasi kedai...');
   try {
     const { Place } = await google.maps.importLibrary('places');
-    const { places } = await Place.searchByText({ textQuery: nama, fields: ['displayName','formattedAddress','location'], region: 'my', maxResultCount: 1 });
+    const { places } = await Place.searchByText({ textQuery: nama, fields: ['displayName','formattedAddress','location','addressComponents'], region: 'my', maxResultCount: 1 });
     if (!places || !places.length) { toast('Kedai tidak dijumpai — cuba cari alamat manual atau klik peta terus','err'); return; }
     const r = places[0];
     setKedaiMarker(r.location.lat(), r.location.lng(), true);
     document.getElementById('f-kedai-alamat').value = r.formattedAddress || '';
-    toast('Lokasi & alamat dijumpai — sahkan/laras pin di peta jika perlu');
+    const { negeri, daerah } = padankanNegeriDaerah(r.addressComponents);
+    if (negeri) {
+      document.getElementById('f-kedai-negeri').value = negeri;
+      isiDaerahSelect(daerah || undefined);
+    }
+    toast(negeri ? 'Lokasi, alamat & daerah dijumpai — sahkan/laras jika perlu' : 'Lokasi & alamat dijumpai — sila semak negeri/daerah secara manual');
   } catch (e) {
     console.log('Places searchByText error:', e);
     toast('Carian gagal: '+e.message,'err');
@@ -2543,10 +2598,10 @@ let hBayar='terus';
 // Kadar diskaun ikut kaedah bayaran — guna semula tetapan yang sama dengan
 // diskaun pre-order (Lebih > Tetapan Pre-Order & Diskaun), supaya satu sahaja
 // tempat untuk ubah kadar, tak kira borang mana yang guna.
-let TETAPAN_DISKAUN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5 };
+let TETAPAN_DISKAUN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5, qr_bank_url: null, butiran_bank: '' };
 async function muatTetapanDiskaunUntukHantar() {
   if (!useCloud) return;
-  const { data } = await sb.from('tetapan').select('minima_transfer, diskaun_peratus, diskaun_cod_peratus').eq('id', 1).single();
+  const { data } = await sb.from('tetapan').select('minima_transfer, diskaun_peratus, diskaun_cod_peratus, qr_bank_url, butiran_bank').eq('id', 1).single();
   if (data) TETAPAN_DISKAUN = { ...TETAPAN_DISKAUN, ...data };
 }
 function kiraDiskaunHantarPeratus(subjumlah) {
@@ -2613,18 +2668,33 @@ async function loadStokBawaan() {
 
 function renderStokBawaanList() {
   const el = document.getElementById('stok-bawaan-list');
+  const ringkasanEl = document.getElementById('stok-bawaan-ringkasan');
   if (!el) return;
-  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; if(ringkasanEl) ringkasanEl.innerHTML=''; return; }
   const entries = Object.entries(DATA.stokPekerja||{}).filter(([id,qty])=>qty>0);
   el.innerHTML = entries.map(([id,qty])=>{
     const s = DATA.stok.find(s=>s.id===id);
     return `<div class="list-item"><div class="list-item-title">${esc(s?.nama||id)}</div><div class="list-item-val">${qty} ${esc(s?.unit||'')}</div></div>`;
   }).join('') || '<div class="empty"><div class="empty-text">Tiada stok dibawa lagi — tekan "Ambil Stok"</div></div>';
 
+  if (ringkasanEl) {
+    const jumlahUnit = entries.reduce((a,[,qty])=>a+qty,0);
+    const nilaiJual = entries.reduce((a,[id,qty])=>{ const s=DATA.stok.find(s=>s.id===id); return a+(s?s.harga_jual*qty:0); },0);
+    ringkasanEl.innerHTML = `
+      <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:9px;color:var(--muted)">JUMLAH STOK</div>
+        <div style="font-weight:800;font-size:15px">${jumlahUnit} unit</div>
+      </div>
+      <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:9px;color:var(--muted)">NILAI STOK</div>
+        <div style="font-weight:800;font-size:15px;color:var(--purple)">${fmt(nilaiJual)}</div>
+      </div>`;
+  }
+
   const ambilSel = document.getElementById('ambil-produk');
-  if (ambilSel) ambilSel.innerHTML = DATA.stok.map(s=>`<option value="${s.id}">${esc(s.nama)} (gudang: ${s.stok})</option>`).join('');
+  if (ambilSel) ambilSel.innerHTML = DATA.stok.map(s=>`<option value="${s.id}">${esc(s.nama)} (gudang: ${s.stok} ${esc(s.unit)})</option>`).join('');
   const pulangSel = document.getElementById('pulang-produk');
-  if (pulangSel) pulangSel.innerHTML = entries.map(([id,qty])=>{ const s=DATA.stok.find(s=>s.id===id); return `<option value="${id}">${esc(s?.nama||id)} (bawaan: ${qty})</option>`; }).join('') || '<option value="">-- Tiada stok dibawa --</option>';
+  if (pulangSel) pulangSel.innerHTML = entries.map(([id,qty])=>{ const s=DATA.stok.find(s=>s.id===id); return `<option value="${id}">${esc(s?.nama||id)} (bawaan: ${qty} ${esc(s?.unit||'')})</option>`; }).join('') || '<option value="">-- Tiada stok dibawa --</option>';
 }
 
 function setStokTab(t) {
@@ -2645,11 +2715,30 @@ async function renderStokMobileSemua() {
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
   const ikutPekerja = {};
   (data||[]).forEach(r => { (ikutPekerja[r.pekerja_id] ||= []).push(r); });
-  el.innerHTML = Object.entries(ikutPekerja).map(([pid, rows])=>`
-    <div class="list-item" style="display:block">
-      <div class="list-item-title" style="margin-bottom:4px">${esc(namaPekerja(pid))}</div>
+  el.innerHTML = Object.entries(ikutPekerja).map(([pid, rows])=>{
+    const subUnit = rows.reduce((a,r)=>a+r.kuantiti,0);
+    const subNilai = rows.reduce((a,r)=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return a+(s?s.harga_jual*r.kuantiti:0); },0);
+    return `<div class="list-item" style="display:block">
+      <div class="list-item-title" style="margin-bottom:4px;display:flex;justify-content:space-between"><span>${esc(namaPekerja(pid))}</span><span style="color:var(--muted);font-weight:400">${subUnit} unit · ${fmt(subNilai)}</span></div>
       ${rows.map(r=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return `<div style="font-size:11px;color:var(--muted);display:flex;justify-content:space-between"><span>${esc(s?.nama||r.stok_id)}</span><span>${r.kuantiti} ${esc(s?.unit||'')}</span></div>`; }).join('')}
-    </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada pekerja bawa stok buat masa ini</div></div>';
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-text">Tiada pekerja bawa stok buat masa ini</div></div>';
+
+  const ringkasanEl = document.getElementById('stok-mobile-semua-ringkasan');
+  if (ringkasanEl) {
+    const semuaRows = Object.values(ikutPekerja).flat();
+    const jumlahUnit = semuaRows.reduce((a,r)=>a+r.kuantiti,0);
+    const nilaiJual = semuaRows.reduce((a,r)=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return a+(s?s.harga_jual*r.kuantiti:0); },0);
+    ringkasanEl.innerHTML = `
+      <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:9px;color:var(--muted)">JUMLAH STOK LUAR</div>
+        <div style="font-weight:800;font-size:15px">${jumlahUnit} unit</div>
+      </div>
+      <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:9px;color:var(--muted)">NILAI STOK LUAR</div>
+        <div style="font-weight:800;font-size:15px;color:var(--purple)">${fmt(nilaiJual)}</div>
+      </div>`;
+  }
 }
 
 async function ambilStok() {
@@ -2709,6 +2798,15 @@ function setBayar(v) {
   document.getElementById('opt-transfer').className='bayar-opt'+(v==='transfer'?' active-transfer':'');
   document.getElementById('opt-hutang').className='bayar-opt'+(v==='hutang'?' active-hutang':'');
   document.getElementById('opt-consignment').className='bayar-opt'+(v==='consignment'?' active-consignment':'');
+  const qrWrap = document.getElementById('h-qr-wrap');
+  if (v === 'transfer' && (TETAPAN_DISKAUN.qr_bank_url || TETAPAN_DISKAUN.butiran_bank)) {
+    qrWrap.style.display = '';
+    const img = document.getElementById('h-qr-img');
+    if (TETAPAN_DISKAUN.qr_bank_url) { img.src = TETAPAN_DISKAUN.qr_bank_url; img.style.display = ''; } else { img.style.display = 'none'; }
+    document.getElementById('h-qr-butiran').textContent = TETAPAN_DISKAUN.butiran_bank || '';
+  } else {
+    qrWrap.style.display = 'none';
+  }
   calcTotal();
 }
 
@@ -2722,6 +2820,8 @@ function setHJenis(v) {
   document.getElementById('h-pembeli-wrap').style.display = v==='peribadi'?'':'none';
   document.getElementById('h-sebab-wrap').style.display = v==='rosak'?'':'none';
   document.getElementById('h-bayar-wrap').style.display = v==='rosak'?'none':'';
+  document.getElementById('h-resit-bukti-wrap').style.display = v==='kedai'?'':'none';
+  if (v!=='kedai') { document.getElementById('h-qr-wrap').style.display = 'none'; }
   document.getElementById('h-items-label').textContent = v==='rosak'?'Barang Dilupuskan':'Barang Dihantar';
   document.getElementById('h-total-label').textContent = v==='rosak'?'ANGGARAN KERUGIAN (MODAL)':'JUMLAH BAYARAN';
   document.getElementById('h-submit-btn').textContent = v==='rosak'?'🗑️ Sahkan Pelupusan Stok':'🚚 Sahkan & Rekod Penghantaran';
@@ -2738,9 +2838,20 @@ function setHantarTab(t) {
   if(t==='baru') renderPreorderInfoBanner();
 }
 
+let resitBuktiFilePilihan = null;
+function previewResitBukti() {
+  const file = document.getElementById('h-resit-bukti-file').files[0];
+  if (!file) { resitBuktiFilePilihan = null; return; }
+  resitBuktiFilePilihan = file;
+  const prev = document.getElementById('h-resit-bukti-preview');
+  prev.src = URL.createObjectURL(file);
+  prev.style.display = 'block';
+}
+
 async function submitHantar() {
   if (hJenis==='rosak') return submitPelupusan();
   const peribadi = hJenis==='peribadi';
+  if (!peribadi && !resitBuktiFilePilihan) return toast('Sila snap & lampir gambar resit/bukti transaksi dahulu','err');
   let kedaiId = peribadi ? null : document.getElementById('h-kedai').value;
   const namaPembeli = peribadi ? document.getElementById('h-nama-pembeli').value.trim() : null;
   if(!peribadi && !kedaiId) return toast('Sila pilih kedai','err');
@@ -2799,6 +2910,13 @@ async function submitHantar() {
     jarak_km: jarakKm,
     created_by: DATA.currentUser?.email || DATA.currentUser?.nama || null,
   };
+  let resitBuktiPath = null;
+  if (useCloud && resitBuktiFilePilihan) {
+    const ext = resitBuktiFilePilihan.name.split('.').pop();
+    resitBuktiPath = `hantar-${trx.id}-${Date.now()}.${ext}`;
+    const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(resitBuktiPath, resitBuktiFilePilihan);
+    if (upErr) return toast('Gagal muat naik gambar resit: '+upErr.message,'err');
+  }
   if (useCloud) {
     // Guna RPC atomik supaya potong stok bawaan + rekod transaksi + hutang kedai berlaku serentak
     // dan tak "lost update" bila dua pekerja hantar barang serentak dari peranti berbeza.
@@ -2807,6 +2925,7 @@ async function submitHantar() {
       p_jumlah:trx.jumlah, p_status:trx.status, p_nota:trx.nota, p_resit:trx.resit, p_jarak_km:trx.jarak_km,
       p_nama_pembeli:trx.nama_pembeli, p_kaedah_bayaran:trx.kaedah_bayaran,
       p_jumlah_asal:trx.jumlah_asal, p_diskaun_peratus:trx.diskaun_peratus,
+      p_resit_bukti_url: resitBuktiPath,
     });
     if (error) return toast('Gagal rekod penghantaran: '+error.message,'err');
     if (preorderIdSelesai) {
@@ -2831,6 +2950,9 @@ async function submitHantar() {
   document.getElementById('h-kedai').value='';
   document.getElementById('h-nama-pembeli').value='';
   document.getElementById('h-nota').value='';
+  resitBuktiFilePilihan = null;
+  document.getElementById('h-resit-bukti-file').value = '';
+  document.getElementById('h-resit-bukti-preview').style.display = 'none';
   renderHItems();
 
   // Terus bawa ke ruangan Jana & Cetak Resit supaya boleh terus hantar kepada kedai
@@ -2911,6 +3033,7 @@ async function renderSejarah(kedaiId='') {
       </div>
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
       ${t.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(t.nota)}</div>`:''}
+      ${t.resit_bukti_url?`<button class="btn-link" style="font-size:11px;margin-top:4px" onclick="lihatBuktiBayaran('${esc(t.resit_bukti_url)}')">📸 Lihat Resit/Bukti</button>`:''}
       ${belumSahkan?`
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
         <div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:6px">🤝 Consignment — belum disahkan jualan (upah belum dikira)</div>
@@ -3002,6 +3125,38 @@ async function renderTugasanBaru() {
   }).join('') || '<div class="empty"><div class="empty-text">Tiada tugasan baru buat masa ini</div></div>';
 }
 
+// Pre-order yang SUDAH ditugaskan/diambil oleh pekerja ini & belum selesai —
+// supaya pekerja tahu berapa pesanan & jumlah stok setiap produk perlu dibawa hari ini.
+async function renderPreorderSaya() {
+  const card = document.getElementById('preorder-saya-card');
+  if (!card) return;
+  if (currentRole !== 'pekerja' || !useCloud) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const { data, error } = await sb.from('pre_order').select('*').eq('assigned_pekerja_id', DATA.currentUser.id).neq('status','selesai');
+  const ringkasanEl = document.getElementById('preorder-saya-ringkasan');
+  const listEl = document.getElementById('preorder-saya-stok-list');
+  if (error) { ringkasanEl.innerHTML=''; listEl.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const senarai = data || [];
+
+  const jumlahProduk = {};
+  senarai.forEach(po => (po.items||[]).forEach(it => { jumlahProduk[it.nama] = (jumlahProduk[it.nama]||0) + (+it.qty||0); }));
+  const jumlahUnit = Object.values(jumlahProduk).reduce((a,n)=>a+n,0);
+
+  ringkasanEl.innerHTML = `
+    <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+      <div style="font-size:9px;color:var(--muted)">BILANGAN PRE-ORDER</div>
+      <div style="font-weight:800;font-size:15px">${senarai.length}</div>
+    </div>
+    <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+      <div style="font-size:9px;color:var(--muted)">JUMLAH STOK DIPERLUKAN</div>
+      <div style="font-weight:800;font-size:15px;color:var(--teal)">${jumlahUnit} unit</div>
+    </div>`;
+
+  listEl.innerHTML = Object.entries(jumlahProduk).sort((a,b)=>b[1]-a[1]).map(([nama,qty])=>
+    `<div class="list-item"><div class="list-item-title">${esc(nama)}</div><div class="list-item-val">${qty}</div></div>`
+  ).join('') || '<div class="empty"><div class="empty-text">Tiada pre-order tertunggak buat masa ini</div></div>';
+}
+
 async function renderPreorderList() {
   const el = document.getElementById('preorder-list');
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
@@ -3030,13 +3185,14 @@ async function renderPreorderList() {
         ${(pekerjaList||[]).map(p=>`<option value="${p.id}" ${po.assigned_pekerja_id===p.id?'selected':''}>${esc(p.nama)}</option>`).join('')}
       </select>` : '';
     return `<div class="trx-card" style="${lewat?'border-left-color:var(--red);background:#FFF5F5':''}">
-      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="padamPreorder('${po.id}')" title="Padam pre-order">✕</button>`:''}
+      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="batalkanPreorder('${po.id}')" title="Batalkan pre-order">✕</button>`:''}
       <div style="display:flex;justify-content:space-between;margin-bottom:4px">
         <div><div style="font-weight:800;font-size:13px">${esc(po.kedai_nama)}</div><div style="font-size:10px;color:var(--muted)">📞 ${esc(po.kedai_telefon)} · ${fmtDT(po.created_at)} ${lewat?`· <strong style="color:var(--red)">${hariBerlalu} hari lalu</strong>`:''}</div></div>
         <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="tandaPreorder('${po.id}',this.value)">
           <option value="baru" ${po.status==='baru'?'selected':''}>🆕 Baru</option>
           <option value="diproses" ${po.status==='diproses'?'selected':''}>⏳ Diproses</option>
           <option value="selesai" ${po.status==='selesai'?'selected':''}>✓ Selesai</option>
+          <option value="dibatalkan" ${po.status==='dibatalkan'?'selected':''}>✕ Dibatalkan</option>
         </select>
       </div>
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
@@ -3061,13 +3217,14 @@ async function tandaPreorder(id, status) {
   toast('Status pre-order dikemaskini');
 }
 
-async function padamPreorder(id) {
-  if (!confirm('Padam pre-order ini secara kekal?')) return;
-  const { error } = await sb.from('pre_order').delete().eq('id', id);
-  if (error) return toast('Gagal padam: '+error.message,'err');
+// Batalkan (bukan padam) — data kedai/pembeli perlu kekal tersimpan untuk rekod.
+async function batalkanPreorder(id) {
+  if (!confirm('Batalkan pre-order ini? Data kedai/pelanggan akan tetap disimpan untuk rekod (bukan dipadam).')) return;
+  const { error } = await sb.from('pre_order').update({ status: 'dibatalkan' }).eq('id', id);
+  if (error) return toast('Gagal batalkan: '+error.message,'err');
   renderPreorderList();
   checkPreorderBadge();
-  toast('Pre-order dipadam');
+  toast('Pre-order dibatalkan — data kekal tersimpan');
 }
 
 // ════════════════════════════════════════════════════
@@ -3082,13 +3239,13 @@ async function renderTempahanList() {
   const list = bulan ? (data||[]).filter(po=>(po.created_at||'').slice(0,7)===bulan) : (data||[]);
   document.getElementById('tp-jumlah').textContent = `${list.length} tempahan${bulan?' pada '+bulan:' (semua)'}`;
 
-  const statusBadge = { baru:'badge-teal', diproses:'badge-gold', selesai:'badge-green' };
-  const statusTxt = { baru:'🆕 Baru', diproses:'⏳ Diproses', selesai:'✓ Selesai' };
+  const statusBadge = { baru:'badge-teal', diproses:'badge-gold', selesai:'badge-green', dibatalkan:'badge-red' };
+  const statusTxt = { baru:'🆕 Baru', diproses:'⏳ Diproses', selesai:'✓ Selesai', dibatalkan:'✕ Dibatalkan' };
 
   el.innerHTML = list.map(po=>{
     const itemsStr = (po.items||[]).map(it=>`${it.nama} ×${it.qty}`).join(' · ');
     return `<div class="trx-card">
-      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="padamTempahan('${po.id}')" title="Padam tempahan">✕</button>`:''}
+      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="batalkanTempahan('${po.id}')" title="Batalkan tempahan">✕</button>`:''}
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
         <div>
           <div style="font-weight:800;font-size:13px">${esc(po.kedai_nama)}</div>
@@ -3105,12 +3262,12 @@ async function renderTempahanList() {
   }).join('') || '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Tiada tempahan dalam julat ini</div></div>';
 }
 
-async function padamTempahan(id) {
-  if (!confirm('Padam rekod tempahan ini secara kekal?')) return;
-  const { error } = await sb.from('pre_order').delete().eq('id', id);
-  if (error) return toast('Gagal padam: '+error.message,'err');
+async function batalkanTempahan(id) {
+  if (!confirm('Batalkan rekod tempahan ini? Data kedai/pelanggan akan tetap disimpan untuk rekod (bukan dipadam).')) return;
+  const { error } = await sb.from('pre_order').update({ status: 'dibatalkan' }).eq('id', id);
+  if (error) return toast('Gagal batalkan: '+error.message,'err');
   renderTempahanList();
-  toast('Tempahan dipadam');
+  toast('Tempahan dibatalkan — data kekal tersimpan');
 }
 
 let tempahanTab = 'tempahan';
@@ -3189,6 +3346,22 @@ async function renderEdagangList() {
   document.getElementById('tp-jumlah').textContent = `${list.length} pesanan e-dagang${bulan?' pada '+bulan:' (semua)'}`;
   document.getElementById('badge-edagang-tab').style.display = list.some(o=>o.status_pesanan==='baru') ? '' : 'none';
 
+  // Jumlah produk ditempah status "Diproses" — pemilik sahaja, ikut tapisan bulan semasa.
+  const diprosesCard = document.getElementById('edagang-diproses-card');
+  if (currentRole==='pemilik') {
+    const diproses = list.filter(o=>o.status_pesanan==='diproses');
+    const jumlahProduk = {};
+    diproses.forEach(o => (o.items||[]).forEach(it => { jumlahProduk[it.nama] = (jumlahProduk[it.nama]||0) + (+it.qty||0); }));
+    const entriProduk = Object.entries(jumlahProduk).sort((a,b)=>b[1]-a[1]);
+    diprosesCard.style.display = diproses.length ? '' : 'none';
+    document.getElementById('edagang-diproses-list').innerHTML = entriProduk.length
+      ? `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${diproses.length} pesanan sedang diproses</div>` +
+        entriProduk.map(([nama,qty])=>`<div class="list-item"><div class="list-item-title">${esc(nama)}</div><div class="list-item-val">${qty}</div></div>`).join('')
+      : '';
+  } else {
+    diprosesCard.style.display = 'none';
+  }
+
   el.innerHTML = list.map(o=>{
     const itemsStr = (o.items||[]).map(it=>`${it.nama} ×${it.qty}`).join(' · ');
     const pilihPekerjaSelect = currentRole==='pemilik' ? `
@@ -3196,8 +3369,12 @@ async function renderEdagangList() {
         <option value="">🙋 Belum ditugaskan</option>
         ${(pekerjaList||[]).map(p=>`<option value="${p.id}" ${o.assigned_pekerja_id===p.id?'selected':''}>${esc(p.nama)}</option>`).join('')}
       </select>` : '';
-    return `<div class="trx-card">
-      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="padamEdagang('${o.id}')" title="Padam pesanan">✕</button>`:''}
+    // Tindakan segera — pesanan belum selesai yang perlu tindakan pemilik SEKARANG.
+    const perluSahkanBayaran = currentRole==='pemilik' && o.status_bayaran==='menunggu' && !!o.bukti_bayaran_url;
+    const perluMulaProses = currentRole==='pemilik' && o.status_pesanan==='baru' && o.status_bayaran==='disahkan';
+    const perluTindakan = perluSahkanBayaran || perluMulaProses;
+    return `<div class="trx-card" style="${perluTindakan?'border-left-color:var(--red);background:#FFF8F0':''}">
+      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="batalkanEdagang('${o.id}')" title="Batalkan pesanan">✕</button>`:''}
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
         <div>
           <div style="font-weight:800;font-size:13px">${esc(o.id)} — ${esc(o.pelanggan_nama)}</div>
@@ -3206,6 +3383,10 @@ async function renderEdagangList() {
         </div>
         <span class="badge ${EDAGANG_STATUS_BADGE[o.status_pesanan]||'badge-teal'}" style="flex-shrink:0">${EDAGANG_STATUS_TXT[o.status_pesanan]||o.status_pesanan}</span>
       </div>
+      ${perluTindakan?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        ${perluSahkanBayaran?`<button class="btn btn-primary btn-sm" style="width:auto;background:var(--red)" onclick="kemaskiniEdagang('${o.id}','status_bayaran','disahkan')">🚨 Sahkan Bayaran Sekarang</button>`:''}
+        ${perluMulaProses?`<button class="btn btn-primary btn-sm" style="width:auto;background:var(--gold)" onclick="kemaskiniEdagang('${o.id}','status_pesanan','diproses')">🚨 Mula Proses Sekarang</button>`:''}
+      </div>`:''}
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
       ${o.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(o.nota)}</div>`:''}
       <div style="font-size:12px;font-weight:700;margin-top:6px">Subjumlah: ${fmt(o.subjumlah)} + Penghantaran: ${fmt(o.kos_penghantaran)} = ${fmt(o.jumlah)} <span style="font-weight:500;color:var(--muted)">${o.kaedah_bayaran==='billplz'?'· 💳 Billplz (automatik)':'· 🏦 Transfer Manual'}</span></div>
@@ -3299,11 +3480,13 @@ async function buatLabelEasyParcel(id, btnEl) {
   renderEdagangList();
 }
 
-async function padamEdagang(id) {
-  if (!confirm('Padam pesanan e-dagang ini secara kekal?')) return;
-  const { error } = await sb.from('pesanan_edagang').delete().eq('id', id);
-  if (error) return toast('Gagal padam: '+error.message,'err');
-  toast('Pesanan dipadam');
+// Batalkan (bukan padam) — data pembeli (nama, telefon, emel, alamat) perlu
+// kekal tersimpan untuk rekod walaupun pesanan gagal bayar/dibatalkan pemilik.
+async function batalkanEdagang(id) {
+  if (!confirm('Batalkan pesanan e-dagang ini? Data pelanggan akan tetap disimpan untuk rekod (bukan dipadam).')) return;
+  const { error } = await sb.from('pesanan_edagang').update({ status_pesanan: 'dibatalkan', updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) return toast('Gagal batalkan: '+error.message,'err');
+  toast('Pesanan dibatalkan — data pelanggan kekal tersimpan');
   renderEdagangList();
 }
 
@@ -3412,6 +3595,11 @@ async function renderResit(id) {
     <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">KAEDAH BAYARAN</span><span>${({tunai:'💵 Tunai',transfer:'🏦 Online Transfer',hutang:'📋 Hutang'})[t.kaedah_bayaran] || (t.status==='selesai'?'💵 Tunai':'📋 Hutang')}</span></div>
     <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">STATUS</span><span style="font-weight:700;color:${t.status==='selesai'?'var(--green)':'var(--red)'}">⬤ ${t.status==='selesai'?'TELAH DIBAYAR':'BELUM DIBAYAR / HUTANG'}</span></div>
     ${t.nota?`<div style="margin-top:8px;font-size:10px;color:var(--muted)">Nota: ${esc(t.nota)}</div>`:''}
+    ${(t.status!=='selesai' && (TETAPAN_DISKAUN.qr_bank_url||TETAPAN_DISKAUN.butiran_bank))?`<div style="margin-top:10px;padding:8px;background:#FFF8E1;border:1px dashed var(--red);border-radius:6px;text-align:center">
+      <div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:6px">💳 SILA JELASKAN HUTANG</div>
+      ${TETAPAN_DISKAUN.qr_bank_url?`<img src="${esc(TETAPAN_DISKAUN.qr_bank_url)}" alt="QR Bayaran" style="width:90px;height:90px;object-fit:contain;background:#fff;border-radius:6px;padding:4px" />`:''}
+      ${TETAPAN_DISKAUN.butiran_bank?`<div style="font-size:9px;color:var(--text);margin-top:6px;white-space:pre-line">${esc(TETAPAN_DISKAUN.butiran_bank)}</div>`:''}
+    </div>`:''}
     ${pekerja?.telefon?`<div style="margin-top:10px;padding:8px;background:#F0FFF4;border:1px dashed var(--green);border-radius:6px;font-size:10px;text-align:center">🔁 Nak repeat order? Hubungi terus <strong>${esc(pekerja.nama||'penghantar')}</strong>: ${esc(pekerja.telefon)}</div>`:''}
     ${peribadi?'':`<div style="text-align:center;margin-top:12px">
       <div id="resit-qr" style="width:100px;height:100px;margin:0 auto"></div>
