@@ -3973,15 +3973,48 @@ async function janaBaucarBulanIni() {
 
 // Baucar Harian — upah 1 hari untuk seorang pekerja, netto terus dengan cash tunai
 // yang dia dah kutip hari tu (dikira server-side dalam RPC, bukan client, sebab duit).
+// Kira JUMLAH PENUH upah harian pekerja — upah penghantaran + minyak kenderaan (GPS) +
+// duit makan + bonus kedai baru + upah e-dagang — formula SAMA seperti pecahanHarian
+// dalam renderUpahSaya()/renderLaporan(), supaya konsisten dengan Laporan Bulanan.
+// Kadar (SETTINGS.minyak/makan/bonus) hanya wujud di localStorage pemilik, jadi dikira
+// di sini (client, pemilik yang disahkan) — bukan di RPC — sama corak dgn baucar bulanan.
+async function kiraUpahPenuhHari(pekerjaId, tarikh) {
+  const filHari = DATA.transaksi.filter(t => t.created_by===pekerjaId && (t.tarikh_masa||'').slice(0,10)===tarikh);
+  const upahHari = filHari.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
+
+  const { kmIkutHari } = await kiraJarakKehadiranJulat(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaId);
+  const kmHari = kmIkutHari[`${pekerjaId}|${tarikh}`] || 0;
+  const minyakHari = kmHari * SETTINGS.minyak;
+
+  const kedaiListHari = DATA.kedai
+    .filter(k => k.didaftarkan_oleh===pekerjaId)
+    .flatMap(k => bonusKedaiEvents(k.id).map(ev => ({ kedai:k, ...ev })))
+    .filter(x => (x.tarikh_masa||'').slice(0,10)===tarikh);
+  const bonusHari = kedaiListHari.reduce((a,x)=>a+x.jumlah,0);
+
+  const { data: edagangData } = await sb.from('pesanan_edagang').select('*').eq('assigned_pekerja_id', pekerjaId);
+  const edagangHari = (edagangData||[]).filter(o=>['dihantar','selesai'].includes(o.status_pesanan) && (o.updated_at||o.created_at||'').slice(0,10)===tarikh);
+  const upahEdagangHari = edagangHari.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
+
+  // Duit makan — hari dikira "hari kerja" jika ada penghantaran, bonus kedai baru, atau
+  // e-dagang diselesaikan hari tu (sama syarat seperti hariList dalam renderUpahSaya()).
+  const adaKerjaHariIni = filHari.length>0 || kedaiListHari.length>0 || edagangHari.length>0;
+  const makanHari = adaKerjaHariIni ? SETTINGS.makan : 0;
+
+  const jumlah = upahHari + minyakHari + makanHari + bonusHari + upahEdagangHari;
+  return { jumlah, butiran: { upah:upahHari, minyak:minyakHari, km:kmHari, makan:makanHari, bonus:bonusHari, upahEdagang:upahEdagangHari } };
+}
+
 async function janaBaucarHarian() {
   if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
   const pekerjaId = document.getElementById('bh-pekerja').value;
   const tarikh = document.getElementById('bh-tarikh').value;
   if (!pekerjaId) return toast('Sila pilih pekerja','err');
   if (!tarikh) return toast('Sila pilih tarikh','err');
-  const { error } = await sb.rpc('cipta_baucar_harian', { p_pekerja_id: pekerjaId, p_tarikh: tarikh });
+  const { jumlah, butiran } = await kiraUpahPenuhHari(pekerjaId, tarikh);
+  const { error } = await sb.rpc('cipta_baucar_harian', { p_pekerja_id: pekerjaId, p_tarikh: tarikh, p_jumlah: jumlah, p_butiran: butiran });
   if (error) return toast('Gagal jana baucar harian: '+error.message,'err');
-  toast('🧮 Baucar harian dijana');
+  toast(`🧮 Baucar harian dijana · Upah ${fmt(butiran.upah)} + Minyak ${fmt(butiran.minyak)} + Makan ${fmt(butiran.makan)} + Bonus ${fmt(butiran.bonus)}${butiran.upahEdagang?` + E-dagang ${fmt(butiran.upahEdagang)}`:''} = ${fmt(jumlah)}`);
   document.getElementById('baucar-bulan').value = tarikh.slice(0,7);
   await renderBaucarList();
 }
@@ -4012,7 +4045,8 @@ async function renderBaucarList() {
         </div>
       </div>
       ${v.kategori==='upah_harian'?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;background:var(--bg);border-radius:6px;padding:6px 8px">
-        Upah harian ${fmt(v.jumlah)} − Cash ditangan ${fmt(v.cash_ditangan)} = <strong style="color:${v.baki>=0?'var(--green)':'var(--red)'}">${v.baki>=0?'Baki pemilik transfer':'Pekerja perlu serah lebihan'} ${fmt(Math.abs(v.baki))}</strong>
+        ${v.butiran?`<div style="margin-bottom:4px">Upah ${fmt(v.butiran.upah)} + Minyak ${fmt(v.butiran.minyak)} (${(v.butiran.km||0).toFixed(1)}km) + Makan ${fmt(v.butiran.makan)} + Bonus ${fmt(v.butiran.bonus)}${v.butiran.upahEdagang?` + E-dagang ${fmt(v.butiran.upahEdagang)}`:''}</div>`:''}
+        Jumlah Upah ${fmt(v.jumlah)} − Cash ditangan ${fmt(v.cash_ditangan)} = <strong style="color:${v.baki>=0?'var(--green)':'var(--red)'}">${v.baki>=0?'Baki pemilik transfer':'Pekerja perlu serah lebihan'} ${fmt(Math.abs(v.baki))}</strong>
       </div>`:''}
       ${v.resit_url
         ? `<div style="font-size:11px;margin-bottom:6px"><button class="btn-link" onclick="lihatResitBaucar('${esc(v.resit_url)}')">📎 Lihat Resit</button></div>`
@@ -4077,7 +4111,14 @@ async function cetakBaucar(id) {
     ${v.tarikh?`<div class="baucar-row"><span>TARIKH</span><span>${fmtD(v.tarikh)}</span></div>`:''}
     ${v.tujuan?`<div class="baucar-row"><span>TUJUAN</span><span style="text-align:right;max-width:60%">${esc(v.tujuan)}</span></div>`:''}
     ${v.kategori==='upah_harian'?`
-    <div class="baucar-row"><span>UPAH HARIAN</span><span>${fmt(v.jumlah)}</span></div>
+    ${v.butiran?`
+    <div class="baucar-row"><span>Upah Penghantaran</span><span>${fmt(v.butiran.upah)}</span></div>
+    <div class="baucar-row"><span>Minyak Kenderaan (${(v.butiran.km||0).toFixed(1)}km)</span><span>${fmt(v.butiran.minyak)}</span></div>
+    <div class="baucar-row"><span>Duit Makan</span><span>${fmt(v.butiran.makan)}</span></div>
+    <div class="baucar-row"><span>Bonus Kedai Baru</span><span>${fmt(v.butiran.bonus)}</span></div>
+    ${v.butiran.upahEdagang?`<div class="baucar-row"><span>Upah E-Dagang</span><span>${fmt(v.butiran.upahEdagang)}</span></div>`:''}
+    `:''}
+    <div class="baucar-row" style="font-weight:700"><span>JUMLAH UPAH HARIAN</span><span>${fmt(v.jumlah)}</span></div>
     <div class="baucar-row"><span>CASH DITANGAN (TOLAK)</span><span>−${fmt(v.cash_ditangan)}</span></div>
     <div class="baucar-total"><span>${v.baki>=0?'BAKI PEMILIK TRANSFER':'PEKERJA SERAH LEBIHAN'}</span><span>${fmt(Math.abs(v.baki))}</span></div>
     `:`<div class="baucar-total"><span>JUMLAH</span><span>${fmt(v.jumlah)}</span></div>`}
