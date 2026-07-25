@@ -369,6 +369,12 @@
       <div style="font-size:10px;color:var(--muted);margin-top:8px">📍 GPS aktif berterusan bermula Thumb In sehingga Thumb Out untuk claim minyak. Sila kekalkan apps terbuka semasa bekerja & benarkan akses lokasi.</div>
     </div>
 
+    <!-- Papan Jualan Pekerja Hari Ini — semua akaun pekerja boleh lihat -->
+    <div class="card" id="jualan-pekerja-card" style="border-left:4px solid var(--gold)">
+      <div class="card-title" style="color:var(--gold)">🏆 Jualan Pekerja Hari Ini</div>
+      <div id="jualan-pekerja-list"></div>
+    </div>
+
     <!-- Link Pre-Order Kedai -->
     <div class="card" style="border-left:4px solid var(--gold);background:#FFFBF0">
       <div class="card-title" style="color:var(--gold)">🔗 Link Pre-Order Kedai Saya</div>
@@ -460,7 +466,10 @@
     </div>
 
     <div id="kedai-senarai">
-      <button class="btn btn-primary" id="btn-daftar-kedai" onclick="bukaModalKedaiBaru()">+ Daftar Kedai Baru</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="btn-daftar-kedai" onclick="bukaModalKedaiBaru()" style="flex:1">+ Daftar Kedai Baru</button>
+        <button class="btn btn-secondary" id="btn-urus-route-senarai" style="display:none;flex-shrink:0" onclick="bukaModalRoute()">🗺️ Urus Route</button>
+      </div>
 
       <!-- Bayar hutang -->
       <div class="card" style="border-left:4px solid var(--gold);background:#FFFBF0;margin-top:12px;display:none" id="bayar-section">
@@ -773,6 +782,17 @@
       <div class="form-group">
         <input type="month" class="form-input" id="baucar-bulan" onchange="renderBaucarList()" />
       </div>
+
+      <div style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:14px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--navy)">💵 Jana Baucar Harian (Netto Cash Ditangan)</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Upah harian pekerja ditolak cash tunai yang dia dah kutip hari tu — baki sahaja perlu pemilik transfer.</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Pekerja</label><select class="form-input" id="bh-pekerja"></select></div>
+          <div class="form-group"><label class="form-label">Tarikh</label><input type="date" class="form-input" id="bh-tarikh" /></div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="janaBaucarHarian()">🧮 Jana Baucar Harian</button>
+      </div>
+
       <div id="baucar-list"></div>
       <div id="baucar-print-preview"></div>
     </div>
@@ -1717,6 +1737,8 @@ function initAll() {
   // Month picker default
   document.getElementById('lap-bulan').value = new Date().toISOString().slice(0,7);
   document.getElementById('baucar-bulan').value = new Date().toISOString().slice(0,7);
+  const bhTarikhEl = document.getElementById('bh-tarikh');
+  if (bhTarikhEl) bhTarikhEl.value = new Date().toISOString().slice(0,10);
 }
 
 // ════════════════════════════════════════════════════
@@ -1726,6 +1748,7 @@ function renderDashboard() {
   renderKehadiranStatus();
   renderTugasanBaru();
   renderPreorderSaya();
+  renderJualanPekerjaHariIni();
   kemaskiniNotifikasi();
   const aktif = DATA.kedai.filter(k=>k.status==='aktif').length;
   const hutang = DATA.kedai.reduce((a,k)=>a+k.hutang,0);
@@ -2245,6 +2268,8 @@ function toggleRouteKedaiList(routeId) {
 async function ciptaRoute() {
   const nama = document.getElementById('route-nama-baru').value.trim();
   if (!nama) return toast('Sila isi nama route','err');
+  const { data: sediaAda } = await sb.from('route_kedai').select('id').ilike('nama', nama);
+  if (sediaAda && sediaAda.length) return toast(`Route "${nama}" sudah wujud`,'err');
   const { error } = await sb.from('route_kedai').insert({ nama });
   if (error) return toast('Gagal cipta route: '+error.message,'err');
   document.getElementById('route-nama-baru').value = '';
@@ -2272,6 +2297,7 @@ async function padamRoute(id) {
 function renderKedai(q='') {
   // Pekerja juga boleh daftar kedai baru (mereka yang cari prospek di lapangan) — edit kekal pemilik sahaja
   document.getElementById('btn-daftar-kedai').style.display='';
+  document.getElementById('btn-urus-route-senarai').style.display = currentRole==='pemilik' ? '' : 'none';
   const qq=q.toLowerCase();
   const list = q ? DATA.kedai.filter(k=>k.nama.toLowerCase().includes(qq)||k.daerah.toLowerCase().includes(qq)||(k.negeri||'').toLowerCase().includes(qq)) : DATA.kedai;
   const hutangTotal=DATA.kedai.reduce((a,k)=>a+k.hutang,0);
@@ -3282,6 +3308,26 @@ async function renderPreorderSaya() {
   ).join('') || '<div class="empty"><div class="empty-text">Tiada pre-order tertunggak buat masa ini</div></div>';
 }
 
+// Papan jualan semua pekerja hari ini — visible untuk SEMUA akaun pekerja (bukan pemilik
+// sahaja) supaya setiap pekerja nampak prestasi jualan hari tu, guna RPC SECURITY DEFINER
+// (papan_jualan_pekerja_hari_ini) sebab RLS profiles tak benarkan pekerja baca profil
+// pekerja lain terus — RPC ni hanya dedah nama + jumlah jualan, bukan data sensitif.
+async function renderJualanPekerjaHariIni() {
+  const el = document.getElementById('jualan-pekerja-list');
+  if (!el) return;
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const { data, error } = await sb.rpc('papan_jualan_pekerja_hari_ini');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const senarai = data || [];
+  el.innerHTML = senarai.map((p,i)=>{
+    const sayaSendiri = p.pekerja_id === DATA.currentUser?.id;
+    return `<div class="list-item" style="${sayaSendiri?'background:#FFFBEA;border-radius:8px;padding-left:8px;padding-right:8px':''}">
+      <div class="list-item-title">${i===0 && p.jumlah_jualan>0?'🥇 ':''}${esc(p.nama)}${sayaSendiri?' (Saya)':''}</div>
+      <div class="list-item-val" style="color:var(--gold)">${fmt(p.jumlah_jualan)}</div>
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-text">Tiada jualan direkod hari ini lagi</div></div>';
+}
+
 async function renderPreorderList() {
   const el = document.getElementById('preorder-list');
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
@@ -3891,7 +3937,7 @@ async function renderLaporan() {
 //  Jumlah diambil terus daripada Laporan Bulanan (LAPORAN_PEKERJA_TERKINI) — tiada
 //  pengiraan baharu, sekadar formalkan angka yang sama menjadi dokumen bernombor siri.
 // ════════════════════════════════════════════════════
-const BAUCAR_KATEGORI_LABEL = { petrol:'⛽ Petrol', upah:'💰 Upah', makan:'🍽️ Duit Makan' };
+const BAUCAR_KATEGORI_LABEL = { petrol:'⛽ Petrol', upah:'💰 Upah', makan:'🍽️ Duit Makan', upah_harian:'💵 Upah Harian (Netto Cash)' };
 const BAUCAR_STATUS_LABEL = { draf:'📝 Draf', diluluskan:'✅ Diluluskan', dibayar:'💵 Dibayar' };
 let BAUCAR_CACHE = [];
 
@@ -3925,9 +3971,29 @@ async function janaBaucarBulanIni() {
   await renderBaucarList();
 }
 
+// Baucar Harian — upah 1 hari untuk seorang pekerja, netto terus dengan cash tunai
+// yang dia dah kutip hari tu (dikira server-side dalam RPC, bukan client, sebab duit).
+async function janaBaucarHarian() {
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  const pekerjaId = document.getElementById('bh-pekerja').value;
+  const tarikh = document.getElementById('bh-tarikh').value;
+  if (!pekerjaId) return toast('Sila pilih pekerja','err');
+  if (!tarikh) return toast('Sila pilih tarikh','err');
+  const { error } = await sb.rpc('cipta_baucar_harian', { p_pekerja_id: pekerjaId, p_tarikh: tarikh });
+  if (error) return toast('Gagal jana baucar harian: '+error.message,'err');
+  toast('🧮 Baucar harian dijana');
+  document.getElementById('baucar-bulan').value = tarikh.slice(0,7);
+  await renderBaucarList();
+}
+
 async function renderBaucarList() {
   const el = document.getElementById('baucar-list');
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const pekerjaSel = document.getElementById('bh-pekerja');
+  if (pekerjaSel && !pekerjaSel.options.length) {
+    const { data: pekerjaList } = await sb.from('profiles').select('id,nama').eq('role','pekerja');
+    pekerjaSel.innerHTML = (pekerjaList||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('') || '<option value="">-- Tiada pekerja --</option>';
+  }
   const bulan = document.getElementById('baucar-bulan').value;
   const { data, error } = await sb.from('baucar_bayaran').select('*').eq('bulan', bulan).order('no_siri');
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
@@ -3938,13 +4004,16 @@ async function renderBaucarList() {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <div>
           <div class="list-item-title">${esc(v.no_siri)} · ${BAUCAR_KATEGORI_LABEL[v.kategori]||v.kategori}</div>
-          <div class="list-item-sub">${esc(PROFIL_NAMA_CACHE[v.pekerja_id]||v.pekerja_id)}</div>
+          <div class="list-item-sub">${esc(PROFIL_NAMA_CACHE[v.pekerja_id]||v.pekerja_id)}${v.tarikh?' · '+fmtD(v.tarikh):''}</div>
         </div>
         <div style="text-align:right">
-          <div class="list-item-val">${fmt(v.jumlah)}</div>
+          <div class="list-item-val">${fmt(v.kategori==='upah_harian'?v.baki:v.jumlah)}</div>
           <span class="badge ${v.status==='dibayar'?'badge-green':v.status==='diluluskan'?'badge-teal':'badge-gold'}">${BAUCAR_STATUS_LABEL[v.status]}</span>
         </div>
       </div>
+      ${v.kategori==='upah_harian'?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;background:var(--bg);border-radius:6px;padding:6px 8px">
+        Upah harian ${fmt(v.jumlah)} − Cash ditangan ${fmt(v.cash_ditangan)} = <strong style="color:${v.baki>=0?'var(--green)':'var(--red)'}">${v.baki>=0?'Baki pemilik transfer':'Pekerja perlu serah lebihan'} ${fmt(Math.abs(v.baki))}</strong>
+      </div>`:''}
       ${v.resit_url
         ? `<div style="font-size:11px;margin-bottom:6px"><button class="btn-link" onclick="lihatResitBaucar('${esc(v.resit_url)}')">📎 Lihat Resit</button></div>`
         : (v.kategori==='petrol' && v.butiran && v.butiran.length)
@@ -4005,8 +4074,13 @@ async function cetakBaucar(id) {
     <div class="baucar-row"><span>KATEGORI</span><span>${BAUCAR_KATEGORI_LABEL[v.kategori]||v.kategori}</span></div>
     <div class="baucar-row"><span>BULAN</span><span>${esc(v.bulan)}</span></div>
     <div class="baucar-row"><span>DIBAYAR KEPADA</span><span>${esc(nama)}</span></div>
+    ${v.tarikh?`<div class="baucar-row"><span>TARIKH</span><span>${fmtD(v.tarikh)}</span></div>`:''}
     ${v.tujuan?`<div class="baucar-row"><span>TUJUAN</span><span style="text-align:right;max-width:60%">${esc(v.tujuan)}</span></div>`:''}
-    <div class="baucar-total"><span>JUMLAH</span><span>${fmt(v.jumlah)}</span></div>
+    ${v.kategori==='upah_harian'?`
+    <div class="baucar-row"><span>UPAH HARIAN</span><span>${fmt(v.jumlah)}</span></div>
+    <div class="baucar-row"><span>CASH DITANGAN (TOLAK)</span><span>−${fmt(v.cash_ditangan)}</span></div>
+    <div class="baucar-total"><span>${v.baki>=0?'BAKI PEMILIK TRANSFER':'PEKERJA SERAH LEBIHAN'}</span><span>${fmt(Math.abs(v.baki))}</span></div>
+    `:`<div class="baucar-total"><span>JUMLAH</span><span>${fmt(v.jumlah)}</span></div>`}
     ${(v.kategori==='petrol' && v.butiran && v.butiran.length) ? `
     <div style="margin-top:10px">
       <div style="font-size:10px;font-weight:700;margin-bottom:4px">LOG PERJALANAN HARIAN (bukti sokongan GPS)</div>
