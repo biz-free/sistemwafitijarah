@@ -532,10 +532,26 @@
             <option value="lain">📝 Lain-lain</option>
           </select>
         </div>
+        <div class="form-group" id="h-tukar-wrap" style="display:none">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;color:var(--navy)">
+            <input type="checkbox" id="h-tukar-checkbox" onchange="toggleTukarExpired(this.checked)" style="width:16px;height:16px;flex-shrink:0" />
+            🔄 Kedai nak tukar barang expired ini dengan barang lain?
+          </label>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Barang gantian diberi PERCUMA — TIADA bayaran/diskaun automatik dikira untuk pertukaran ini.</div>
+        </div>
+        <div class="form-group" id="h-tukar-kedai-wrap" style="display:none">
+          <label class="form-label">Kedai Yang Tukar</label>
+          <select class="form-input" id="h-tukar-kedai"></select>
+        </div>
         <div class="form-group">
           <label class="form-label" id="h-items-label">Barang Dihantar</label>
           <div id="h-items"></div>
           <button class="btn btn-outline" onclick="addHItem()">+ Tambah Item</button>
+        </div>
+        <div class="form-group" id="h-gantian-wrap" style="display:none">
+          <label class="form-label">🔄 Barang Gantian Diberi Kepada Kedai (Percuma)</label>
+          <div id="h-items-gantian"></div>
+          <button type="button" class="btn btn-outline" onclick="addHItemGantian()">+ Tambah Item Gantian</button>
         </div>
 
         <div class="total-box">
@@ -543,6 +559,10 @@
           <span class="total-val" id="h-total">RM 0.00</span>
         </div>
         <div id="h-diskaun-info" style="display:none;font-size:11px;color:var(--green);text-align:right;margin-top:-8px;margin-bottom:8px;font-weight:700"></div>
+        <div class="total-box" id="h-tukar-total-box" style="display:none;margin-top:8px;background:#FFF5F5">
+          <span class="total-label" style="color:var(--red)">JUMLAH KERUGIAN PERTUKARAN</span>
+          <span class="total-val" id="h-tukar-total" style="color:var(--red)">RM 0.00</span>
+        </div>
 
         <div class="form-group" id="h-bayar-wrap">
           <label class="form-label">Kaedah Bayaran</label>
@@ -2626,6 +2646,8 @@ async function renderHantarSelects() {
     });
   }
   sel.innerHTML='<option value="">-- Pilih kedai --</option>'+opsiPO+DATA.kedai.filter(k=>k.status==='aktif').map(k=>`<option value="${k.id}">${k.nama} · ${k.daerah}</option>`).join('');
+  const tukarSel = document.getElementById('h-tukar-kedai');
+  if (tukarSel) tukarSel.innerHTML = '<option value="">-- Pilih kedai --</option>'+DATA.kedai.filter(k=>k.status==='aktif').map(k=>`<option value="${k.id}">${k.nama} · ${k.daerah}</option>`).join('');
   if (useCloud) await loadStokBawaan();
   renderHItems();
 }
@@ -2651,6 +2673,44 @@ function renderHItems() {
   }).join('');
   calcTotal();
 }
+
+// ── Tukar Barang Expired Dengan Barang Lain (mod dalam tab Rosak/Expired) ──
+// Barang gantian diberi PERCUMA kepada kedai — direkod sebagai kerugian, BUKAN jualan,
+// supaya tiada diskaun automatik transfer/COD terpakai atas nilai gantian ini.
+let hItemsGantian = [{stokId:'',qty:1}];
+let tukarExpiredAktif = false;
+
+function toggleTukarExpired(checked) {
+  tukarExpiredAktif = checked;
+  document.getElementById('h-tukar-kedai-wrap').style.display = checked?'':'none';
+  document.getElementById('h-gantian-wrap').style.display = checked?'':'none';
+  document.getElementById('h-tukar-total-box').style.display = checked?'':'none';
+  if (!checked) {
+    hItemsGantian = [{stokId:'',qty:1}];
+    document.getElementById('h-tukar-kedai').value = '';
+  }
+  renderHItemsGantian();
+}
+
+function renderHItemsGantian() {
+  document.getElementById('h-items-gantian').innerHTML = hItemsGantian.map((it,i)=>{
+    const s=DATA.stok.find(s=>s.id===it.stokId);
+    const sub=s?fmt(s.harga_beli*(+it.qty||0)):'';
+    return `<div class="item-row">
+      <select class="form-input" onchange="updHItemGantian(${i},'stokId',this.value)">
+        <option value="">-- Pilih produk --</option>
+        ${DATA.stok.map(s=>`<option value="${s.id}" ${it.stokId===s.id?'selected':''}>${s.nama} (${bakiUntukHantar(s)} ${s.unit})</option>`).join('')}
+      </select>
+      <input type="number" class="form-input" min="1" value="${it.qty}" onchange="updHItemGantian(${i},'qty',this.value)" />
+      <span class="item-price">${sub}</span>
+      ${hItemsGantian.length>1?`<button class="btn-remove" onclick="remHItemGantian(${i})">✕</button>`:''}
+    </div>`;
+  }).join('');
+  calcTotal();
+}
+function updHItemGantian(i,f,v) { hItemsGantian[i][f]=v; renderHItemsGantian(); }
+function addHItemGantian() { hItemsGantian.push({stokId:'',qty:1}); renderHItemsGantian(); }
+function remHItemGantian(i) { hItemsGantian.splice(i,1); renderHItemsGantian(); }
 
 // ── Stok Bawaan Pekerja (ambil dari gudang / pulangkan balik) ──
 async function loadStokBawaan() {
@@ -2778,6 +2838,10 @@ function calcTotal() {
     const kerugian=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_beli*(+it.qty||0):0); },0);
     document.getElementById('h-total').textContent=fmt(kerugian);
     document.getElementById('h-diskaun-info').style.display='none';
+    if (tukarExpiredAktif) {
+      const kerugianGantian = hItemsGantian.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_beli*(+it.qty||0):0); },0);
+      document.getElementById('h-tukar-total').textContent = fmt(kerugian + kerugianGantian);
+    }
     return;
   }
   const sub=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty||0):0); },0);
@@ -2831,6 +2895,11 @@ function setHJenis(v) {
   document.getElementById('h-kedai-wrap').style.display = v==='kedai'?'':'none';
   document.getElementById('h-pembeli-wrap').style.display = v==='peribadi'?'':'none';
   document.getElementById('h-sebab-wrap').style.display = v==='rosak'?'':'none';
+  document.getElementById('h-tukar-wrap').style.display = v==='rosak'?'':'none';
+  if (v!=='rosak' && tukarExpiredAktif) {
+    document.getElementById('h-tukar-checkbox').checked = false;
+    toggleTukarExpired(false);
+  }
   document.getElementById('h-bayar-wrap').style.display = v==='rosak'?'none':'';
   document.getElementById('h-resit-bukti-wrap').style.display = v==='kedai'?'':'none';
   if (v!=='kedai') { document.getElementById('h-qr-wrap').style.display = 'none'; }
@@ -2976,6 +3045,7 @@ async function submitHantar() {
 
 // ── Pelupusan stok bawaan (rosak/expired/hilang) — tiada jualan, potong stok bawaan sahaja ──
 async function submitPelupusan() {
+  if (tukarExpiredAktif) return submitTukarExpired();
   if (hItems.some(it=>!it.stokId||+it.qty<1)) return toast('Sila isi semua item','err');
   for (const it of hItems) {
     const s = DATA.stok.find(s=>s.id===it.stokId);
@@ -3002,13 +3072,54 @@ async function submitPelupusan() {
   await setHantarTab('sejarah');
 }
 
+// ── Tukar barang expired dengan barang lain (kedai) — DUA belah kerugian, TIADA jualan/diskaun.
+// Belah 1 (barang expired diambil balik): TIADA potong stok bawaan pekerja — barang ni dari kedai, bukan bag pekerja.
+// Belah 2 (barang gantian diberi percuma): potong stok bawaan pekerja sebenar.
+async function submitTukarExpired() {
+  const kedaiId = document.getElementById('h-tukar-kedai').value;
+  if (!kedaiId) return toast('Sila pilih kedai untuk pertukaran','err');
+  if (hItems.some(it=>!it.stokId||+it.qty<1)) return toast('Sila isi semua barang expired','err');
+  if (hItemsGantian.some(it=>!it.stokId||+it.qty<1)) return toast('Sila isi semua barang gantian','err');
+  for (const it of hItemsGantian) {
+    const s = DATA.stok.find(s=>s.id===it.stokId);
+    if (!s || bakiUntukHantar(s)<+it.qty) return toast(`Stok gantian ${s?.nama||'?'} tidak mencukupi (baki bawaan: ${s?bakiUntukHantar(s):0})`,'err');
+  }
+  const sebabExpired = document.getElementById('h-sebab').value;
+  const nota = document.getElementById('h-nota').value;
+  const itemsExpired = hItems.map(it=>({ stokId: it.stokId, qty: +it.qty }));
+  const itemsGantian = hItemsGantian.map(it=>({ stokId: it.stokId, qty: +it.qty }));
+  const kerugianExpired = itemsExpired.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_beli*it.qty:0); },0);
+  const kerugianGantian = itemsGantian.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_beli*it.qty:0); },0);
+
+  if (useCloud) {
+    const { error } = await sb.rpc('tukar_stok_expired_kedai', {
+      p_kedai_id: kedaiId, p_items_expired: itemsExpired, p_items_gantian: itemsGantian,
+      p_sebab_expired: sebabExpired, p_nota: nota,
+    });
+    if (error) return toast('Gagal rekod pertukaran: '+error.message,'err');
+    await loadData();
+    await loadStokBawaan();
+  } else {
+    DATA.stok = DATA.stok.map(s=>{ const it=itemsGantian.find(i=>i.stokId===s.id); return it?{...s,stok:s.stok-it.qty}:s; });
+    saveData();
+  }
+  toast(`🔄 Pertukaran direkod · Kerugian ${fmt(kerugianExpired+kerugianGantian)}`);
+  hItems=[{stokId:'',qty:1}]; hItemsGantian=[{stokId:'',qty:1}];
+  document.getElementById('h-tukar-checkbox').checked = false;
+  toggleTukarExpired(false);
+  setHJenis('kedai');
+  document.getElementById('h-nota').value='';
+  renderHItems();
+  await setHantarTab('sejarah');
+}
+
 // Nama destinasi paparan untuk 1 transaksi — kedai berdaftar, atau "Belian Peribadi" jika tiada kedai
 function namaDestinasiTrx(t) {
   if (t.kedai_id) return DATA.kedai.find(k=>k.id===t.kedai_id)?.nama || '?';
   return t.nama_pembeli ? `🙋 Belian Peribadi: ${t.nama_pembeli}` : '🙋 Belian Peribadi';
 }
 
-const LABEL_SEBAB_LUPUS = { rosak:'💔 Rosak', expired:'⏰ Expired', hilang:'❓ Hilang', lain:'📝 Lain-lain' };
+const LABEL_SEBAB_LUPUS = { rosak:'💔 Rosak', expired:'⏰ Expired', hilang:'❓ Hilang', lain:'📝 Lain-lain', gantian_tukar:'🔄 Gantian (Tukar Expired)' };
 
 async function renderSejarah(kedaiId='') {
   const listTrx = [...DATA.transaksi].filter(t=>kedaiId?t.kedai_id===kedaiId:true).map(t=>({ ...t, _jenis:'trx', _masa:t.tarikh_masa }));
@@ -3025,9 +3136,11 @@ async function renderSejarah(kedaiId='') {
     if (t._jenis==='lupus') {
       const s = DATA.stok.find(s=>s.id===t.stok_id);
       const namaPekerja = currentRole==='pemilik' ? (PROFIL_NAMA_CACHE[t.pekerja_id]||'?') : null;
+      const kedaiNama = t.kedai_id ? (DATA.kedai.find(k=>k.id===t.kedai_id)?.nama || t.kedai_id) : null;
+      const tajuk = t.jenis==='tukar_ambil' ? '🔄 Ambil Balik (Tukar Expired)' : t.jenis==='tukar_beri' ? '🔄 Gantian Diberi (Tukar Expired)' : '🗑️ Pelupusan Stok';
       return `<div class="trx-card" style="border-left:4px solid var(--red)">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <div><div style="font-weight:800;font-size:13px">🗑️ Pelupusan Stok${namaPekerja?` · ${esc(namaPekerja)}`:''}</div><div style="font-size:10px;color:var(--muted)">${fmtDT(t.created_at)}</div></div>
+          <div><div style="font-weight:800;font-size:13px">${tajuk}${namaPekerja?` · ${esc(namaPekerja)}`:''}</div><div style="font-size:10px;color:var(--muted)">${fmtDT(t.created_at)}${kedaiNama?` · 🏪 ${esc(kedaiNama)}`:''}</div></div>
           <div style="text-align:right"><div style="font-weight:800;font-size:14px;color:var(--red)">−${fmt(t.kos||0)}</div><span class="badge badge-red">${LABEL_SEBAB_LUPUS[t.sebab]||esc(t.sebab)}</span></div>
         </div>
         <div style="font-size:11px;color:var(--muted)">${esc(s?.nama||t.stok_id)} ×${t.kuantiti}</div>
