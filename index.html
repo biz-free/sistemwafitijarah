@@ -401,7 +401,7 @@
         <label class="form-label">Kod Voucher (Optional)</label>
         <div style="display:flex;gap:8px">
           <input type="text" class="form-input" id="c-kod-voucher" placeholder="cth: RAYA10" style="text-transform:uppercase;flex:1;min-width:0" />
-          <button class="btn btn-secondary btn-sm" style="width:auto;flex-shrink:0" onclick="gunaVoucher()">🎟️ Guna Kod</button>
+          <button class="btn btn-primary" style="width:auto;flex-shrink:0;padding:12px 20px;font-size:15px" onclick="gunaVoucher()">🎟️ Guna Kod</button>
         </div>
         <div id="voucher-mesej" style="font-size:12px;margin-top:6px;display:none"></div>
       </div>
@@ -409,14 +409,14 @@
         <label class="form-label">🎁 Kod Rujukan Kawan (Optional — untuk pelanggan baharu)</label>
         <div style="display:flex;gap:8px">
           <input type="tel" class="form-input" id="c-kod-rujukan" placeholder="No. telefon kawan yang rujuk anda" style="flex:1;min-width:0" />
-          <button class="btn btn-secondary btn-sm" style="width:auto;flex-shrink:0" onclick="gunaRujukan()">✅ Guna Kod</button>
+          <button class="btn btn-primary" style="width:auto;flex-shrink:0;padding:12px 20px;font-size:15px" onclick="gunaRujukan()">✅ Guna Kod</button>
         </div>
         <div id="rujukan-mesej" style="font-size:12px;margin-top:6px;display:none"></div>
       </div>
       <div id="kiraan-jelas">
         <div class="kiraan-row"><span>Subjumlah</span><span id="kiraan-subtotal">RM 0.00</span></div>
-        <div class="kiraan-row" id="kiraan-diskaun-row" style="display:none;color:var(--green)"><span>Diskaun Voucher (<span id="kiraan-diskaun-kod"></span>) <a href="javascript:void(0)" onclick="bukaVoucherTnc()" style="font-size:11px;color:var(--green);text-decoration:underline" title="Terma & Syarat voucher ini">ℹ️ T&C</a> <button class="btn-link" style="font-size:11px" onclick="buangVoucher()">✕ Buang</button></span><span id="kiraan-diskaun">−RM 0.00</span></div>
-        <div class="kiraan-row" id="kiraan-rujukan-row" style="display:none;color:var(--green)"><span>Diskaun Rujukan Kawan <button class="btn-link" style="font-size:11px" onclick="buangRujukan()">✕ Buang</button></span><span id="kiraan-rujukan">−RM 0.00</span></div>
+        <div class="kiraan-row" id="kiraan-diskaun-row" style="display:none;color:var(--green)"><span>Diskaun Voucher (<span id="kiraan-diskaun-kod"></span>) <a href="javascript:void(0)" onclick="bukaVoucherTnc()" style="font-size:11px;color:var(--green);text-decoration:underline" title="Terma & Syarat voucher ini">ℹ️ T&C</a> <button class="btn-link" style="font-size:13px;padding:4px 6px" onclick="buangVoucher()">✕ Buang</button></span><span id="kiraan-diskaun">−RM 0.00</span></div>
+        <div class="kiraan-row" id="kiraan-rujukan-row" style="display:none;color:var(--green)"><span>Diskaun Rujukan Kawan <button class="btn-link" style="font-size:13px;padding:4px 6px" onclick="buangRujukan()">✕ Buang</button></span><span id="kiraan-rujukan">−RM 0.00</span></div>
         <div class="kiraan-row"><span>Kos Penghantaran<span id="kiraan-zon-label"></span></span><span id="kiraan-penghantaran">RM 0.00</span></div>
         <div class="kiraan-row jumlah"><span>JUMLAH AKHIR</span><span id="grand-total" style="color:var(--teal)">RM 0.00</span></div>
       </div>

@@ -480,7 +480,10 @@ function subtotal() {
 function peratusDiskaunSemasa() {
   if (subtotal() < TETAPAN.minima_transfer) return 0;
   if (bayarMetod === 'cod') return TETAPAN.diskaun_cod_peratus || 0;
-  if (bayarMetod === 'transfer') return TETAPAN.diskaun_peratus || 0;
+  // Billplz (Bayar Online) = bayaran penuh serta-merta, sama seperti instant
+  // transfer — jadi layak kadar diskaun yang sama. Mesti selari dengan trigger
+  // validasi_harga_pre_order() di server yang menetapkan harga sebenar.
+  if (bayarMetod === 'transfer' || bayarMetod === 'billplz') return TETAPAN.diskaun_peratus || 0;
   return 0;
 }
 function layakDiskaunSemasa() {

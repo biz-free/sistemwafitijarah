@@ -570,9 +570,9 @@
           <span class="total-val" id="h-total">RM 0.00</span>
         </div>
         <div id="h-diskaun-info" style="display:none;font-size:11px;color:var(--green);text-align:right;margin-top:-8px;margin-bottom:8px;font-weight:700"></div>
-        <div class="total-box" id="h-tukar-total-box" style="display:none;margin-top:8px;background:#FFF5F5">
-          <span class="total-label" style="color:var(--red)">JUMLAH KERUGIAN PERTUKARAN</span>
-          <span class="total-val" id="h-tukar-total" style="color:var(--red)">RM 0.00</span>
+        <div class="total-box" id="h-tukar-total-box" style="display:none;margin-top:8px;background:var(--bg)">
+          <span class="total-label">JUMLAH BARANG PERTUKARAN</span>
+          <span class="total-val" id="h-tukar-total" style="font-size:14px">—</span>
         </div>
 
         <div class="form-group" id="h-bayar-wrap">
@@ -1453,6 +1453,16 @@ function saveData() {
 //  HELPERS
 // ════════════════════════════════════════════════════
 const fmt = n => 'RM ' + Number(n).toFixed(2);
+// Tarikh TEMPATAN (Malaysia, UTC+8) dalam format YYYY-MM-DD.
+// PENTING: JANGAN guna tarikhTempatan() untuk "hari ini" —
+// itu tarikh UTC. Perniagaan beroperasi waktu Malaysia (UTC+8), jadi apa-apa
+// yang berlaku antara 12:00 tengah malam – 8:00 pagi waktu Malaysia akan
+// tersalah dikira sebagai HARI SEBELUMNYA jika guna UTC (cth pekerja thumb in
+// 7:36 pagi = 23:36 UTC hari sebelum → dianggap "belum thumb in").
+const tarikhTempatan = (d = new Date()) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(d instanceof Date ? d : new Date(d));
+const bulanTempatan = (d = new Date()) => tarikhTempatan(d).slice(0, 7);
 const genId = p => p + Date.now().toString().slice(-7);
 const genResit = () => { const d=new Date(); return `R-${d.getFullYear().toString().slice(2)}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${Math.floor(Math.random()*900+100)}`; };
 const fmtD = iso => new Date(iso).toLocaleDateString('ms-MY',{day:'2-digit',month:'short',year:'numeric'});
@@ -1644,12 +1654,12 @@ async function setPage(p) {
     if (useCloud) checkPreorderBadge();
   }
   if (p==='tempahan') {
-    if (!document.getElementById('tp-bulan').value) document.getElementById('tp-bulan').value = new Date().toISOString().slice(0,7);
+    if (!document.getElementById('tp-bulan').value) document.getElementById('tp-bulan').value = bulanTempatan();
     renderTempahanAktif();
   }
   if (p==='analisis' && currentRole==='pemilik') {
     if (!document.getElementById('an-dari').value) {
-      const bulanIni = new Date().toISOString().slice(0,7);
+      const bulanIni = bulanTempatan();
       document.getElementById('an-dari').value = bulanIni;
       document.getElementById('an-hingga').value = bulanIni;
     }
@@ -1657,8 +1667,8 @@ async function setPage(p) {
     if (!document.getElementById('tw-dari').value) {
       const hariIni = new Date();
       const sebulanLalu = new Date(hariIni); sebulanLalu.setDate(hariIni.getDate() - 30);
-      document.getElementById('tw-dari').value = sebulanLalu.toISOString().slice(0,10);
-      document.getElementById('tw-hingga').value = hariIni.toISOString().slice(0,10);
+      document.getElementById('tw-dari').value = tarikhTempatan(sebulanLalu);
+      document.getElementById('tw-hingga').value = tarikhTempatan(hariIni);
     }
     renderTrafikWeb();
   }
@@ -1668,12 +1678,12 @@ async function setPage(p) {
     if (currentRole==='pemilik') renderBaucarList();
     document.getElementById('profil-nama').value = DATA.currentUser?.nama || '';
     document.getElementById('profil-telefon').value = DATA.currentUser?.telefon || '';
-    if (!document.getElementById('upah-saya-bulan').value) document.getElementById('upah-saya-bulan').value = new Date().toISOString().slice(0,7);
+    if (!document.getElementById('upah-saya-bulan').value) document.getElementById('upah-saya-bulan').value = bulanTempatan();
     renderUpahSaya();
     renderSenaraiCutiSaya();
     if (currentRole==='pemilik') {
       renderSenaraiPekerja();
-      if (!document.getElementById('kh-tarikh').value) document.getElementById('kh-tarikh').value = new Date().toISOString().slice(0,10);
+      if (!document.getElementById('kh-tarikh').value) document.getElementById('kh-tarikh').value = tarikhTempatan();
       renderLaporanKehadiran();
       loadTetapanDiskaun();
       renderVoucherList();
@@ -1737,10 +1747,10 @@ function initAll() {
   // Date
   document.getElementById('dash-date').textContent = new Date().toLocaleDateString('ms-MY',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
   // Month picker default
-  document.getElementById('lap-bulan').value = new Date().toISOString().slice(0,7);
-  document.getElementById('baucar-bulan').value = new Date().toISOString().slice(0,7);
+  document.getElementById('lap-bulan').value = bulanTempatan();
+  document.getElementById('baucar-bulan').value = bulanTempatan();
   const bhTarikhEl = document.getElementById('bh-tarikh');
-  if (bhTarikhEl) bhTarikhEl.value = new Date().toISOString().slice(0,10);
+  if (bhTarikhEl) bhTarikhEl.value = tarikhTempatan();
 }
 
 // ════════════════════════════════════════════════════
@@ -2688,7 +2698,9 @@ function bakiUntukHantar(s) {
 function renderHItems() {
   document.getElementById('h-items').innerHTML = hItems.map((it,i)=>{
     const s=DATA.stok.find(s=>s.id===it.stokId);
-    const sub=s?fmt(s.harga_jual*(+it.qty||0)):'';
+    // Mod tukar barang expired ialah pertukaran barang-dengan-barang — papar
+    // KUANTITI (bukan nilai RM), sebab harga modal tak relevan untuk gantian.
+    const sub = !s ? '' : (tukarExpiredAktif ? `${(+it.qty||0)} ${esc(s.unit||'')}` : fmt(s.harga_jual*(+it.qty||0)));
     return `<div class="item-row">
       <select class="form-input" onchange="updHItem(${i},'stokId',this.value)">
         <option value="">-- Pilih produk --</option>
@@ -2717,13 +2729,16 @@ function toggleTukarExpired(checked) {
     hItemsGantian = [{stokId:'',qty:1}];
     document.getElementById('h-tukar-kedai').value = '';
   }
+  // Label & lajur nilai berbeza antara mod pelupusan (RM modal) dan mod tukar (kuantiti)
+  document.getElementById('h-total-label').textContent = checked ? 'JUMLAH BARANG DITARIK' : 'ANGGARAN KERUGIAN (MODAL)';
+  renderHItems();
   renderHItemsGantian();
 }
 
 function renderHItemsGantian() {
   document.getElementById('h-items-gantian').innerHTML = hItemsGantian.map((it,i)=>{
     const s=DATA.stok.find(s=>s.id===it.stokId);
-    const sub=s?fmt(s.harga_beli*(+it.qty||0)):'';
+    const sub = s ? `${(+it.qty||0)} ${esc(s.unit||'')}` : ''; // kuantiti, bukan harga modal
     return `<div class="item-row">
       <select class="form-input" onchange="updHItemGantian(${i},'stokId',this.value)">
         <option value="">-- Pilih produk --</option>
@@ -2863,13 +2878,19 @@ function addHItem() { hItems.push({stokId:'',qty:1}); renderHItems(); }
 function remHItem(i) { hItems.splice(i,1); renderHItems(); }
 function calcTotal() {
   if (hJenis==='rosak') {
+    document.getElementById('h-diskaun-info').style.display='none';
+    // Mod TUKAR — pertukaran barang-dengan-barang, harga modal tak relevan.
+    // Papar bilangan unit setiap belah, bukan nilai kerugian RM.
+    if (tukarExpiredAktif) {
+      const unitExpired = hItems.reduce((a,it)=>a+(+it.qty||0),0);
+      const unitGantian = hItemsGantian.reduce((a,it)=>a+(+it.qty||0),0);
+      document.getElementById('h-total').textContent = `${unitExpired} unit`;
+      document.getElementById('h-tukar-total').textContent = `${unitExpired} unit ditarik ⇄ ${unitGantian} unit diganti`;
+      return;
+    }
+    // Pelupusan biasa (rosak/hilang) — kekal papar anggaran kerugian modal.
     const kerugian=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_beli*(+it.qty||0):0); },0);
     document.getElementById('h-total').textContent=fmt(kerugian);
-    document.getElementById('h-diskaun-info').style.display='none';
-    if (tukarExpiredAktif) {
-      const kerugianGantian = hItemsGantian.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_beli*(+it.qty||0):0); },0);
-      document.getElementById('h-tukar-total').textContent = fmt(kerugian + kerugianGantian);
-    }
     return;
   }
   const sub=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty||0):0); },0);
@@ -3049,7 +3070,7 @@ async function submitHantar() {
     DATA.stok=DATA.stok.map(s=>{ const it=hItems.find(i=>i.stokId===s.id); return it?{...s,stok:s.stok-(+it.qty)}:s; });
     if (!peribadi) DATA.kedai=DATA.kedai.map(k=>{
       if(k.id===kedaiId){
-        return{...k, hutang:hBayar==='hutang'?k.hutang+jumlah:k.hutang, last_visit:new Date().toISOString().slice(0,10)};
+        return{...k, hutang:hBayar==='hutang'?k.hutang+jumlah:k.hutang, last_visit:tarikhTempatan()};
       } return k;
     });
     saveData();
@@ -3116,8 +3137,8 @@ async function submitTukarExpired() {
   const nota = document.getElementById('h-nota').value;
   const itemsExpired = hItems.map(it=>({ stokId: it.stokId, qty: +it.qty }));
   const itemsGantian = hItemsGantian.map(it=>({ stokId: it.stokId, qty: +it.qty }));
-  const kerugianExpired = itemsExpired.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_beli*it.qty:0); },0);
-  const kerugianGantian = itemsGantian.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_beli*it.qty:0); },0);
+  const unitExpired = itemsExpired.reduce((a,it)=>a+it.qty,0);
+  const unitGantian = itemsGantian.reduce((a,it)=>a+it.qty,0);
 
   if (useCloud) {
     const { error } = await sb.rpc('tukar_stok_expired_kedai', {
@@ -3131,7 +3152,7 @@ async function submitTukarExpired() {
     DATA.stok = DATA.stok.map(s=>{ const it=itemsGantian.find(i=>i.stokId===s.id); return it?{...s,stok:s.stok-it.qty}:s; });
     saveData();
   }
-  toast(`🔄 Pertukaran direkod · Kerugian ${fmt(kerugianExpired+kerugianGantian)}`);
+  toast(`🔄 Pertukaran direkod · ${unitExpired} unit ditarik ⇄ ${unitGantian} unit diganti`);
   hItems=[{stokId:'',qty:1}]; hItemsGantian=[{stokId:'',qty:1}];
   document.getElementById('h-tukar-checkbox').checked = false;
   toggleTukarExpired(false);
@@ -3166,10 +3187,15 @@ async function renderSejarah(kedaiId='') {
       const namaPekerja = currentRole==='pemilik' ? (PROFIL_NAMA_CACHE[t.pekerja_id]||'?') : null;
       const kedaiNama = t.kedai_id ? (DATA.kedai.find(k=>k.id===t.kedai_id)?.nama || t.kedai_id) : null;
       const tajuk = t.jenis==='tukar_ambil' ? '🔄 Ambil Balik (Tukar Expired)' : t.jenis==='tukar_beri' ? '🔄 Gantian Diberi (Tukar Expired)' : '🗑️ Pelupusan Stok';
-      return `<div class="trx-card" style="border-left:4px solid var(--red)">
+      // Pertukaran barang-dengan-barang — papar kuantiti, bukan nilai kerugian RM.
+      const isTukar = t.jenis==='tukar_ambil' || t.jenis==='tukar_beri';
+      const nilaiKanan = isTukar
+        ? `<div style="font-weight:800;font-size:14px">${t.kuantiti} ${esc(s?.unit||'unit')}</div>`
+        : `<div style="font-weight:800;font-size:14px;color:var(--red)">−${fmt(t.kos||0)}</div>`;
+      return `<div class="trx-card" style="border-left:4px solid ${isTukar?'var(--gold)':'var(--red)'}">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
           <div><div style="font-weight:800;font-size:13px">${tajuk}${namaPekerja?` · ${esc(namaPekerja)}`:''}</div><div style="font-size:10px;color:var(--muted)">${fmtDT(t.created_at)}${kedaiNama?` · 🏪 ${esc(kedaiNama)}`:''}</div></div>
-          <div style="text-align:right"><div style="font-weight:800;font-size:14px;color:var(--red)">−${fmt(t.kos||0)}</div><span class="badge badge-red">${LABEL_SEBAB_LUPUS[t.sebab]||esc(t.sebab)}</span></div>
+          <div style="text-align:right">${nilaiKanan}<span class="badge ${isTukar?'badge-gold':'badge-red'}">${LABEL_SEBAB_LUPUS[t.sebab]||esc(t.sebab)}</span></div>
         </div>
         <div style="font-size:11px;color:var(--muted)">${esc(s?.nama||t.stok_id)} ×${t.kuantiti}</div>
         ${t.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(t.nota)}</div>`:''}
@@ -3370,7 +3396,8 @@ async function renderPreorderList() {
       </div>
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
       ${po.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(po.nota)}</div>`:''}
-      ${po.bayar_metod==='consignment'?`<div style="font-size:12px;font-weight:700;margin-top:6px;color:var(--purple)">🤝 Consignment (letak barang, bayar lepas jual)</div>`:po.jumlah_asal?`<div style="font-size:12px;font-weight:700;margin-top:6px">${po.bayar_metod==='transfer'?`🏦 Online Transfer — ${fmt(po.jumlah_selepas_diskaun)} <span style="font-weight:400;color:var(--green);font-size:11px">(${po.diskaun_peratus}% diskaun daripada ${fmt(po.jumlah_asal)})</span>`:`🚚 COD — ${fmt(po.jumlah_asal)}`}</div>`:''}
+      ${po.bayar_metod==='consignment'?`<div style="font-size:12px;font-weight:700;margin-top:6px;color:var(--purple)">🤝 Consignment (letak barang, bayar lepas jual)</div>`:po.jumlah_asal?`<div style="font-size:12px;font-weight:700;margin-top:6px">${(po.bayar_metod==='transfer'||po.bayar_metod==='billplz')?`${po.bayar_metod==='billplz'?'💳 Bayar Online':'🏦 Online Transfer'} — ${fmt(po.jumlah_selepas_diskaun)} <span style="font-weight:400;color:var(--green);font-size:11px">(${po.diskaun_peratus}% diskaun daripada ${fmt(po.jumlah_asal)})</span>`:`🚚 COD — ${fmt(po.jumlah_asal)}`}</div>`:''}
+      ${po.status_bayaran==='dibayar'||po.status_bayaran==='disahkan'?`<div style="font-size:12px;font-weight:800;margin-top:4px;color:var(--green)">✅ SUDAH DIBAYAR — jangan kutip tunai</div>`:(po.bayar_metod==='billplz'?`<div style="font-size:11px;font-weight:700;margin-top:4px;color:var(--red)">⏳ Bayaran online belum disahkan</div>`:'')}
       ${po.bayar_metod==='transfer'&&po.bayar_tarikh?`<div style="font-size:11px;color:var(--muted);margin-top:2px">📅 Transfer: ${esc(po.bayar_tarikh)} ${esc(po.bayar_masa||'')}</div>`:''}
       ${currentRole==='pemilik' ? pilihTugasSelect : `<div style="font-size:11px;margin-top:6px">${po.assigned_pekerja_id?`👤 Ditugaskan: <strong>${po.assigned_pekerja_id===DATA.currentUser.id?'Saya':'Pekerja lain'}</strong>`:'🙋 Belum ditugaskan'}</div>`}
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
@@ -4565,7 +4592,7 @@ function dpMuatTurunCSV() {
   const blob = new Blob(['﻿'+csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `data-pembeli-${new Date().toISOString().slice(0,10)}.csv`;
+  a.href = url; a.download = `data-pembeli-${tarikhTempatan()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -5178,7 +5205,7 @@ async function renderVoucherList() {
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
   const { data, error } = await sb.from('baucar').select('*').order('kod');
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
-  const hariIni = new Date().toISOString().slice(0,10);
+  const hariIni = tarikhTempatan();
   el.innerHTML = (data||[]).map(v=>{
     const luput = v.tarikh_luput && v.tarikh_luput < hariIni;
     const statusTxt = luput ? '⏰ Luput' : (v.aktif ? '✅ Aktif' : '⏸️ Tidak Aktif');
@@ -5473,10 +5500,14 @@ async function padamCuti(id) {
 // ── Status Live Pekerja: thumb in/out, cuti/mc/off, lokasi terkini ──
 async function renderStatusLive() {
   const el = document.getElementById('status-live-list');
-  const hariIni = new Date().toISOString().slice(0,10);
+  // Guna tarikh TEMPATAN + julat masa UTC sebenar bagi hari tempatan itu — pekerja
+  // yang thumb in sebelum 8 pagi (cth 7:36 pagi = 23:36 UTC hari sebelum) dahulunya
+  // tercicir dari query dan tersalah papar "Belum thumb in" walaupun sedang bekerja.
+  const hariIni = tarikhTempatan();
+  const mulaHariUTC = new Date(`${hariIni}T00:00:00+08:00`).toISOString();
   const [{ data: pekerjaList }, { data: kehadiranHariIni }, { data: cutiAktif }] = await Promise.all([
     sb.from('profiles').select('id,nama').eq('role','pekerja'),
-    sb.from('kehadiran').select('*').gte('thumb_in_masa', hariIni+'T00:00:00'),
+    sb.from('kehadiran').select('*').gte('thumb_in_masa', mulaHariUTC),
     sb.from('permohonan_cuti').select('*').eq('status','diluluskan').lte('tarikh_mula', hariIni).gte('tarikh_tamat', hariIni),
   ]);
 
@@ -5897,7 +5928,12 @@ function akhirBulanISO(bulanYYYYMM) {
 // pecahan ikut pekerja (dikunci ikut created_by supaya sepadan dengan data transaksi).
 async function kiraJarakKehadiranJulat(dariISO, hinggaISO, pekerjaId=null) {
   if (!useCloud) return { totalKm:0, kmIkutPekerja:{}, kmIkutHari:{} };
-  let q = sb.from('kehadiran').select('*').gte('thumb_in_masa', dariISO).lte('thumb_in_masa', hinggaISO);
+  // Julat masuk ialah tarikh TEMPATAN tanpa offset (cth '2026-07-26T00:00:00') —
+  // tandakan sebagai +08:00 supaya ditapis pada sempadan hari Malaysia sebenar.
+  // Tanpa ini, sesi yang bermula sebelum 8 pagi (UTC hari sebelumnya) tercicir
+  // sepenuhnya daripada julat, lalu km/minyak pekerja jadi 0.
+  const keUTC = s => /[Z+]|-\d{2}:\d{2}$/.test(s) ? s : new Date(s + '+08:00').toISOString();
+  let q = sb.from('kehadiran').select('*').gte('thumb_in_masa', keUTC(dariISO)).lte('thumb_in_masa', keUTC(hinggaISO));
   if (pekerjaId) q = q.eq('pekerja_id', pekerjaId);
   const { data: sesiSemua } = await q;
 
@@ -5907,10 +5943,15 @@ async function kiraJarakKehadiranJulat(dariISO, hinggaISO, pekerjaId=null) {
   const kmIkutPekerja = {};
   const kmIkutHari = {}; // key: `${pekerja_id}|${tarikh}` — untuk pecahan harian upah
   (sesiSemua||[]).forEach(sesi => {
-    const tarikhSesi = (sesi.thumb_in_masa||'').slice(0,10);
+    // Bucket hari guna tarikh TEMPATAN (Malaysia), bukan UTC. Sesi yang bermula
+    // sebelum 8 pagi (cth thumb in 7:36 pagi = 23:36 UTC hari sebelum) dahulunya
+    // dilabel hari UTC sebelumnya, lalu SEMUA penghantaran hari itu tercicir dari
+    // padanan tarikh di bawah — menjadikan laluan cuma thumb-in → thumb-out dan
+    // tuntutan minyak pekerja terkurang kira.
+    const tarikhSesi = tarikhTempatan(sesi.thumb_in_masa);
     const penghantaranSesi = DATA.transaksi.filter(t=>{
       if (t.created_by !== sesi.pekerja_id) return false;
-      if ((t.tarikh_masa||'').slice(0,10) !== tarikhSesi) return false;
+      if (tarikhTempatan(t.tarikh_masa) !== tarikhSesi) return false;
       return t.tarikh_masa >= sesi.thumb_in_masa && (!sesi.thumb_out_masa || t.tarikh_masa <= sesi.thumb_out_masa);
     });
     const km = jarakSesiKehadiran(sesi, penghantaranSesi);
