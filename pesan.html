@@ -195,7 +195,8 @@
         </div>
         <div class="form-group">
           <label class="form-label">No. Telefon Kedai</label>
-          <input type="tel" class="form-input" id="p-tel" placeholder="01x-xxxxxxx" />
+          <input type="tel" class="form-input" id="p-tel" placeholder="01x-xxxxxxx" onchange="autoIsiKedaiDariTelefon()" onblur="autoIsiKedaiDariTelefon()" />
+          <div id="p-tel-status" style="font-size:12px;margin-top:6px;display:none"></div>
         </div>
         <div class="form-group">
           <label class="form-label">📍 Alamat Kedai (auto-isi selepas cari, boleh laras)</label>
@@ -403,6 +404,46 @@ async function initHalaman() {
   }
 }
 
+// Auto-isi butiran kedai berdaftar daripada no. telefon — kedai lama tak perlu
+// taip semula nama/alamat setiap kali pesan (dahulunya hanya berlaku jika masuk
+// melalui link QR ?kedai=<id>). Turut mengaitkan pesanan kepada kedai SEDIA ADA
+// (kedai_id) supaya tiada rekod kedai pendua tercipta dengan ejaan berbeza.
+let kedaiIdDikesan = null;
+let telefonTerakhirDicari = '';
+
+async function autoIsiKedaiDariTelefon() {
+  const tel = document.getElementById('p-tel').value.trim();
+  const statusEl = document.getElementById('p-tel-status');
+  if (!tel || tel === telefonTerakhirDicari) return;
+  telefonTerakhirDicari = tel;
+  if (tel.replace(/\D/g,'').length < 8) { statusEl.style.display='none'; return; }
+
+  const { data, error } = await sb.rpc('cari_kedai_ikut_telefon', { p_telefon: tel });
+  const kedai = data?.[0];
+  if (error || !kedai) {
+    kedaiIdDikesan = null;
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = 'ℹ️ Nombor baharu — sila isi nama & alamat kedai di bawah.';
+    return;
+  }
+
+  kedaiIdDikesan = kedai.id;
+  const namaEl = document.getElementById('p-nama');
+  const alamatEl = document.getElementById('p-alamat');
+  // Jangan timpa jika kedai dah taip sendiri sesuatu — hormat input pengguna
+  if (!namaEl.value.trim()) namaEl.value = kedai.nama || '';
+  if (!alamatEl.value.trim()) alamatEl.value = kedai.alamat || '';
+  if (kedai.lat && kedai.lng) {
+    document.getElementById('p-lat').value = kedai.lat;
+    document.getElementById('p-lng').value = kedai.lng;
+    if (typeof setPoMarker === 'function') setPoMarker(kedai.lat, kedai.lng, true);
+  }
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--green)';
+  statusEl.textContent = `✅ Selamat kembali, ${kedai.nama}! Butiran kedai telah diisi automatik.`;
+}
+
 function gambarProduk(p) {
   if (p.gambar_urls && p.gambar_urls.length) return p.gambar_urls;
   if (p.gambar_url) return [p.gambar_url];
@@ -579,7 +620,7 @@ async function hantarPesanan() {
 
   const payload = {
     id: 'PO' + Date.now().toString().slice(-8),
-    kedai_id: kedaiIdDariQR || null,
+    kedai_id: kedaiIdDariQR || kedaiIdDikesan || null,
     kedai_nama: nama,
     kedai_telefon: tel,
     alamat: document.getElementById('p-alamat').value.trim() || null,

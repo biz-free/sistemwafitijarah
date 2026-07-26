@@ -810,6 +810,13 @@
       <div style="font-size:11px;color:var(--muted);margin-top:-8px">Bonus hanya masuk Kiraan Upah selepas kedai buat penghantaran/transaksi PERTAMA — Tunai/Transfer terus dapat kadar penuh; Consignment/Hutang dapat kadar rendah dahulu, kemudian dapat top-up automatik (sehingga cecah kadar penuh, tak lebih) bila kedai buat belian tunai/transfer buat kali pertama. Kedai berdaftar tanpa transaksi langsung tidak dapat bonus.</div>
     </div>
 
+    <!-- Permohonan Padam daripada pekerja (pemilik sahaja) -->
+    <div class="card" id="permohonan-padam-card" style="border-left:4px solid var(--gold)">
+      <div class="card-title" style="color:var(--gold)">🗑️ Permohonan Padam Pekerja</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Pekerja tiada kebenaran padam rekod. Permohonan mereka disenaraikan di sini — semak dahulu sebelum luluskan (padam kekal, tidak boleh diundur).</div>
+      <div id="permohonan-padam-list"></div>
+    </div>
+
     <!-- Tetapan Pre-Order & Diskaun Online Transfer (pemilik sahaja) -->
     <div class="card" id="tetapan-diskaun-card">
       <div class="card-title">💳 Tetapan Pre-Order & Diskaun</div>
@@ -1486,6 +1493,44 @@ let currentRole = null;
 
 // Cache nama pekerja (id → nama) — dimuatkan sekali semasa login, dipakai untuk paparan
 // segerak (bukan async) seperti Senarai Kedai supaya tak perlu query Supabase setiap render.
+// ── Ikon padam universal ──────────────────────────────────────────────
+// Pemilik dapat butang padam SEBENAR. Pekerja dapat butang "🗑️ Minta Padam"
+// yang menghantar permohonan untuk kelulusan pemilik (pekerja tiada kebenaran
+// padam di peringkat RLS pun — padam kekal melibatkan audit & kewangan).
+// Guna helper ini di SETIAP tempat pemilik ada ikon padam supaya kedua-dua
+// peranan sentiasa selari.
+const PADAM_JADUAL = {
+  kedai:           { jadual:'kedai',           label:'Kedai' },
+  pre_order:       { jadual:'pre_order',       label:'Pre-Order' },
+  transaksi:       { jadual:'transaksi',       label:'Transaksi' },
+  pesanan_edagang: { jadual:'pesanan_edagang', label:'Pesanan E-Dagang' },
+  stok:            { jadual:'stok',            label:'Produk' },
+  baucar_bayaran:  { jadual:'baucar_bayaran',  label:'Baucar Bayaran' },
+};
+
+function ikonPadam(onclickPemilik, jenis, rekodId, label, tajuk='Padam', gaya='') {
+  if (currentRole === 'pemilik') {
+    return `<button class="btn-delete-icon"${gaya?` style="${gaya}"`:''} onclick="${onclickPemilik}" title="${esc(tajuk)}">✕</button>`;
+  }
+  const lbl = String(label||'').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+  return `<button class="btn-delete-icon" style="background:var(--gold);color:var(--navy)${gaya?';'+gaya:''}" onclick="mintaPadam('${jenis}','${String(rekodId).replace(/'/g,'&#39;')}','${lbl}')" title="Minta pemilik padam">🗑️</button>`;
+}
+
+async function mintaPadam(jenis, rekodId, label) {
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  const sebab = prompt(`Minta pemilik padam:\n${label}\n\nNyatakan sebab (pemilik akan semak dahulu sebelum padam):`);
+  if (sebab === null) return; // batal
+  const { error } = await sb.from('permohonan_padam').insert({
+    id: genId('PP'), jenis, rekod_id: String(rekodId), rekod_label: label,
+    sebab: sebab.trim() || null, pekerja_id: DATA.currentUser.id,
+  });
+  if (error) {
+    if (error.code === '23505') return toast('Permohonan padam untuk rekod ini sudah dihantar','err');
+    return toast('Gagal hantar permohonan: '+error.message,'err');
+  }
+  toast('✅ Permohonan padam dihantar — menunggu kelulusan pemilik');
+}
+
 let PROFIL_NAMA_CACHE = {};
 async function muatProfilNamaCache() {
   if (!useCloud) return;
@@ -1616,7 +1661,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card'];
+  const pemilikOnly = ['laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -1695,6 +1740,7 @@ async function setPage(p) {
       renderStatusLive();
       semakStatusEasyParcel();
       renderSenaraiPemohon();
+      renderPermohonanPadam();
     }
   }
 }
@@ -1710,6 +1756,7 @@ const LEBIH_SHORTCUTS = [
   { id: 'resit-card', icon: '🧾', label: 'Resit' },
   { id: 'laporan-card', icon: '📊', label: 'Laporan' },
   { id: 'baucar-card', icon: '🧾', label: 'Baucar' },
+  { id: 'permohonan-padam-card', icon: '🗑️', label: 'Minta Padam' },
   { id: 'tetapan-kos-card', icon: '⚙️', label: 'Kos Operasi' },
   { id: 'tetapan-diskaun-card', icon: '💳', label: 'Diskaun' },
   { id: 'voucher-card', icon: '🎟️', label: 'Voucher' },
@@ -1826,7 +1873,7 @@ function renderStok(q='') {
     const dLuput = s.tarikh_luput ? daysUntil(s.tarikh_luput) : null;
     const luputStatus = dLuput===null ? '' : dLuput<0 ? `<span class="badge badge-red">⏳ LUPUT ${fmtD(s.tarikh_luput)}</span>` : dLuput<=30 ? `<span class="badge badge-gold">⏳ Luput ${dLuput}h lagi</span>` : '';
     return `<div class="card" style="border-left:4px solid ${rendah?'var(--red)':'var(--teal)'}">
-      ${isPemilik?`<button class="btn-delete-icon" onclick="padamStok('${s.id}','${esc(s.nama)}')" title="Padam produk">✕</button>`:''}
+      ${ikonPadam(`padamStok('${s.id}','${esc(s.nama)}')`, 'stok', s.id, s.nama, 'Padam produk')}
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
           <div style="font-weight:800;font-size:14px">${esc(s.nama)}</div>
@@ -2331,7 +2378,7 @@ function renderKedai(q='') {
     const lama=daysSince(k.last_visit)>=14;
     const cls=k.hutang>0?'hutang':lama?'lama':'';
     return `<div class="kedai-card ${cls}">
-      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="padamKedai('${k.id}','${esc(k.nama)}')" title="Padam kedai">✕</button>`:''}
+      ${ikonPadam(`padamKedai('${k.id}','${esc(k.nama)}')`, 'kedai', k.id, k.nama, 'Padam kedai')}
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
         <div style="font-weight:800;font-size:14px">${esc(k.nama)}</div>
         <span class="badge badge-teal">${esc(k.daerah)}${k.negeri?', '+esc(k.negeri):''}</span>
@@ -2981,7 +3028,10 @@ function previewResitBukti() {
 async function submitHantar() {
   if (hJenis==='rosak') return submitPelupusan();
   const peribadi = hJenis==='peribadi';
-  if (!peribadi && hBayar==='transfer' && !resitBuktiFilePilihan) return toast('Sila snap & lampir gambar resit/bukti transaksi dahulu','err');
+  // Resit wajib untuk transfer — KECUALI pre-order yang kedai sudah bayar online
+  // (bukti bayaran sudah terlekat pada rekod pre-order, tak perlu snap lagi).
+  const poSudahBayar = aktifPreorderInfo && (aktifPreorderInfo.status_bayaran==='disahkan' || aktifPreorderInfo.status_bayaran==='dibayar');
+  if (!peribadi && hBayar==='transfer' && !resitBuktiFilePilihan && !poSudahBayar) return toast('Sila snap & lampir gambar resit/bukti transaksi dahulu','err');
   let kedaiId = peribadi ? null : document.getElementById('h-kedai').value;
   const namaPembeli = peribadi ? document.getElementById('h-nama-pembeli').value.trim() : null;
   if(!peribadi && !kedaiId) return toast('Sila pilih kedai','err');
@@ -3272,11 +3322,14 @@ async function kemaskiniNotifikasi() {
   const { count: edagangCount } = await sb.from('pesanan_edagang').select('id',{count:'exact',head:true}).eq('status_pesanan','baru');
   document.getElementById('badge-tempahan-nav').style.display = edagangCount ? '' : 'none';
   if (currentRole==='pemilik') {
-    const [{ count: cutiCount }, { count: poCount }] = await Promise.all([
+    const [{ count: cutiCount }, { count: poCount }, { count: padamCount }] = await Promise.all([
       sb.from('permohonan_cuti').select('id',{count:'exact',head:true}).eq('status','menunggu'),
       sb.from('pre_order').select('id',{count:'exact',head:true}).eq('status','baru'),
+      sb.from('permohonan_padam').select('id',{count:'exact',head:true}).eq('status','menunggu'),
     ]);
-    document.getElementById('badge-profile-nav').style.display = cutiCount ? '' : 'none';
+    // Permohonan padam pekerja turut cetus lencana Profile — supaya pemilik nampak
+    // ada rekod menunggu keputusan tanpa perlu buka tab tu satu per satu.
+    document.getElementById('badge-profile-nav').style.display = (cutiCount || padamCount) ? '' : 'none';
     document.getElementById('badge-hantar-nav').style.display = poCount ? '' : 'none';
   } else {
     const { count: poCount } = await sb.from('pre_order').select('id',{count:'exact',head:true}).eq('status','baru').is('assigned_pekerja_id', null);
@@ -3384,7 +3437,7 @@ async function renderPreorderList() {
         ${(pekerjaList||[]).map(p=>`<option value="${p.id}" ${po.assigned_pekerja_id===p.id?'selected':''}>${esc(p.nama)}</option>`).join('')}
       </select>` : '';
     return `<div class="trx-card" style="${lewat?'border-left-color:var(--red);background:#FFF5F5':''}">
-      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="batalkanPreorder('${po.id}')" title="Batalkan pre-order">✕</button>`:''}
+      ${ikonPadam(`batalkanPreorder('${po.id}')`, 'pre_order', po.id, `Pre-Order ${po.kedai_nama||po.id}`, 'Batalkan pre-order')}
       <div style="display:flex;justify-content:space-between;margin-bottom:4px">
         <div><div style="font-weight:800;font-size:13px">${esc(po.kedai_nama)}</div><div style="font-size:10px;color:var(--muted)">📞 ${esc(po.kedai_telefon)} · ${fmtDT(po.created_at)} ${lewat?`· <strong style="color:var(--red)">${hariBerlalu} hari lalu</strong>`:''}</div></div>
         <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="tandaPreorder('${po.id}',this.value)">
@@ -3445,7 +3498,7 @@ async function renderTempahanList() {
   el.innerHTML = list.map(po=>{
     const itemsStr = (po.items||[]).map(it=>`${it.nama} ×${it.qty}`).join(' · ');
     return `<div class="trx-card">
-      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="batalkanTempahan('${po.id}')" title="Batalkan tempahan">✕</button>`:''}
+      ${ikonPadam(`batalkanTempahan('${po.id}')`, 'pre_order', po.id, `Tempahan ${po.kedai_nama||po.id}`, 'Batalkan tempahan')}
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
         <div>
           <div style="font-weight:800;font-size:13px">${esc(po.kedai_nama)}</div>
@@ -3501,7 +3554,7 @@ async function renderTransaksiKedaiList() {
     const k = t.kedai_id ? DATA.kedai.find(k=>k.id===t.kedai_id) : null;
     const itemsStr = t.items.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `${s.nama} ×${it.qty}`; }).join(' · ');
     return `<div class="trx-card ${t.status==='hutang'?'hutang':''}">
-      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="padamTransaksiKedai('${t.id}')" title="Padam transaksi">✕</button>`:''}
+      ${ikonPadam(`padamTransaksiKedai('${t.id}')`, 'transaksi', t.id, `Transaksi ${t.resit||t.id}`, 'Padam transaksi')}
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
         <div>
           <div style="font-weight:800;font-size:13px">${esc(namaDestinasiTrx(t))}</div>
@@ -3574,7 +3627,7 @@ async function renderEdagangList() {
     const perluMulaProses = currentRole==='pemilik' && o.status_pesanan==='baru' && o.status_bayaran==='disahkan';
     const perluTindakan = perluSahkanBayaran || perluMulaProses;
     return `<div class="trx-card" style="${perluTindakan?'border-left-color:var(--red);background:#FFF8F0':''}">
-      ${currentRole==='pemilik'?`<button class="btn-delete-icon" onclick="batalkanEdagang('${o.id}')" title="Batalkan pesanan">✕</button>`:''}
+      ${ikonPadam(`batalkanEdagang('${o.id}')`, 'pesanan_edagang', o.id, `Pesanan ${o.id} — ${o.pelanggan_nama||''}`, 'Batalkan pesanan')}
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
         <div>
           <div style="font-weight:800;font-size:13px">${esc(o.id)} — ${esc(o.pelanggan_nama)}</div>
@@ -3711,6 +3764,34 @@ async function hantarUntukPreorder(id) {
   aktifPreorderInfo = po;
   await setPage('hantar');
   setHantarTab('baru');
+
+  // Auto key-in SEMUA produk pre-order terus ke borang Hantar — penghantar tak
+  // perlu taip semula satu per satu (punca utama tersalah kuantiti/produk).
+  const itemsPO = (po.items||[]).filter(it=>it.stokId).map(it=>({ stokId: it.stokId, qty: +it.qty||1 }));
+  if (itemsPO.length) {
+    hItems = itemsPO;
+    setHJenis('kedai');
+    // Padankan destinasi: kedai berdaftar, atau pilihan _PO_ untuk kedai belum berdaftar
+    const sel = document.getElementById('h-kedai');
+    const nilaiPO = '_PO_' + po.id;
+    if (po.kedai_id && [...sel.options].some(o=>o.value===po.kedai_id)) sel.value = po.kedai_id;
+    else if ([...sel.options].some(o=>o.value===nilaiPO)) sel.value = nilaiPO;
+
+    // Kedai yang SUDAH bayar online (Billplz/transfer disahkan) tak perlu
+    // lampiran resit lagi — bukti bayaran sudah ada pada rekod pre-order.
+    const sudahBayar = po.status_bayaran==='disahkan' || po.status_bayaran==='dibayar';
+    if (sudahBayar) {
+      setBayar(po.bayar_metod==='cod' ? 'terus' : 'transfer');
+      resitBuktiFilePilihan = null;
+      const wajibLabel = document.getElementById('h-resit-wajib-label');
+      const notaEl = document.getElementById('h-resit-bukti-nota');
+      if (wajibLabel) wajibLabel.textContent = '(Tidak perlu — sudah dibayar online)';
+      if (notaEl) notaEl.textContent = 'Kedai sudah bayar online untuk pre-order ini — lampiran resit tidak diperlukan.';
+    }
+    renderHItems();
+    toast(`✅ ${itemsPO.length} produk dimasukkan automatik dari pre-order`);
+  }
+
   renderPreorderInfoBanner();
 }
 
@@ -4092,8 +4173,17 @@ async function renderBaucarList() {
         <button class="btn btn-secondary btn-sm" onclick="cetakBaucar('${v.id}')">🖨️ Cetak</button>
         <button class="btn btn-gold btn-sm" onclick="muatTurunBaucarPDF('${v.id}')">📄 PDF</button>
         <button class="btn btn-whatsapp btn-sm" onclick="hantarBaucarWhatsapp('${v.id}')">📱 WhatsApp Pekerja</button>
+        ${ikonPadam(`padamBaucarBayaran('${v.id}','${esc(v.no_siri)}')`, 'baucar_bayaran', v.id, `Baucar ${v.no_siri}`, 'Padam baucar', 'position:static')}
       </div>
     </div>`).join('') || '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Tiada baucar untuk bulan ini — tekan "Jana Baucar Bulan Ini" dalam Laporan</div></div>';
+}
+
+async function padamBaucarBayaran(id, noSiri) {
+  if (!confirm(`Padam baucar "${noSiri}" secara kekal?\n\nBaucar tersalah jana boleh dibuang di sini. Tindakan ini tidak boleh diundur.`)) return;
+  const { error } = await sb.from('baucar_bayaran').delete().eq('id', id);
+  if (error) return toast('Gagal padam baucar: '+error.message,'err');
+  toast(`Baucar ${noSiri} dipadam`);
+  await renderBaucarList();
 }
 
 async function muatNaikResitBaucar(id, file) {
@@ -5567,6 +5657,63 @@ async function renderStatusLiveMap(pekerjaList, kehadiranHariIni) {
   }
   if (adaTitik) { statusLiveMap.fitBounds(bounds); }
   google.maps.event.trigger(statusLiveMap, 'resize');
+}
+
+// ── Permohonan Padam (pemilik semak permohonan pekerja) ──
+async function renderPermohonanPadam() {
+  const el = document.getElementById('permohonan-padam-list');
+  if (!el) return;
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const { data, error } = await sb.from('permohonan_padam').select('*').eq('status','menunggu').order('created_at');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const senarai = data || [];
+  if (senarai.length && !Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
+  el.innerHTML = senarai.map(p=>`
+    <div class="list-item" style="display:block">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">
+        <div>
+          <div class="list-item-title">${esc(p.rekod_label||p.rekod_id)}</div>
+          <div class="list-item-sub">${esc(PADAM_JADUAL[p.jenis]?.label||p.jenis)} · dipohon oleh ${esc(PROFIL_NAMA_CACHE[p.pekerja_id]||'?')} · ${fmtDT(p.created_at)}</div>
+        </div>
+        <span class="badge badge-gold" style="flex-shrink:0">⏳ Menunggu</span>
+      </div>
+      ${p.sebab?`<div style="font-size:11px;color:var(--gold);margin-bottom:6px">📝 ${esc(p.sebab)}</div>`:''}
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-danger btn-sm" style="width:auto" onclick="putuskanPermohonanPadam('${p.id}','luluskan')">✅ Luluskan & Padam</button>
+        <button class="btn btn-secondary btn-sm" style="width:auto" onclick="putuskanPermohonanPadam('${p.id}','tolak')">✕ Tolak</button>
+      </div>
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada permohonan padam menunggu</div></div>';
+}
+
+async function putuskanPermohonanPadam(id, tindakan) {
+  const { data: p, error: eGet } = await sb.from('permohonan_padam').select('*').eq('id', id).single();
+  if (eGet || !p) return toast('Permohonan tidak dijumpai','err');
+
+  if (tindakan === 'tolak') {
+    const { error } = await sb.from('permohonan_padam').update({
+      status:'ditolak', diputuskan_oleh: DATA.currentUser.id, diputuskan_pada: new Date().toISOString(),
+    }).eq('id', id);
+    if (error) return toast('Gagal tolak: '+error.message,'err');
+    toast('Permohonan ditolak');
+    return renderPermohonanPadam();
+  }
+
+  const peta = PADAM_JADUAL[p.jenis];
+  if (!peta) return toast('Jenis rekod tidak dikenali: '+p.jenis,'err');
+  if (!confirm(`Padam KEKAL "${p.rekod_label||p.rekod_id}"?\n\nJenis: ${peta.label}\nTindakan ini TIDAK boleh diundur.`)) return;
+
+  const { error: ePadam } = await sb.from(peta.jadual).delete().eq('id', p.rekod_id);
+  if (ePadam) return toast('Gagal padam rekod: '+ePadam.message,'err');
+
+  const { error: eUpd } = await sb.from('permohonan_padam').update({
+    status:'diluluskan', diputuskan_oleh: DATA.currentUser.id, diputuskan_pada: new Date().toISOString(),
+  }).eq('id', id);
+  if (eUpd) return toast('Rekod dipadam tapi gagal kemaskini permohonan: '+eUpd.message,'err');
+
+  toast(`✅ "${p.rekod_label||p.rekod_id}" telah dipadam`);
+  await loadData();
+  renderPermohonanPadam();
+  kemaskiniNotifikasi();
 }
 
 async function luluskanCuti(id, status) {
