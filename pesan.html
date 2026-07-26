@@ -527,9 +527,6 @@ function peratusDiskaunSemasa() {
   if (bayarMetod === 'transfer' || bayarMetod === 'billplz') return TETAPAN.diskaun_peratus || 0;
   return 0;
 }
-function layakDiskaunSemasa() {
-  return peratusDiskaunSemasa() > 0;
-}
 function melebihiHadConsignment() {
   return subtotal() >= (TETAPAN.consignment_limit || 300);
 }

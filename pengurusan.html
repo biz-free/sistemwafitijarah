@@ -3642,7 +3642,6 @@ async function padamTransaksiKedai(id) {
 // ════════════════════════════════════════════════════
 const EDAGANG_STATUS_BADGE = { baru:'badge-teal', diproses:'badge-gold', dihantar:'badge-gold', selesai:'badge-green', dibatalkan:'badge-red' };
 const EDAGANG_STATUS_TXT = { baru:'🆕 Baru', diproses:'⏳ Diproses', dihantar:'🚚 Dihantar', selesai:'✓ Selesai', dibatalkan:'✕ Dibatalkan' };
-const EDAGANG_BAYAR_TXT = { menunggu:'⏳ Menunggu Sahkan', disahkan:'✓ Disahkan', gagal:'✕ Gagal' };
 
 async function renderEdagangList() {
   const el = document.getElementById('edagang-list');
@@ -5447,7 +5446,6 @@ async function padamVoucher(kod) {
 //  PERMOHONAN EJEN & PENGHANTAR (pesan.html — "Sertai Ejen" / "Sertai Kami")
 // ════════════════════════════════════════════════════
 let tabPemohonSemasa = 'semua';
-const PEMOHON_STATUS_TXT = { baru:'🆕 Baru', dihubungi:'📞 Dihubungi', diterima:'✅ Diterima', ditolak:'✕ Ditolak' };
 function setTabPemohon(jenis) {
   tabPemohonSemasa = jenis;
   ['semua','ejen','penghantar','marketing'].forEach(j => {
