@@ -406,6 +406,7 @@
       <div class="stat-box"><div class="stat-icon">💰</div><div class="stat-label">Hasil Diterima</div><div class="stat-val" id="s-hasil" style="color:var(--green)">—</div></div>
       <div class="stat-box"><div class="stat-icon">⚠️</div><div class="stat-label">Hutang</div><div class="stat-val" id="s-hutang" style="color:var(--red)">—</div></div>
       <div class="stat-box"><div class="stat-icon">📦</div><div class="stat-label">Produk</div><div class="stat-val" id="s-produk" style="color:var(--gold)">—</div></div>
+      <div class="stat-box"><div class="stat-icon">💵</div><div class="stat-label" id="s-cash-label">Cash Dipegang</div><div class="stat-val" id="s-cash-pegang" style="color:var(--gold)">—</div></div>
     </div>
 
     <div class="card">
@@ -775,6 +776,23 @@
       <div id="upah-saya-output"></div>
     </div>
 
+    <!-- Serahan Duit Cash (pekerja kumpul & serah cash bila-bila masa, boleh bawa ke hari lain) -->
+    <div class="card" id="serahan-cash-card">
+      <div class="card-title">💵 Serahan Duit Cash</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Duit tunai yang dikutip daripada jualan boleh dikumpul dan diserahkan/bank-in bila-bila masa — tak perlu selesai setiap hari, boleh dibawa ke hari lain.</div>
+      <div class="total-box" style="margin-bottom:14px">
+        <span class="total-label">CASH DIPEGANG SEKARANG</span>
+        <span class="total-val" id="serahan-cash-pegang" style="color:var(--gold)">—</span>
+      </div>
+      <div class="form-group"><label class="form-label">Jumlah Diserahkan (RM)</label><input type="number" class="form-input" id="sc-jumlah" step="0.01" min="0.01" placeholder="0.00" /></div>
+      <div class="form-group"><label class="form-label">Resit Pindahan/Bank In</label><input type="file" class="form-input" id="sc-resit" accept="image/*" /></div>
+      <div class="form-group"><label class="form-label">Nota (Pilihan)</label><input type="text" class="form-input" id="sc-nota" placeholder="cth: Transfer ke akaun Maybank pemilik" /></div>
+      <button class="btn btn-primary" onclick="hantarSerahanCash()">📤 Hantar Bukti Serahan</button>
+      <div class="divider" style="margin:14px 0"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SEJARAH SERAHAN SAYA</div>
+      <div id="serahan-cash-list"></div>
+    </div>
+
     <!-- Status Pekerja: Mohon Cuti/MC/Off -->
     <div class="card" id="status-pekerja-card">
       <div class="card-title">🗓️ Status Pekerja</div>
@@ -818,6 +836,13 @@
         <button class="btn btn-gold" onclick="muatTurunResitPDF()">📄 Muat Turun PDF</button>
       </div>
       <button class="btn btn-whatsapp" style="width:100%;margin-top:8px" onclick="hantarResitWhatsapp()">📱 Hantar Resit via WhatsApp</button>
+    </div>
+
+    <!-- Cash Dipegang Semua Pekerja + Sahkan Serahan (pemilik sahaja) -->
+    <div class="card" id="serahan-cash-semua-card">
+      <div class="card-title">👥 Cash Dipegang Semua Pekerja</div>
+      <div id="serahan-cash-semua-ringkasan" style="display:flex;gap:8px;margin-bottom:10px"></div>
+      <div id="serahan-cash-semua-list"></div>
     </div>
 
     <!-- Laporan Harian (pemilik sahaja) -->
@@ -1584,6 +1609,7 @@ const PADAM_JADUAL = {
   pesanan_edagang: { jadual:'pesanan_edagang', label:'Pesanan E-Dagang' },
   stok:            { jadual:'stok',            label:'Produk' },
   baucar_bayaran:  { jadual:'baucar_bayaran',  label:'Baucar Bayaran' },
+  serahan_cash:    { jadual:'serahan_cash',    label:'Serahan Cash' },
 };
 
 function ikonPadam(onclickPemilik, jenis, rekodId, label, tajuk='Padam', gaya='') {
@@ -1739,7 +1765,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['laporan-harian-card','laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
+  const pemilikOnly = ['serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -1803,6 +1829,7 @@ async function setPage(p) {
     document.getElementById('profil-telefon').value = DATA.currentUser?.telefon || '';
     if (!document.getElementById('upah-saya-bulan').value) document.getElementById('upah-saya-bulan').value = bulanTempatan();
     renderUpahSaya();
+    loadSerahanCashSaya();
     renderSenaraiCutiSaya();
     if (currentRole==='pemilik') {
       renderSenaraiPekerja();
@@ -1819,6 +1846,7 @@ async function setPage(p) {
       semakStatusEasyParcel();
       renderSenaraiPemohon();
       renderPermohonanPadam();
+      renderSerahanCashSemua();
     }
   }
 }
@@ -1829,6 +1857,8 @@ async function setPage(p) {
 const LEBIH_SHORTCUTS = [
   { id: 'profil-saya-card', icon: '👤', label: 'Profil' },
   { id: 'upah-saya-card', icon: '💰', label: 'Upah Saya' },
+  { id: 'serahan-cash-card', icon: '💵', label: 'Serah Cash' },
+  { id: 'serahan-cash-semua-card', icon: '👥', label: 'Cash Pekerja' },
   { id: 'status-pekerja-card', icon: '🗓️', label: 'Status' },
   { id: 'kelulusan-cuti-card', icon: '✅', label: 'Kelulusan Cuti' },
   { id: 'resit-card', icon: '🧾', label: 'Resit' },
@@ -1888,6 +1918,7 @@ function renderDashboard() {
   renderTugasanBaru();
   renderPreorderSaya();
   renderJualanPekerjaHariIni();
+  renderCashDipegangDashboard();
   kemaskiniNotifikasi();
   const aktif = DATA.kedai.filter(k=>k.status==='aktif').length;
   const hutang = DATA.kedai.reduce((a,k)=>a+k.hutang,0);
@@ -1927,6 +1958,27 @@ function renderDashboard() {
       <div class="list-item-right"><div class="list-item-val">${fmt(t.jumlah)}</div><span class="badge ${t.status==='selesai'?'badge-green':'badge-red'}">${t.status==='selesai'?'✓ Selesai':'⏳ Hutang'}</span></div>
     </div>`;
   }).join('');
+}
+
+// Stat "Cash Dipegang" di dashboard — pekerja nampak cash sendiri, pemilik nampak
+// jumlah SEMUA pekerja gabungan (guna kiraCashDipegang() yang sama seperti kad
+// Serahan Duit Cash di Tab Profile, supaya nombor sentiasa konsisten).
+async function renderCashDipegangDashboard() {
+  const labelEl = document.getElementById('s-cash-label');
+  const valEl = document.getElementById('s-cash-pegang');
+  if (!labelEl || !valEl) return;
+  if (!useCloud) { valEl.textContent = '—'; return; }
+  if (currentRole==='pemilik') {
+    labelEl.textContent = 'Cash Dipegang (Semua)';
+    const { data: serahanSemua } = await sb.from('serahan_cash').select('pekerja_id,jumlah,status');
+    const pekerjaIds = [...new Set(DATA.transaksi.filter(t=>t.kaedah_bayaran==='tunai').map(t=>t.created_by))];
+    const jumlah = pekerjaIds.reduce((a,pid)=>a+kiraCashDipegang(pid, serahanSemua||[]), 0);
+    valEl.textContent = fmt(jumlah);
+  } else {
+    labelEl.textContent = 'Cash Saya Dipegang';
+    const { data: serahanSaya } = await sb.from('serahan_cash').select('pekerja_id,jumlah,status').eq('pekerja_id', DATA.currentUser.id);
+    valEl.textContent = fmt(kiraCashDipegang(DATA.currentUser.id, serahanSaya||[]));
+  }
 }
 
 // ════════════════════════════════════════════════════
@@ -4670,6 +4722,21 @@ let SETTINGS = {...SETTINGS_DEF};
 //   top-up dibayar supaya jumlah keseluruhan cecah upahKedaiBaruBayar (maksimum) — tak lebih.
 const KAEDAH_BAYAR_TERUS = new Set(['tunai', 'transfer']);
 
+// Cash dipegang pekerja = jumlah tunai dikutip (transaksi tunai/selesai, SEPANJANG
+// masa — tak reset harian) TOLAK jumlah sudah diserahkan (serahan_cash, kira status
+// menunggu & disahkan sebagai sudah tolak daripada tangan; ditolak dikira semula
+// sebagai belum diserahkan). Sengaja tak dihadkan bulan/hari — pekerja boleh kumpul
+// cash & bawa ke hari lain, cuma serah bila cukup/senang.
+function jumlahCashDikutip(pekerjaId) {
+  return DATA.transaksi.filter(t=>t.created_by===pekerjaId && t.kaedah_bayaran==='tunai' && t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
+}
+function jumlahCashDiserahkan(pekerjaId, senaraiSerahan) {
+  return (senaraiSerahan||[]).filter(r=>r.pekerja_id===pekerjaId && r.status!=='ditolak').reduce((a,r)=>a+ (+r.jumlah||0), 0);
+}
+function kiraCashDipegang(pekerjaId, senaraiSerahan) {
+  return jumlahCashDikutip(pekerjaId) - jumlahCashDiserahkan(pekerjaId, senaraiSerahan);
+}
+
 function bonusKedaiEvents(kedaiId) {
   const semua = DATA.transaksi.filter(t => t.kedai_id === kedaiId).sort((a,b) => a.tarikh_masa < b.tarikh_masa ? -1 : (a.tarikh_masa > b.tarikh_masa ? 1 : 0));
   if (!semua.length) return [];
@@ -5764,6 +5831,134 @@ async function renderUpahSaya() {
     <div class="divider" style="margin:14px 0"></div>
     <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">💰 DIBAYAR MENGIKUT HARI</div>
     ${pecahanHarian.map(h=>`<div class="list-item"><div><div class="list-item-title">${fmtD(h.tarikh)}</div><div class="list-item-sub">${h.bil} penghantaran${h.kedaiHari?` · ${h.kedaiHari} kedai baru`:''}${h.edagangBil?` · ${h.edagangBil} e-dagang`:''}</div></div><div class="list-item-val">${fmt(h.jumlahHari)}</div></div>`).join('') || '<div class="empty"><div class="empty-text">Tiada hari kerja dalam bulan ini</div></div>'}`;
+}
+
+// ════════════════════════════════════════════════════
+//  SERAHAN CASH — pekerja kumpul & serah duit tunai bila-bila masa
+//  (boleh bawa ke hari lain), pemilik sahkan lepas semak resit.
+// ════════════════════════════════════════════════════
+const SERAHAN_CASH_STATUS_TXT = { menunggu:'⏳ Menunggu Sahkan', disahkan:'✅ Disahkan', ditolak:'✕ Ditolak' };
+const SERAHAN_CASH_STATUS_BADGE = { menunggu:'badge-gold', disahkan:'badge-green', ditolak:'badge-red' };
+
+async function loadSerahanCashSaya() {
+  const el = document.getElementById('serahan-cash-list');
+  if (!el) return;
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const { data, error } = await sb.from('serahan_cash').select('*').eq('pekerja_id', DATA.currentUser.id).order('created_at',{ascending:false});
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  DATA.serahanCashSaya = data || [];
+  renderSerahanCashSaya();
+}
+
+function renderSerahanCashSaya() {
+  const el = document.getElementById('serahan-cash-list');
+  if (!el) return;
+  const rows = DATA.serahanCashSaya || [];
+  const pegangEl = document.getElementById('serahan-cash-pegang');
+  if (pegangEl) pegangEl.textContent = fmt(kiraCashDipegang(DATA.currentUser.id, rows));
+  el.innerHTML = rows.map(r=>`
+    <div class="list-item" style="display:block">
+      ${ikonPadam(`padamSerahanCash('${r.id}')`, 'serahan_cash', r.id, `Serahan ${fmt(r.jumlah)}`, 'Padam serahan')}
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div><div class="list-item-title">${fmt(r.jumlah)}</div><div class="list-item-sub">${fmtDT(r.created_at)}${r.nota?' · '+esc(r.nota):''}</div></div>
+        <span class="badge ${SERAHAN_CASH_STATUS_BADGE[r.status]}" style="flex-shrink:0">${SERAHAN_CASH_STATUS_TXT[r.status]}</span>
+      </div>
+      ${r.resit_url?`<div style="margin-top:6px"><button class="btn-link" onclick="lihatResitSerahanCash('${esc(r.resit_url)}')">📎 Lihat Resit</button></div>`:''}
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Belum ada serahan lagi — cash yang dikutip boleh diserahkan bila-bila masa</div></div>';
+}
+
+async function hantarSerahanCash() {
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  const jumlah = +document.getElementById('sc-jumlah').value;
+  const file = document.getElementById('sc-resit').files[0];
+  const nota = document.getElementById('sc-nota').value.trim();
+  if (!jumlah || jumlah<=0) return toast('Sila isi jumlah yang diserahkan','err');
+  const id = genId('SC');
+  let resitPath = null;
+  if (file) {
+    resitPath = `${id}-${Date.now()}.jpg`;
+    const { error: upErr } = await sb.storage.from('serahan-cash-resit').upload(resitPath, file);
+    if (upErr) return toast('Gagal muat naik resit: '+upErr.message,'err');
+  }
+  const { error } = await sb.from('serahan_cash').insert({ id, pekerja_id: DATA.currentUser.id, jumlah, resit_url: resitPath, nota: nota||null });
+  if (error) return toast('Gagal hantar serahan: '+error.message,'err');
+  document.getElementById('sc-jumlah').value=''; document.getElementById('sc-resit').value=''; document.getElementById('sc-nota').value='';
+  await loadSerahanCashSaya();
+  toast('📤 Bukti serahan cash dihantar — menunggu sahkan pemilik');
+}
+
+async function lihatResitSerahanCash(path) {
+  const { data, error } = await sb.storage.from('serahan-cash-resit').createSignedUrl(path, 3600);
+  if (error) return toast('Gagal buka resit: '+error.message,'err');
+  window.open(data.signedUrl, '_blank');
+}
+
+async function padamSerahanCash(id) {
+  if (!confirm('Padam rekod serahan cash ini secara kekal?')) return;
+  const { error } = await sb.from('serahan_cash').delete().eq('id', id);
+  if (error) return toast('Gagal padam: '+error.message,'err');
+  toast('Rekod serahan dipadam');
+  if (currentRole==='pemilik') await renderSerahanCashSemua(); else await loadSerahanCashSaya();
+}
+
+// Pemilik: sahkan/tolak serahan cash + lihat berapa cash dipegang SETIAP pekerja.
+async function ubahStatusSerahanCash(id, status) {
+  const kemaskini = { status, disahkan_oleh: DATA.currentUser.id, disahkan_pada: new Date().toISOString() };
+  const { error } = await sb.from('serahan_cash').update(kemaskini).eq('id', id);
+  if (error) return toast('Gagal kemaskini status: '+error.message,'err');
+  toast(status==='disahkan' ? '✅ Serahan cash disahkan' : '✕ Serahan cash ditolak');
+  await renderSerahanCashSemua();
+}
+
+async function renderSerahanCashSemua() {
+  const el = document.getElementById('serahan-cash-semua-list');
+  if (!el) return;
+  const { data, error } = await sb.from('serahan_cash').select('*').order('created_at',{ascending:false});
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const senarai = data || [];
+  const { data: profil } = await sb.from('profiles').select('id,nama').eq('role','pekerja');
+  const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
+
+  const pekerjaIds = [...new Set([...DATA.transaksi.filter(t=>t.kaedah_bayaran==='tunai').map(t=>t.created_by), ...senarai.map(r=>r.pekerja_id)].filter(Boolean))];
+  const ringkasanPekerja = pekerjaIds.map(pid => ({ id: pid, nama: namaPekerja(pid), pegang: kiraCashDipegang(pid, senarai) }))
+    .filter(p => Math.abs(p.pegang) > 0.005)
+    .sort((a,b)=>b.pegang-a.pegang);
+
+  const menunggu = senarai.filter(r=>r.status==='menunggu');
+  const jumlahPegangSemua = ringkasanPekerja.reduce((a,p)=>a+p.pegang,0);
+
+  const ringkasanEl = document.getElementById('serahan-cash-semua-ringkasan');
+  if (ringkasanEl) {
+    ringkasanEl.innerHTML = `
+      <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:9px;color:var(--muted)">CASH DIPEGANG SEMUA PEKERJA</div>
+        <div style="font-weight:800;font-size:15px;color:var(--gold)">${fmt(jumlahPegangSemua)}</div>
+      </div>
+      <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:9px;color:var(--muted)">MENUNGGU SAHKAN</div>
+        <div style="font-weight:800;font-size:15px;color:${menunggu.length?'var(--red)':'var(--green)'}">${menunggu.length}</div>
+      </div>`;
+  }
+
+  const blokMenunggu = menunggu.length ? `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">MENUNGGU SAHKAN</div>` +
+    menunggu.map(r=>`
+      <div class="list-item" style="display:block;border-left:3px solid var(--gold);padding-left:8px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><div class="list-item-title">${esc(namaPekerja(r.pekerja_id))}</div><div class="list-item-sub">${fmtDT(r.created_at)}${r.nota?' · '+esc(r.nota):''}</div></div>
+          <div class="list-item-val">${fmt(r.jumlah)}</div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
+          ${r.resit_url?`<button class="btn btn-secondary btn-sm" style="width:auto" onclick="lihatResitSerahanCash('${esc(r.resit_url)}')">📎 Resit</button>`:'<span style="font-size:11px;color:var(--red)">⚠️ Tiada resit</span>'}
+          <button class="btn btn-primary btn-sm" style="width:auto" onclick="ubahStatusSerahanCash('${r.id}','disahkan')">✅ Sahkan</button>
+          <button class="btn btn-secondary btn-sm" style="width:auto;color:var(--red)" onclick="ubahStatusSerahanCash('${r.id}','ditolak')">✕ Tolak</button>
+        </div>
+      </div>`).join('') + '<div class="divider" style="margin:12px 0"></div>' : '';
+
+  const blokRingkasan = `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">CASH DIPEGANG IKUT PEKERJA</div>` +
+    (ringkasanPekerja.map(p=>`<div class="list-item"><div class="list-item-title">${esc(p.nama)}</div><div class="list-item-val" style="color:${p.pegang>0?'var(--gold)':'var(--muted)'}">${fmt(p.pegang)}</div></div>`).join('')
+      || '<div class="empty"><div class="empty-text">Tiada pekerja memegang cash buat masa ini</div></div>');
+
+  el.innerHTML = blokMenunggu + blokRingkasan;
 }
 
 // ════════════════════════════════════════════════════
