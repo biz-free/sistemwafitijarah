@@ -2635,6 +2635,14 @@ async function carianAlamatPeta() {
 // Padan nama negeri dari Google (cth "Penang", "Pulau Pinang") ke kunci STATE_DAERAH kita
 const NEGERI_ALIAS = { 'penang': 'Pulau Pinang', 'pulau pinang': 'Pulau Pinang', 'kedah': 'Kedah', 'perlis': 'Perlis', 'perak': 'Perak' };
 
+// Google kadangkala pulangkan nama PEKAN/MUKIM (bukan nama daerah rasmi) sebagai
+// "locality" apabila tiada administrative_area_level_2 (biasa utk alamat luar bandar
+// Kedah) — cth "Lunas"/"Karangan" ialah pekan DALAM Daerah Kulim, bukan nama daerah
+// sendiri, jadi tak sepadan terus dgn STATE_DAERAH. Alias manual utk kes yang dikesan.
+const DAERAH_ALIAS = {
+  'Kedah': { 'lunas':'Kulim', 'karangan':'Kulim', 'padang serai':'Kulim' },
+};
+
 function padankanNegeriDaerah(addressComponents) {
   if (!addressComponents || !addressComponents.length) return { negeri: null, daerah: null };
   const cari = (type) => addressComponents.find(c => (c.types||[]).includes(type));
@@ -2648,7 +2656,7 @@ function padankanNegeriDaerah(addressComponents) {
     daerah = (STATE_DAERAH[negeri]||[]).find(d => {
       const dLower = d.toLowerCase();
       return dLower.includes(daerahMentah) || daerahMentah.includes(dLower.replace(/\s*\(.*\)/,'').trim());
-    }) || null;
+    }) || DAERAH_ALIAS[negeri]?.[daerahMentah] || null;
   }
   return { negeri, daerah };
 }
