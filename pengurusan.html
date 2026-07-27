@@ -453,6 +453,7 @@
         <div class="card-title">👥 Stok Bawaan Semua Pekerja</div>
         <div id="stok-mobile-semua-ringkasan" style="display:flex;gap:8px;margin-bottom:10px"></div>
         <div id="stok-mobile-semua-list"></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="bukaModalPindahStok()">🔀 Pindah Stok Antara Pekerja</button>
       </div>
     </div>
   </div>
@@ -1231,6 +1232,23 @@
     </div>
     <div class="form-group"><label class="form-label">Kuantiti</label><input type="number" class="form-input" id="pulang-qty" placeholder="0" min="1" /></div>
     <button class="btn btn-primary" style="background:var(--gold)" onclick="pulangStok()">📤 Pulangkan Stok</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-pindah-stok-pekerja">
+  <div class="modal-box">
+    <div class="modal-title">🔀 Pindah Stok Antara Pekerja<button class="modal-close" onclick="closeModal('modal-pindah-stok-pekerja')">✕ Tutup</button></div>
+    <div class="form-group"><label class="form-label">Dari Pekerja</label>
+      <select class="form-input" id="pindah-dari-pekerja" onchange="isiPindahProdukSel()"></select>
+    </div>
+    <div class="form-group"><label class="form-label">Produk</label>
+      <select class="form-input" id="pindah-produk"></select>
+    </div>
+    <div class="form-group"><label class="form-label">Kuantiti</label><input type="number" class="form-input" id="pindah-qty" placeholder="0" min="1" /></div>
+    <div class="form-group"><label class="form-label">Kepada Pekerja</label>
+      <select class="form-input" id="pindah-kepada-pekerja"></select>
+    </div>
+    <button class="btn btn-primary" onclick="pindahStokPekerja()">🔀 Pindah Stok</button>
   </div>
 </div>
 
@@ -2950,6 +2968,8 @@ function setStokTab(t) {
 }
 
 // Pemilik: lihat stok bawaan SEMUA pekerja (audit di mana barang berada)
+let STOK_MOBILE_PEKERJA_CACHE = []; // pekerja yang SEDANG bawa stok (>0) — untuk pilihan "dari" + senarai produk
+let STOK_SEMUA_PEKERJA_CACHE = [];  // semua pekerja — untuk pilihan "kepada" (boleh terima stok walau belum bawa apa-apa)
 async function renderStokMobileSemua() {
   const el = document.getElementById('stok-mobile-semua-list');
   const { data, error } = await sb.from('stok_pekerja').select('pekerja_id,stok_id,kuantiti').gt('kuantiti', 0);
@@ -2958,6 +2978,8 @@ async function renderStokMobileSemua() {
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
   const ikutPekerja = {};
   (data||[]).forEach(r => { (ikutPekerja[r.pekerja_id] ||= []).push(r); });
+  STOK_MOBILE_PEKERJA_CACHE = Object.entries(ikutPekerja).map(([pid, rows]) => ({ id: pid, nama: namaPekerja(pid), rows }));
+  STOK_SEMUA_PEKERJA_CACHE = profil || [];
   el.innerHTML = Object.entries(ikutPekerja).map(([pid, rows])=>{
     const subUnit = rows.reduce((a,r)=>a+r.kuantiti,0);
     const subNilai = rows.reduce((a,r)=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return a+(s?s.harga_jual*r.kuantiti:0); },0);
@@ -2982,6 +3004,40 @@ async function renderStokMobileSemua() {
         <div style="font-weight:800;font-size:15px;color:var(--purple)">${fmt(nilaiJual)}</div>
       </div>`;
   }
+}
+
+// Pindah stok bawaan terus antara 2 pekerja (pemilik sahaja) — tiada laluan gudang.
+function bukaModalPindahStok() {
+  if (!STOK_MOBILE_PEKERJA_CACHE.length) return toast('Tiada pekerja membawa stok buat masa ini','err');
+  const dariSel = document.getElementById('pindah-dari-pekerja');
+  const kepadaSel = document.getElementById('pindah-kepada-pekerja');
+  dariSel.innerHTML = STOK_MOBILE_PEKERJA_CACHE.map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('');
+  kepadaSel.innerHTML = STOK_SEMUA_PEKERJA_CACHE.map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('');
+  isiPindahProdukSel();
+  showModal('modal-pindah-stok-pekerja');
+}
+
+function isiPindahProdukSel() {
+  const pid = document.getElementById('pindah-dari-pekerja').value;
+  const pekerja = STOK_MOBILE_PEKERJA_CACHE.find(p=>p.id===pid);
+  const produkSel = document.getElementById('pindah-produk');
+  produkSel.innerHTML = (pekerja?.rows||[]).map(r=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return `<option value="${r.stok_id}">${esc(s?.nama||r.stok_id)} (bawaan: ${r.kuantiti} ${esc(s?.unit||'')})</option>`; }).join('') || '<option value="">-- Tiada stok --</option>';
+}
+
+async function pindahStokPekerja() {
+  const dari = document.getElementById('pindah-dari-pekerja').value;
+  const kepada = document.getElementById('pindah-kepada-pekerja').value;
+  const stokId = document.getElementById('pindah-produk').value;
+  const qty = +document.getElementById('pindah-qty').value;
+  if (!dari || !kepada) return toast('Pilih pekerja sumber dan destinasi','err');
+  if (dari === kepada) return toast('Pekerja sumber dan destinasi mesti berbeza','err');
+  if (!stokId || qty<1) return toast('Pilih produk dan kuantiti','err');
+  const { error } = await sb.rpc('pindah_stok_pekerja', { p_dari_pekerja_id:dari, p_kepada_pekerja_id:kepada, p_stok_id:stokId, p_qty:qty });
+  if (error) return toast('Gagal pindah stok: '+error.message,'err');
+  closeModal('modal-pindah-stok-pekerja');
+  document.getElementById('pindah-qty').value='';
+  await renderStokMobileSemua();
+  toast('Stok berjaya dipindahkan antara pekerja');
 }
 
 async function ambilStok() {
