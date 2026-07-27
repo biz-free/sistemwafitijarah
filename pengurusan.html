@@ -1970,14 +1970,20 @@ async function renderCashDipegangDashboard() {
   if (!useCloud) { valEl.textContent = '—'; return; }
   if (currentRole==='pemilik') {
     labelEl.textContent = 'Cash Dipegang (Semua)';
-    const { data: serahanSemua } = await sb.from('serahan_cash').select('pekerja_id,jumlah,status');
+    const [{ data: serahanSemua }, { data: baucarHarianSemua }] = await Promise.all([
+      sb.from('serahan_cash').select('pekerja_id,jumlah,status'),
+      sb.from('baucar_bayaran').select('pekerja_id,tarikh,jumlah').eq('kategori','upah_harian'),
+    ]);
     const pekerjaIds = [...new Set(DATA.transaksi.filter(t=>t.kaedah_bayaran==='tunai').map(t=>t.created_by))];
-    const jumlah = pekerjaIds.reduce((a,pid)=>a+kiraCashDipegang(pid, serahanSemua||[]), 0);
+    const jumlah = pekerjaIds.reduce((a,pid)=>a+kiraCashDipegang(pid, serahanSemua||[], baucarHarianSemua||[]), 0);
     valEl.textContent = fmt(jumlah);
   } else {
     labelEl.textContent = 'Cash Saya Dipegang';
-    const { data: serahanSaya } = await sb.from('serahan_cash').select('pekerja_id,jumlah,status').eq('pekerja_id', DATA.currentUser.id);
-    valEl.textContent = fmt(kiraCashDipegang(DATA.currentUser.id, serahanSaya||[]));
+    const [{ data: serahanSaya }, { data: baucarHarianSaya }] = await Promise.all([
+      sb.from('serahan_cash').select('pekerja_id,jumlah,status').eq('pekerja_id', DATA.currentUser.id),
+      sb.from('baucar_bayaran').select('pekerja_id,tarikh,jumlah').eq('kategori','upah_harian').eq('pekerja_id', DATA.currentUser.id),
+    ]);
+    valEl.textContent = fmt(kiraCashDipegang(DATA.currentUser.id, serahanSaya||[], baucarHarianSaya||[]));
   }
 }
 
@@ -4722,19 +4728,36 @@ let SETTINGS = {...SETTINGS_DEF};
 //   top-up dibayar supaya jumlah keseluruhan cecah upahKedaiBaruBayar (maksimum) — tak lebih.
 const KAEDAH_BAYAR_TERUS = new Set(['tunai', 'transfer']);
 
-// Cash dipegang pekerja = jumlah tunai dikutip (transaksi tunai/selesai, SEPANJANG
-// masa — tak reset harian) TOLAK jumlah sudah diserahkan (serahan_cash, kira status
-// menunggu & disahkan sebagai sudah tolak daripada tangan; ditolak dikira semula
-// sebagai belum diserahkan). Sengaja tak dihadkan bulan/hari — pekerja boleh kumpul
-// cash & bawa ke hari lain, cuma serah bila cukup/senang.
-function jumlahCashDikutip(pekerjaId) {
-  return DATA.transaksi.filter(t=>t.created_by===pekerjaId && t.kaedah_bayaran==='tunai' && t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
+// Cash dipegang pekerja = cash tunai dikutip (SEPANJANG masa, tak reset harian —
+// pekerja boleh kumpul & bawa ke hari lain) TOLAK 2 perkara:
+//   1) Bahagian yang SUDAH dinetkan terus sebagai upah melalui Baucar Harian
+//      (cipta_baucar_harian menyimpan cash_ditangan hari tu ditolak terus daripada
+//      upah — lihat SQL_TAMBAHAN_54). Sebaik baucar harian dijana untuk 1 hari, cash
+//      hari tu SUDAH diselesaikan sehingga jumlah upah hari itu; hanya LEBIHAN
+//      (cash > upah hari tu) yang masih perlu diserah kepada pemilik. Tanpa tolak
+//      ini, cash yang pemilik dah "terima" dalam bentuk upah pekerja akan dikira 2x
+//      sebagai cash masih dipegang — inilah bug yang dilaporkan pemilik.
+//   2) Jumlah sudah diserahkan (serahan_cash) — status menunggu & disahkan dikira
+//      sudah tolak daripada tangan; ditolak dikira semula sebagai belum diserahkan.
+function jumlahCashBelumDiselesai(pekerjaId, senaraiBaucarHarian) {
+  const hariCash = {};
+  DATA.transaksi.filter(t=>t.created_by===pekerjaId && t.kaedah_bayaran==='tunai' && t.status==='selesai').forEach(t=>{
+    const tarikh = tarikhTempatan(t.tarikh_masa);
+    hariCash[tarikh] = (hariCash[tarikh]||0) + t.jumlah;
+  });
+  const baucarIkutHari = {};
+  (senaraiBaucarHarian||[]).filter(v=>v.pekerja_id===pekerjaId).forEach(v=>{ baucarIkutHari[v.tarikh] = v; });
+  return Object.entries(hariCash).reduce((a,[tarikh,cashHari])=>{
+    const v = baucarIkutHari[tarikh];
+    if (!v) return a + cashHari; // tiada baucar harian utk hari ni — cash penuh belum diselesai
+    return a + Math.max(0, cashHari - v.jumlah); // hanya lebihan atas upah hari tu yang masih perlu diserah
+  }, 0);
 }
 function jumlahCashDiserahkan(pekerjaId, senaraiSerahan) {
   return (senaraiSerahan||[]).filter(r=>r.pekerja_id===pekerjaId && r.status!=='ditolak').reduce((a,r)=>a+ (+r.jumlah||0), 0);
 }
-function kiraCashDipegang(pekerjaId, senaraiSerahan) {
-  return jumlahCashDikutip(pekerjaId) - jumlahCashDiserahkan(pekerjaId, senaraiSerahan);
+function kiraCashDipegang(pekerjaId, senaraiSerahan, senaraiBaucarHarian) {
+  return jumlahCashBelumDiselesai(pekerjaId, senaraiBaucarHarian) - jumlahCashDiserahkan(pekerjaId, senaraiSerahan);
 }
 
 function bonusKedaiEvents(kedaiId) {
@@ -5844,9 +5867,13 @@ async function loadSerahanCashSaya() {
   const el = document.getElementById('serahan-cash-list');
   if (!el) return;
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
-  const { data, error } = await sb.from('serahan_cash').select('*').eq('pekerja_id', DATA.currentUser.id).order('created_at',{ascending:false});
+  const [{ data, error }, { data: baucarHarian }] = await Promise.all([
+    sb.from('serahan_cash').select('*').eq('pekerja_id', DATA.currentUser.id).order('created_at',{ascending:false}),
+    sb.from('baucar_bayaran').select('pekerja_id,tarikh,jumlah').eq('kategori','upah_harian').eq('pekerja_id', DATA.currentUser.id),
+  ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   DATA.serahanCashSaya = data || [];
+  DATA.baucarHarianSaya = baucarHarian || [];
   renderSerahanCashSaya();
 }
 
@@ -5855,7 +5882,7 @@ function renderSerahanCashSaya() {
   if (!el) return;
   const rows = DATA.serahanCashSaya || [];
   const pegangEl = document.getElementById('serahan-cash-pegang');
-  if (pegangEl) pegangEl.textContent = fmt(kiraCashDipegang(DATA.currentUser.id, rows));
+  if (pegangEl) pegangEl.textContent = fmt(kiraCashDipegang(DATA.currentUser.id, rows, DATA.baucarHarianSaya||[]));
   el.innerHTML = rows.map(r=>`
     <div class="list-item" style="display:block">
       ${ikonPadam(`padamSerahanCash('${r.id}')`, 'serahan_cash', r.id, `Serahan ${fmt(r.jumlah)}`, 'Padam serahan')}
@@ -5913,14 +5940,17 @@ async function ubahStatusSerahanCash(id, status) {
 async function renderSerahanCashSemua() {
   const el = document.getElementById('serahan-cash-semua-list');
   if (!el) return;
-  const { data, error } = await sb.from('serahan_cash').select('*').order('created_at',{ascending:false});
+  const [{ data, error }, { data: baucarHarianSemua }, { data: profil }] = await Promise.all([
+    sb.from('serahan_cash').select('*').order('created_at',{ascending:false}),
+    sb.from('baucar_bayaran').select('pekerja_id,tarikh,jumlah').eq('kategori','upah_harian'),
+    sb.from('profiles').select('id,nama').eq('role','pekerja'),
+  ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   const senarai = data || [];
-  const { data: profil } = await sb.from('profiles').select('id,nama').eq('role','pekerja');
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
 
   const pekerjaIds = [...new Set([...DATA.transaksi.filter(t=>t.kaedah_bayaran==='tunai').map(t=>t.created_by), ...senarai.map(r=>r.pekerja_id)].filter(Boolean))];
-  const ringkasanPekerja = pekerjaIds.map(pid => ({ id: pid, nama: namaPekerja(pid), pegang: kiraCashDipegang(pid, senarai) }))
+  const ringkasanPekerja = pekerjaIds.map(pid => ({ id: pid, nama: namaPekerja(pid), pegang: kiraCashDipegang(pid, senarai, baucarHarianSemua||[]) }))
     .filter(p => Math.abs(p.pegang) > 0.005)
     .sort((a,b)=>b.pegang-a.pegang);
 
