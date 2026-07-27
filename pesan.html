@@ -187,14 +187,14 @@
       <div class="card">
         <div class="section-title">📋 Maklumat Kedai</div>
         <div class="form-group">
-          <label class="form-label">Nama Kedai</label>
+          <label class="form-label">Nama Kedai <span style="font-weight:400;color:var(--muted)">(Jika anda tidak pernah membeli)</span></label>
           <div class="map-search-row">
             <input type="text" class="form-input" id="p-nama" placeholder="cth: Kedai Runcit Pak Ali" />
             <button type="button" class="form-input" style="width:auto;background:var(--teal);color:#fff;border:none;font-weight:700;font-size:12px;flex-shrink:0" onclick="cariLokasiKedaiPO()">🔍 Cari</button>
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">No. Telefon Kedai</label>
+          <label class="form-label">No. Telefon Kedai <span style="font-weight:400;color:var(--muted)">(Jika anda pernah membeli)</span></label>
           <div class="map-search-row">
             <input type="tel" class="form-input" id="p-tel" placeholder="01x-xxxxxxx" onchange="autoIsiKedaiDariTelefon()" onblur="autoIsiKedaiDariTelefon()" />
             <button type="button" class="form-input" style="width:auto;background:var(--teal);color:#fff;border:none;font-weight:700;font-size:12px;flex-shrink:0" onclick="autoIsiKedaiDariTelefon(true)">🔍 Cari</button>
