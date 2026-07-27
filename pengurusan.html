@@ -2653,6 +2653,28 @@ function padankanNegeriDaerah(addressComponents) {
   return { negeri, daerah };
 }
 
+// Reverse-geocode lat/lng (tak perlu peta/modal Kedai dibuka) — untuk auto-isi
+// negeri/daerah bila kedai didaftar automatik dari pre-order. pesan.html hanya
+// hantar lat/lng mentah (tiada address components berstruktur macam carian
+// Places), jadi kena reverse-geocode dahulu sebelum padan ke STATE_DAERAH.
+async function padankanNegeriDaerahDariLatLng(lat, lng) {
+  if (lat == null || lng == null || !isGoogleMapsDikonfigur()) return { negeri: null, daerah: null };
+  try {
+    await muatkanGoogleMaps();
+    const geocoder = new google.maps.Geocoder();
+    const results = await new Promise(resolve => {
+      geocoder.geocode({ location: { lat: +lat, lng: +lng } }, (res, status) => {
+        resolve(status === 'OK' && res && res.length ? res : []);
+      });
+    });
+    if (!results.length) return { negeri: null, daerah: null };
+    return padankanNegeriDaerah(results[0].address_components);
+  } catch (e) {
+    console.log('Reverse geocode negeri/daerah gagal:', e);
+    return { negeri: null, daerah: null };
+  }
+}
+
 async function cariKedaiIkutNama() {
   const nama = document.getElementById('f-kedai-nama').value.trim();
   if (!nama) return toast('Masukkan nama kedai dahulu','err');
@@ -3256,9 +3278,10 @@ async function submitHantar() {
   if (!peribadi && kedaiId.startsWith('_PO_')) {
     const po = poDestinasiCache[kedaiId];
     if (!po) return toast('Pre-order ini sudah tidak sah — sila muat semula','err');
+    const { negeri, daerah } = await padankanNegeriDaerahDariLatLng(po.lat, po.lng);
     const kedaiObj = {
       id: genId('K'), nama: po.kedai_nama, alamat: po.alamat || 'Alamat belum disahkan',
-      negeri: '', daerah: '', telefon: po.kedai_telefon || '',
+      negeri: negeri || '', daerah: daerah || '', telefon: po.kedai_telefon || '',
       lat: po.lat || null, lng: po.lng || null,
       nota: 'Didaftarkan automatik dari Pre-Order', status: 'aktif', hutang: 0, last_visit: null,
       didaftarkan_oleh: DATA.currentUser?.id || null,
