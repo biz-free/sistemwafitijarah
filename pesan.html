@@ -195,7 +195,10 @@
         </div>
         <div class="form-group">
           <label class="form-label">No. Telefon Kedai</label>
-          <input type="tel" class="form-input" id="p-tel" placeholder="01x-xxxxxxx" onchange="autoIsiKedaiDariTelefon()" onblur="autoIsiKedaiDariTelefon()" />
+          <div class="map-search-row">
+            <input type="tel" class="form-input" id="p-tel" placeholder="01x-xxxxxxx" onchange="autoIsiKedaiDariTelefon()" onblur="autoIsiKedaiDariTelefon()" />
+            <button type="button" class="form-input" style="width:auto;background:var(--teal);color:#fff;border:none;font-weight:700;font-size:12px;flex-shrink:0" onclick="autoIsiKedaiDariTelefon(true)">🔍 Cari</button>
+          </div>
           <div id="p-tel-status" style="font-size:12px;margin-top:6px;display:none"></div>
         </div>
         <div class="form-group">
@@ -411,12 +414,20 @@ async function initHalaman() {
 let kedaiIdDikesan = null;
 let telefonTerakhirDicari = '';
 
-async function autoIsiKedaiDariTelefon() {
+async function autoIsiKedaiDariTelefon(paksa) {
   const tel = document.getElementById('p-tel').value.trim();
   const statusEl = document.getElementById('p-tel-status');
-  if (!tel || tel === telefonTerakhirDicari) return;
+  // "paksa" = ditekan terus butang "Cari" — cari semula walaupun nombor sama
+  // dgn carian lepas, & beri maklum balas jelas jika kosong/pendek (bukan senyap
+  // macam onblur automatik, sebab tekanan butang ialah tindakan sengaja pengguna).
+  if (!tel) { if (paksa) toast('Sila isi no. telefon dahulu','err'); return; }
+  if (!paksa && tel === telefonTerakhirDicari) return;
   telefonTerakhirDicari = tel;
-  if (tel.replace(/\D/g,'').length < 8) { statusEl.style.display='none'; return; }
+  if (tel.replace(/\D/g,'').length < 8) {
+    if (paksa) { statusEl.style.display='block'; statusEl.style.color='var(--red)'; statusEl.textContent='⚠️ No. telefon terlalu pendek'; }
+    else statusEl.style.display='none';
+    return;
+  }
 
   const { data, error } = await sb.rpc('cari_kedai_ikut_telefon', { p_telefon: tel });
   const kedai = data?.[0];
