@@ -454,7 +454,7 @@
         <div id="stok-bawaan-ringkasan" style="display:flex;gap:8px;margin-bottom:10px"></div>
         <div id="stok-bawaan-list"></div>
         <div class="btn-row">
-          <button class="btn btn-secondary btn-sm" onclick="showModal('modal-ambil-stok')">📥 Ambil Stok</button>
+          <button class="btn btn-secondary btn-sm" onclick="bukaModalAmbilStok()">📥 Ambil Stok</button>
           <button class="btn btn-secondary btn-sm" onclick="showModal('modal-pulang-stok')">📤 Pulangkan Stok</button>
         </div>
         <button class="btn btn-secondary btn-sm" style="width:100%;margin-top:8px;color:var(--red);border-color:var(--red)" onclick="bukaModalSerahReject()">🚫 Serah Produk Reject</button>
@@ -1281,11 +1281,12 @@
 <div class="modal-overlay" id="modal-ambil-stok">
   <div class="modal-box">
     <div class="modal-title">📥 Ambil Stok dari Gudang<button class="modal-close" onclick="closeModal('modal-ambil-stok')">✕ Tutup</button></div>
+    <div id="ambil-stok-hint" style="font-size:11px;color:var(--muted);margin-bottom:10px"></div>
     <div class="form-group"><label class="form-label">Produk</label>
       <select class="form-input" id="ambil-produk"></select>
     </div>
     <div class="form-group"><label class="form-label">Kuantiti</label><input type="number" class="form-input" id="ambil-qty" placeholder="0" min="1" /></div>
-    <button class="btn btn-primary" onclick="ambilStok()">📥 Ambil Stok</button>
+    <button class="btn btn-primary" id="ambil-stok-btn" onclick="ambilStok()">📥 Ambil Stok</button>
   </div>
 </div>
 
@@ -3199,19 +3200,45 @@ async function pindahStokPekerja() {
   toast('Stok berjaya dipindahkan antara pekerja');
 }
 
+function bukaModalAmbilStok() {
+  const hintEl = document.getElementById('ambil-stok-hint');
+  const btnEl = document.getElementById('ambil-stok-btn');
+  if (currentRole === 'pemilik') {
+    hintEl.textContent = '';
+    btnEl.textContent = '📥 Ambil Stok';
+  } else {
+    hintEl.textContent = '⏳ Permohonan anda perlu diluluskan pemilik dahulu sebelum stok berpindah ke bawaan anda.';
+    btnEl.textContent = '📤 Hantar Permohonan';
+  }
+  showModal('modal-ambil-stok');
+}
+
+// Pemilik: ambil terus (tiada sebab perlu lulus permohonan sendiri). Pekerja: hantar
+// PERMOHONAN sahaja — pergerakan stok sebenar hanya berlaku bila pemilik luluskan
+// (lihat putuskan_ambil_stok / renderSerahanProdukSemua) — elak pekerja ambil stok
+// tanpa kebenaran/pengetahuan pemilik.
 async function ambilStok() {
   if (!kehadiranAktif) return toast('Sila Thumb In dahulu sebelum ambil stok','err');
   const id = document.getElementById('ambil-produk').value;
   const qty = +document.getElementById('ambil-qty').value;
   if (!id||qty<1) return toast('Pilih produk dan kuantiti','err');
-  const { error } = await sb.rpc('ambil_stok_pekerja', { p_stok_id:id, p_qty:qty });
-  if (error) return toast('Gagal ambil stok: '+error.message,'err');
-  await loadData();
-  await loadStokBawaan();
-  renderHItems();
+  if (currentRole === 'pemilik') {
+    const { error } = await sb.rpc('ambil_stok_pekerja', { p_stok_id:id, p_qty:qty });
+    if (error) return toast('Gagal ambil stok: '+error.message,'err');
+    await loadData();
+    await loadStokBawaan();
+    renderHItems();
+    closeModal('modal-ambil-stok');
+    document.getElementById('ambil-qty').value='';
+    toast('Stok berjaya diambil dari gudang');
+    return;
+  }
+  const { error } = await sb.rpc('minta_ambil_stok', { p_id: genId('AS'), p_stok_id:id, p_qty:qty });
+  if (error) return toast('Gagal hantar permohonan: '+error.message,'err');
+  await loadSerahanProdukSaya();
   closeModal('modal-ambil-stok');
   document.getElementById('ambil-qty').value='';
-  toast('Stok berjaya diambil dari gudang');
+  toast('📤 Permohonan ambil stok dihantar — menunggu kelulusan pemilik');
 }
 
 async function pulangStok() {
@@ -3326,6 +3353,7 @@ async function renderSerahanProdukSemua() {
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
 
   const menunggu = senarai.filter(r=>r.jenis==='reject' && r.status==='menunggu');
+  const menungguAmbil = senarai.filter(r=>r.jenis==='ambil' && r.status==='menunggu');
   const rejectDisahkan = senarai.filter(r=>r.jenis==='reject' && r.status==='disahkan');
   const nilaiKerugian = rejectDisahkan.reduce((a,r)=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return a+(s?s.harga_beli*r.kuantiti:0); },0);
   const jumlahUnitMenunggu = menunggu.reduce((a,r)=>a+r.kuantiti,0);
@@ -3340,6 +3368,10 @@ async function renderSerahanProdukSemua() {
       <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
         <div style="font-size:9px;color:var(--muted)">KERUGIAN REJECT (MODAL)</div>
         <div style="font-weight:800;font-size:15px;color:var(--red)">${fmt(nilaiKerugian)}</div>
+      </div>
+      <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:9px;color:var(--muted)">PERMOHONAN AMBIL MENUNGGU</div>
+        <div style="font-weight:800;font-size:15px;color:${menungguAmbil.length?'var(--gold)':'var(--green)'}">${menungguAmbil.length}</div>
       </div>`;
   }
 
@@ -3359,16 +3391,23 @@ async function renderSerahanProdukSemua() {
     }).join('') : '<div class="empty"><div class="empty-text">Tiada produk reject dipegang pekerja buat masa ini</div></div>') +
     '<div class="divider" style="margin:12px 0"></div>';
 
-  const blokMenunggu = menunggu.length ? `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">MENUNGGU SAHKAN</div>` +
-    menunggu.map(r=>`
+  const semuaMenunggu = [...menungguAmbil, ...menunggu].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const blokMenunggu = semuaMenunggu.length ? `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">MENUNGGU SAHKAN</div>` +
+    semuaMenunggu.map(r=>{
+      const isAmbil = r.jenis === 'ambil';
+      const fnSahkan = isAmbil ? `ubahStatusAmbilStok('${r.id}','disahkan')` : `ubahStatusSerahanProduk('${r.id}','disahkan')`;
+      const fnTolak = isAmbil ? `ubahStatusAmbilStok('${r.id}','ditolak')` : `ubahStatusSerahanProduk('${r.id}','ditolak')`;
+      const subLabel = isAmbil ? '📥 Minta Ambil Stok' : (SERAHAN_PRODUK_SEBAB_TXT[r.sebab]||r.sebab||'');
+      return `
       <div class="list-item" style="display:block;border-left:3px solid var(--gold);padding-left:8px;margin-bottom:8px">
-        <div><div class="list-item-title">${esc(namaPekerja(r.pekerja_id))} — ${esc(r.stok_nama)} ×${r.kuantiti}</div><div class="list-item-sub">${SERAHAN_PRODUK_SEBAB_TXT[r.sebab]||r.sebab||''} · ${fmtDT(r.created_at)}</div></div>
+        <div><div class="list-item-title">${esc(namaPekerja(r.pekerja_id))} — ${esc(r.stok_nama)} ×${r.kuantiti}</div><div class="list-item-sub">${subLabel} · ${fmtDT(r.created_at)}</div></div>
         <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
-          ${r.gambar_url?`<button class="btn btn-secondary btn-sm" style="width:auto" onclick="lihatGambarSerahanProduk('${esc(r.gambar_url)}')">📎 Gambar</button>`:'<span style="font-size:11px;color:var(--red)">⚠️ Tiada gambar</span>'}
-          <button class="btn btn-primary btn-sm" style="width:auto" onclick="ubahStatusSerahanProduk('${r.id}','disahkan')">✅ Sahkan</button>
-          <button class="btn btn-secondary btn-sm" style="width:auto;color:var(--red)" onclick="ubahStatusSerahanProduk('${r.id}','ditolak')">✕ Tolak (Pulang Semula)</button>
+          ${!isAmbil?(r.gambar_url?`<button class="btn btn-secondary btn-sm" style="width:auto" onclick="lihatGambarSerahanProduk('${esc(r.gambar_url)}')">📎 Gambar</button>`:'<span style="font-size:11px;color:var(--red)">⚠️ Tiada gambar</span>'):''}
+          <button class="btn btn-primary btn-sm" style="width:auto" onclick="${fnSahkan}">✅ Sahkan</button>
+          <button class="btn btn-secondary btn-sm" style="width:auto;color:var(--red)" onclick="${fnTolak}">✕ Tolak${isAmbil?'':' (Pulang Semula)'}</button>
         </div>
-      </div>`).join('') + '<div class="divider" style="margin:12px 0"></div>' : '';
+      </div>`;
+    }).join('') + '<div class="divider" style="margin:12px 0"></div>' : '';
 
   const blokSejarah = `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SEJARAH PERGERAKAN STOK TERKINI</div>` +
     (senarai.slice(0,30).map(r=>{
@@ -3393,13 +3432,21 @@ async function ubahStatusSerahanProduk(id, status) {
   await renderSerahanProdukSemua();
 }
 
+async function ubahStatusAmbilStok(id, status) {
+  const { error } = await sb.rpc('putuskan_ambil_stok', { p_id:id, p_status:status });
+  if (error) return toast('Gagal kemaskini status: '+error.message,'err');
+  toast(status==='disahkan' ? '✅ Permohonan ambil stok disahkan — stok dipindah ke pekerja' : '✕ Permohonan ambil stok ditolak');
+  await renderSerahanProdukSemua();
+  await loadData(); // stok gudang berubah bila disahkan
+}
+
 // Tab Stok > Gudang (pemilik sahaja): sejarah pergerakan yang jejas stok gudang
 // terus — restock (+), ambil pekerja (−), pulangan baik pekerja (+). Pindah/reject
 // TAK disenaraikan di sini sebab tak ubah jumlah stok GUDANG (cuma antara pekerja).
 async function renderSejarahStokGudang() {
   const el = document.getElementById('sejarah-stok-gudang-list');
   if (!el) return;
-  const { data, error } = await sb.from('serahan_produk').select('*').in('jenis', ['restock','ambil','baik']).order('created_at',{ascending:false}).limit(50);
+  const { data, error } = await sb.from('serahan_produk').select('*').in('jenis', ['restock','ambil','baik']).eq('status','disahkan').order('created_at',{ascending:false}).limit(50);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   const senarai = data || [];
   const { data: profil } = await sb.from('profiles').select('id,nama');
