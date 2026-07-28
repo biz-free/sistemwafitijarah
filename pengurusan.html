@@ -1365,9 +1365,9 @@
 <div class="modal-overlay" id="modal-route">
   <div class="modal-box">
     <div class="modal-title">🗺️ Urus Route Kedai<button class="modal-close" onclick="closeModal('modal-route')">✕ Tutup</button></div>
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <input type="text" class="form-input" id="route-nama-baru" placeholder="cth: Route A" />
-      <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="ciptaRoute()">+ Cipta</button>
+    <div class="map-search-row" style="margin-bottom:14px">
+      <input type="text" class="form-input" id="route-nama-baru" placeholder="cth: Route A" onkeydown="if(event.key==='Enter')ciptaRoute()" />
+      <button class="btn btn-primary btn-sm" style="flex-shrink:0;width:auto" onclick="ciptaRoute()">+ Cipta</button>
     </div>
     <div id="route-senarai"></div>
   </div>
@@ -2515,14 +2515,24 @@ async function renderSenaraiRoute() {
           <button class="btn-delete-icon" style="position:static" onclick="padamRoute('${r.id}')" title="Padam route">✕</button>
         </div>
       </div>
-      <div id="route-kedai-${r.id}" style="display:none;margin-top:8px;max-height:200px;overflow-y:auto;border-top:1px dashed var(--border);padding-top:8px">
-        ${DATA.kedai.map(k=>`<label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;cursor:pointer">
-          <input type="checkbox" style="width:auto" ${k.route_id===r.id?'checked':''} onchange="tetapkanRouteKedai('${k.id}', this.checked?'${r.id}':null)" />
-          ${esc(k.nama)}${k.route_id && k.route_id!==r.id?' <span style="color:var(--muted)">(route lain)</span>':''}
-        </label>`).join('')}
+      <div id="route-kedai-${r.id}" style="display:none;margin-top:8px">
+        <input type="text" class="form-input" placeholder="🔍 Cari kedai..." style="font-size:12px;padding:6px 10px;margin-bottom:6px" oninput="tapisRouteKedaiList('${r.id}', this.value)" />
+        <div style="max-height:200px;overflow-y:auto;border-top:1px dashed var(--border);padding-top:6px">
+          ${DATA.kedai.map(k=>`<label class="route-kedai-item" data-nama="${esc(k.nama.toLowerCase())}" style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;cursor:pointer">
+            <input type="checkbox" style="width:auto" ${k.route_id===r.id?'checked':''} onchange="tetapkanRouteKedai('${k.id}', this.checked?'${r.id}':null)" />
+            ${esc(k.nama)}${k.route_id && k.route_id!==r.id?' <span style="color:var(--muted)">(route lain)</span>':''}
+          </label>`).join('')}
+        </div>
       </div>
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-icon">🗺️</div><div class="empty-text">Tiada route lagi — cipta satu di atas</div></div>';
+}
+
+function tapisRouteKedaiList(routeId, q) {
+  const qq = q.trim().toLowerCase();
+  document.querySelectorAll(`#route-kedai-${routeId} .route-kedai-item`).forEach(label => {
+    label.style.display = !qq || label.dataset.nama.includes(qq) ? 'flex' : 'none';
+  });
 }
 
 function toggleRouteKedaiList(routeId) {
