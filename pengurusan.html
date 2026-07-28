@@ -1365,9 +1365,24 @@
 <div class="modal-overlay" id="modal-route">
   <div class="modal-box">
     <div class="modal-title">🗺️ Urus Route Kedai<button class="modal-close" onclick="closeModal('modal-route')">✕ Tutup</button></div>
-    <div class="map-search-row" style="margin-bottom:14px">
+    <div id="route-cipta-row" class="map-search-row" style="margin-bottom:14px">
       <input type="text" class="form-input" id="route-nama-baru" placeholder="cth: Route A" onkeydown="if(event.key==='Enter')ciptaRoute()" />
       <button class="btn btn-primary btn-sm" style="flex-shrink:0;width:auto" onclick="ciptaRoute()">+ Cipta</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px" id="route-hint-pekerja"></div>
+    <div class="form-row">
+      <div class="form-group" id="route-filter-pendaftar-wrap"><label class="form-label">Tapis Pendaftar</label>
+        <select class="form-input" id="route-filter-pendaftar" onchange="renderSenaraiRoute()"><option value="">Semua Pekerja</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Tapis Tempoh Servis</label>
+        <select class="form-input" id="route-filter-tempoh" onchange="renderSenaraiRoute()">
+          <option value="">Semua</option>
+          <option value="7">⏳ ≥7 hari</option>
+          <option value="14">⏳ ≥14 hari</option>
+          <option value="30">⏳ ≥30 hari</option>
+          <option value="tiada">🆕 Tidak pernah dihantar</option>
+        </select>
+      </div>
     </div>
     <div id="route-senarai"></div>
   </div>
@@ -2436,7 +2451,7 @@ function susunRouteIkutJarak(kedaiList) {
 }
 
 async function renderServisKedai() {
-  document.getElementById('btn-urus-route').style.display = currentRole==='pemilik' ? '' : 'none';
+  document.getElementById('btn-urus-route').style.display = '';
   const el = document.getElementById('servis-list');
   // Pekerja hanya nampak kedai yang PERNAH mereka hantar sendiri
   let kedaiSkop = DATA.kedai;
@@ -2497,14 +2512,48 @@ function focusServisKedai(id) {
 // ── Urus Route Kedai (pemilik sahaja) ──
 function bukaModalRoute() {
   showModal('modal-route');
+  const isPemilik = currentRole === 'pemilik';
+  document.getElementById('route-cipta-row').style.display = isPemilik ? '' : 'none';
+  document.getElementById('route-filter-pendaftar-wrap').style.display = isPemilik ? '' : 'none';
+  document.getElementById('route-hint-pekerja').textContent = isPemilik ? '' : '📌 Anda hanya boleh urus route untuk kedai yang anda daftarkan sendiri.';
   renderSenaraiRoute();
 }
 
+// Pekerja hanya boleh urus route utk kedai SENDIRI (yang mereka daftarkan) — skop
+// disempadan dahulu sebelum apa-apa tapisan lain. "Tapis Tempoh Servis" bagi pekerja
+// guna tarikh MEREKA SENDIRI hantar ke kedai tu (bukan last_visit sejagat kedai, yang
+// boleh dikemaskini pekerja lain) — pemilik kekal guna last_visit sejagat kedai.
 async function renderSenaraiRoute() {
   const el = document.getElementById('route-senarai');
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const isPemilik = currentRole === 'pemilik';
   const { data: routes, error } = await sb.from('route_kedai').select('*').order('nama');
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+
+  const pendaftarSel = document.getElementById('route-filter-pendaftar');
+  if (isPemilik && pendaftarSel.options.length <= 1) {
+    const idUnik = [...new Set(DATA.kedai.map(k=>k.didaftarkan_oleh).filter(Boolean))];
+    pendaftarSel.innerHTML = '<option value="">Semua Pekerja</option>' + idUnik.map(id=>`<option value="${id}">${esc(PROFIL_NAMA_CACHE[id]||id)}</option>`).join('');
+  }
+  const pendaftarPilih = isPemilik ? pendaftarSel.value : '';
+  const tempohPilih = document.getElementById('route-filter-tempoh').value;
+
+  const skopKedai = isPemilik ? DATA.kedai : DATA.kedai.filter(k=>k.didaftarkan_oleh===DATA.currentUser.id);
+
+  const lastServisSaya = {};
+  if (!isPemilik) {
+    DATA.transaksi.forEach(t => {
+      if (t.created_by !== DATA.currentUser.id || !t.kedai_id) return;
+      if (!lastServisSaya[t.kedai_id] || t.tarikh_masa > lastServisSaya[t.kedai_id]) lastServisSaya[t.kedai_id] = t.tarikh_masa;
+    });
+  }
+  const tarikhServis = k => isPemilik ? k.last_visit : (lastServisSaya[k.id] ? lastServisSaya[k.id].slice(0,10) : null);
+
+  let kedaiTapis = skopKedai;
+  if (pendaftarPilih) kedaiTapis = kedaiTapis.filter(k=>k.didaftarkan_oleh===pendaftarPilih);
+  if (tempohPilih === 'tiada') kedaiTapis = kedaiTapis.filter(k=>!tarikhServis(k));
+  else if (tempohPilih) kedaiTapis = kedaiTapis.filter(k=>tarikhServis(k) && daysSince(tarikhServis(k))>=(+tempohPilih));
+
   el.innerHTML = (routes||[]).map(r => {
     const kedaiDalamRoute = DATA.kedai.filter(k=>k.route_id===r.id);
     return `<div class="list-item" style="display:block">
@@ -2512,16 +2561,21 @@ async function renderSenaraiRoute() {
         <div class="list-item-title">${esc(r.nama)}</div>
         <div style="display:flex;gap:6px">
           <button class="btn btn-secondary btn-sm" onclick="toggleRouteKedaiList('${r.id}')">🏪 ${kedaiDalamRoute.length} kedai</button>
-          <button class="btn-delete-icon" style="position:static" onclick="padamRoute('${r.id}')" title="Padam route">✕</button>
+          ${isPemilik?`<button class="btn-delete-icon" style="position:static" onclick="padamRoute('${r.id}')" title="Padam route">✕</button>`:''}
         </div>
       </div>
       <div id="route-kedai-${r.id}" style="display:none;margin-top:8px">
         <input type="text" class="form-input" placeholder="🔍 Cari kedai..." style="font-size:12px;padding:6px 10px;margin-bottom:6px" oninput="tapisRouteKedaiList('${r.id}', this.value)" />
         <div style="max-height:200px;overflow-y:auto;border-top:1px dashed var(--border);padding-top:6px">
-          ${DATA.kedai.map(k=>`<label class="route-kedai-item" data-nama="${esc(k.nama.toLowerCase())}" style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;cursor:pointer">
-            <input type="checkbox" style="width:auto" ${k.route_id===r.id?'checked':''} onchange="tetapkanRouteKedai('${k.id}', this.checked?'${r.id}':null)" />
-            ${esc(k.nama)}${k.route_id && k.route_id!==r.id?' <span style="color:var(--muted)">(route lain)</span>':''}
-          </label>`).join('')}
+          ${kedaiTapis.map(k=>{
+            const tarikh = tarikhServis(k);
+            const servisTxt = tarikh ? `⏳ ${daysSince(tarikh)} hari lalu` : '🆕 Belum pernah';
+            return `<label class="route-kedai-item" data-nama="${esc(k.nama.toLowerCase())}" style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;cursor:pointer">
+              <input type="checkbox" style="width:auto" ${k.route_id===r.id?'checked':''} onchange="tetapkanRouteKedai('${k.id}', this.checked?'${r.id}':null)" />
+              <span style="flex:1">${esc(k.nama)}${k.route_id && k.route_id!==r.id?' <span style="color:var(--muted)">(route lain)</span>':''}</span>
+              <span style="color:var(--muted);font-size:10px;flex-shrink:0">${servisTxt}</span>
+            </label>`;
+          }).join('') || '<div class="empty"><div class="empty-text">Tiada kedai sepadan tapisan</div></div>'}
         </div>
       </div>
     </div>`;
@@ -2553,7 +2607,9 @@ async function ciptaRoute() {
 }
 
 async function tetapkanRouteKedai(kedaiId, routeId) {
-  const { error } = await sb.from('kedai').update({ route_id: routeId }).eq('id', kedaiId);
+  // RPC (bukan .update() terus) sebab RLS "kedai" UPDATE pemilik-only — RPC ni
+  // dedahkan medan route_id sahaja, dibenarkan utk pekerja pada kedai SENDIRI juga.
+  const { error } = await sb.rpc('tetapkan_route_kedai_sendiri', { p_kedai_id: kedaiId, p_route_id: routeId });
   if (error) return toast('Gagal kemaskini route: '+error.message,'err');
   await loadData();
   renderSenaraiRoute();
@@ -2572,7 +2628,7 @@ async function padamRoute(id) {
 function renderKedai(q='') {
   // Pekerja juga boleh daftar kedai baru (mereka yang cari prospek di lapangan) — edit kekal pemilik sahaja
   document.getElementById('btn-daftar-kedai').style.display='';
-  document.getElementById('btn-urus-route-senarai').style.display = currentRole==='pemilik' ? '' : 'none';
+  document.getElementById('btn-urus-route-senarai').style.display = '';
 
   // Kategori/penapis — daerah semua peranan, pendaftar pemilik sahaja (data lebih sensitif).
   const daerahSel = document.getElementById('kedai-filter-daerah');
