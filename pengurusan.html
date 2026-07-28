@@ -223,6 +223,10 @@
     #toast.show { opacity:1; }
     #toast.err { background:var(--red); }
 
+    /* ── SCROLL TO TOP ── */
+    #scroll-top-btn { position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));width:46px;height:46px;border-radius:50%;background:var(--navy);color:#fff;border:none;box-shadow:0 4px 14px rgba(0,0,0,0.28);font-size:20px;line-height:1;display:none;align-items:center;justify-content:center;z-index:90;cursor:pointer;opacity:0;transition:opacity 0.2s; }
+    #scroll-top-btn.show { display:flex;opacity:1; }
+
     /* ── MODAL ── */
     .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:flex-end;justify-content:center; }
     .modal-overlay.show { display:flex; }
@@ -1194,6 +1198,8 @@
   </button>
 </div>
 
+<button id="scroll-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Naik ke atas" aria-label="Naik ke atas">⬆️</button>
+
 <!-- MODALS -->
 <div class="modal-overlay" id="modal-tambah-stok">
   <div class="modal-box">
@@ -1937,6 +1943,11 @@ function initAll() {
   document.getElementById('baucar-bulan').value = bulanTempatan();
   const bhTarikhEl = document.getElementById('bh-tarikh');
   if (bhTarikhEl) bhTarikhEl.value = tarikhTempatan();
+  // Butang "naik ke atas" — timbul lepas skrol melepasi 1 skrin, sama utk semua tab
+  // (bukan dalam mana-mana .page supaya kekal berfungsi bila tukar tab).
+  window.addEventListener('scroll', () => {
+    document.getElementById('scroll-top-btn')?.classList.toggle('show', window.scrollY > 300);
+  }, { passive: true });
 }
 
 // ════════════════════════════════════════════════════
@@ -3276,19 +3287,36 @@ async function renderSerahanProdukSemua() {
   const jumlahBaik = senarai.filter(r=>r.jenis==='baik').reduce((a,r)=>a+r.kuantiti,0);
   const rejectDisahkan = senarai.filter(r=>r.jenis==='reject' && r.status==='disahkan');
   const nilaiKerugian = rejectDisahkan.reduce((a,r)=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return a+(s?s.harga_beli*r.kuantiti:0); },0);
+  const jumlahUnitMenunggu = menunggu.reduce((a,r)=>a+r.kuantiti,0);
 
   const ringkasanEl = document.getElementById('serahan-produk-semua-ringkasan');
   if (ringkasanEl) {
     ringkasanEl.innerHTML = `
       <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
-        <div style="font-size:9px;color:var(--muted)">MENUNGGU SAHKAN</div>
-        <div style="font-weight:800;font-size:15px;color:${menunggu.length?'var(--red)':'var(--green)'}">${menunggu.length}</div>
+        <div style="font-size:9px;color:var(--muted)">JUMLAH REJECT MENUNGGU</div>
+        <div style="font-weight:800;font-size:15px;color:${jumlahUnitMenunggu?'var(--red)':'var(--green)'}">${jumlahUnitMenunggu} unit</div>
       </div>
       <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
         <div style="font-size:9px;color:var(--muted)">KERUGIAN REJECT (MODAL)</div>
         <div style="font-weight:800;font-size:15px;color:var(--red)">${fmt(nilaiKerugian)}</div>
       </div>`;
   }
+
+  // Dashboard "produk reject yang dimiliki pekerja" — barang reject yang masih
+  // menunggu sahkan secara fizikal MASIH ada pada/berdekatan pekerja (belum
+  // diselesaikan), jadi dikumpul ikut pekerja macam Stok Bawaan Semua Pekerja.
+  const ikutPekerjaReject = {};
+  menunggu.forEach(r => { (ikutPekerjaReject[r.pekerja_id] ||= []).push(r); });
+  const blokRejectIkutPekerja = `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">🚫 PRODUK REJECT DIPEGANG IKUT PEKERJA</div>` +
+    (Object.entries(ikutPekerjaReject).length ? Object.entries(ikutPekerjaReject).map(([pid, rows])=>{
+      const subUnit = rows.reduce((a,r)=>a+r.kuantiti,0);
+      const subNilai = rows.reduce((a,r)=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return a+(s?s.harga_beli*r.kuantiti:0); },0);
+      return `<div class="list-item" style="display:block">
+        <div class="list-item-title" style="margin-bottom:4px;display:flex;justify-content:space-between"><span>${esc(namaPekerja(pid))}</span><span style="color:var(--muted);font-weight:400">${subUnit} unit · ${fmt(subNilai)}</span></div>
+        ${rows.map(r=>`<div style="font-size:11px;color:var(--muted);display:flex;justify-content:space-between"><span>${esc(r.stok_nama)} · ${SERAHAN_PRODUK_SEBAB_TXT[r.sebab]||r.sebab}</span><span>${r.kuantiti}</span></div>`).join('')}
+      </div>`;
+    }).join('') : '<div class="empty"><div class="empty-text">Tiada produk reject dipegang pekerja buat masa ini</div></div>') +
+    '<div class="divider" style="margin:12px 0"></div>';
 
   const blokMenunggu = menunggu.length ? `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">MENUNGGU SAHKAN</div>` +
     menunggu.map(r=>`
@@ -3311,7 +3339,7 @@ async function renderSerahanProdukSemua() {
         </div>
       </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada sejarah lagi</div></div>');
 
-  el.innerHTML = blokMenunggu + blokSejarah;
+  el.innerHTML = blokRejectIkutPekerja + blokMenunggu + blokSejarah;
 }
 
 async function ubahStatusSerahanProduk(id, status) {
