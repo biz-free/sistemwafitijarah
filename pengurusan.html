@@ -441,6 +441,11 @@
       </div>
       <input class="search-bar" placeholder="Cari produk..." oninput="renderStok(this.value)" />
       <div id="stok-list"></div>
+      <div class="card" id="sejarah-stok-gudang-card">
+        <div class="card-title">📜 Sejarah Pindahan Stok</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Restock, ambil pekerja & pulangan ke gudang — sejarah bermula dari ciri ini diaktifkan, bukan dari awal sistem (pergerakan sebelum ini tidak direkod).</div>
+        <div id="sejarah-stok-gudang-list"></div>
+      </div>
     </div>
 
     <div id="stok-mobile" style="display:none">
@@ -1800,7 +1805,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
+  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -1831,7 +1836,7 @@ async function setPage(p) {
     renderDashboard();
     document.getElementById('link-preorder').value = location.href.replace(/pengurusan\.html.*$/,'').replace(/\/$/,'') + '/pesan.html' + (DATA.currentUser?.id ? '?pekerja='+DATA.currentUser.id : '');
   }
-  if (p==='stok') renderStok();
+  if (p==='stok') { renderStok(); if (currentRole==='pemilik') renderSejarahStokGudang(); }
   if (p==='kedai') renderKedai();
   if (p==='hantar') {
     renderHantarSelects(); renderSejarah();
@@ -3207,6 +3212,21 @@ async function pulangStok() {
 const SERAHAN_PRODUK_STATUS_TXT = { menunggu:'⏳ Menunggu Sahkan', disahkan:'✅ Disahkan', ditolak:'✕ Ditolak' };
 const SERAHAN_PRODUK_STATUS_BADGE = { menunggu:'badge-gold', disahkan:'badge-green', ditolak:'badge-red' };
 const SERAHAN_PRODUK_SEBAB_TXT = { rosak:'📦 Rosak/Pecah', luput:'⏳ Luput', ditolak_kedai:'🚫 Ditolak Kedai', lain:'📝 Lain-lain' };
+// Label sejarah bagi SETIAP jenis pergerakan stok (bukan cuma pulangan/reject) —
+// dipapar di kad "Sejarah Serahan Saya" & "Produk Dipulangkan" (Mobile) dan
+// "Sejarah Pindahan Stok" (Gudang).
+const SERAHAN_PRODUK_JENIS_TXT = {
+  baik: '📤 Pulang ke Gudang',
+  reject: '🚫 Reject',
+  ambil: '📥 Ambil dari Gudang',
+  pindah_keluar: '🔀 Pindah Keluar',
+  pindah_masuk: '🔀 Pindah Masuk',
+  restock: '⚡ Restock Gudang',
+};
+function labelSerahanProduk(r) {
+  if (r.jenis === 'reject') return SERAHAN_PRODUK_SEBAB_TXT[r.sebab] || r.sebab || SERAHAN_PRODUK_JENIS_TXT.reject;
+  return SERAHAN_PRODUK_JENIS_TXT[r.jenis] || r.jenis;
+}
 
 function bukaModalSerahReject() {
   const entries = Object.entries(DATA.stokPekerja||{}).filter(([id,qty])=>qty>0);
@@ -3265,7 +3285,7 @@ async function loadSerahanProdukSaya() {
     <div class="list-item" style="display:block">
       ${ikonPadam(`padamSerahanProduk('${r.id}')`, 'serahan_produk', r.id, `Serahan ${r.stok_nama} ×${r.kuantiti}`, 'Padam serahan')}
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div><div class="list-item-title">${esc(r.stok_nama)} ×${r.kuantiti}</div><div class="list-item-sub">${r.jenis==='reject'?(SERAHAN_PRODUK_SEBAB_TXT[r.sebab]||r.sebab):'📤 Pulang ke gudang'} · ${fmtDT(r.created_at)}</div></div>
+        <div><div class="list-item-title">${esc(r.stok_nama)} ×${r.kuantiti}</div><div class="list-item-sub">${labelSerahanProduk(r)} · ${fmtDT(r.created_at)}</div></div>
         <span class="badge ${SERAHAN_PRODUK_STATUS_BADGE[r.status]}" style="flex-shrink:0">${SERAHAN_PRODUK_STATUS_TXT[r.status]}</span>
       </div>
       ${r.gambar_url?`<div style="margin-top:6px"><button class="btn-link" onclick="lihatGambarSerahanProduk('${esc(r.gambar_url)}')">📎 Lihat Gambar</button></div>`:''}
@@ -3284,7 +3304,6 @@ async function renderSerahanProdukSemua() {
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
 
   const menunggu = senarai.filter(r=>r.jenis==='reject' && r.status==='menunggu');
-  const jumlahBaik = senarai.filter(r=>r.jenis==='baik').reduce((a,r)=>a+r.kuantiti,0);
   const rejectDisahkan = senarai.filter(r=>r.jenis==='reject' && r.status==='disahkan');
   const nilaiKerugian = rejectDisahkan.reduce((a,r)=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return a+(s?s.harga_beli*r.kuantiti:0); },0);
   const jumlahUnitMenunggu = menunggu.reduce((a,r)=>a+r.kuantiti,0);
@@ -3329,15 +3348,18 @@ async function renderSerahanProdukSemua() {
         </div>
       </div>`).join('') + '<div class="divider" style="margin:12px 0"></div>' : '';
 
-  const blokSejarah = `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SEJARAH TERKINI (${jumlahBaik} unit pulang gudang)</div>` +
-    (senarai.slice(0,30).map(r=>`
+  const blokSejarah = `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SEJARAH PERGERAKAN STOK TERKINI</div>` +
+    (senarai.slice(0,30).map(r=>{
+      const rujuk = r.rujuk_pekerja_id ? ` (${esc(namaPekerja(r.rujuk_pekerja_id))})` : '';
+      return `
       <div class="list-item" style="display:block">
         ${ikonPadam(`padamSerahanProduk('${r.id}')`, 'serahan_produk', r.id, `Serahan ${r.stok_nama} ×${r.kuantiti}`, 'Padam serahan', 'position:static')}
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <div><div class="list-item-title">${esc(namaPekerja(r.pekerja_id))} — ${esc(r.stok_nama)} ×${r.kuantiti}</div><div class="list-item-sub">${r.jenis==='reject'?(SERAHAN_PRODUK_SEBAB_TXT[r.sebab]||r.sebab):'📤 Pulang Gudang'} · ${fmtDT(r.created_at)}</div></div>
+          <div><div class="list-item-title">${esc(namaPekerja(r.pekerja_id))} — ${esc(r.stok_nama)} ×${r.kuantiti}</div><div class="list-item-sub">${labelSerahanProduk(r)}${rujuk} · ${fmtDT(r.created_at)}</div></div>
           <span class="badge ${SERAHAN_PRODUK_STATUS_BADGE[r.status]}" style="flex-shrink:0">${SERAHAN_PRODUK_STATUS_TXT[r.status]}</span>
         </div>
-      </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada sejarah lagi</div></div>');
+      </div>`;
+    }).join('') || '<div class="empty"><div class="empty-text">Tiada sejarah lagi</div></div>');
 
   el.innerHTML = blokRejectIkutPekerja + blokMenunggu + blokSejarah;
 }
@@ -3347,6 +3369,27 @@ async function ubahStatusSerahanProduk(id, status) {
   if (error) return toast('Gagal kemaskini status: '+error.message,'err');
   toast(status==='disahkan' ? '✅ Serahan reject disahkan' : '✕ Serahan reject ditolak — stok dipulangkan semula ke pekerja');
   await renderSerahanProdukSemua();
+}
+
+// Tab Stok > Gudang (pemilik sahaja): sejarah pergerakan yang jejas stok gudang
+// terus — restock (+), ambil pekerja (−), pulangan baik pekerja (+). Pindah/reject
+// TAK disenaraikan di sini sebab tak ubah jumlah stok GUDANG (cuma antara pekerja).
+async function renderSejarahStokGudang() {
+  const el = document.getElementById('sejarah-stok-gudang-list');
+  if (!el) return;
+  const { data, error } = await sb.from('serahan_produk').select('*').in('jenis', ['restock','ambil','baik']).order('created_at',{ascending:false}).limit(50);
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const senarai = data || [];
+  const { data: profil } = await sb.from('profiles').select('id,nama');
+  const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
+  const ARAH = { restock:'+', ambil:'−', baik:'+' };
+  const WARNA = { restock:'var(--green)', ambil:'var(--red)', baik:'var(--green)' };
+
+  el.innerHTML = senarai.map(r=>`
+    <div class="list-item">
+      <div><div class="list-item-title">${esc(r.stok_nama)}</div><div class="list-item-sub">${labelSerahanProduk(r)}${r.jenis!=='restock'?' · '+esc(namaPekerja(r.pekerja_id)):''} · ${fmtDT(r.created_at)}</div></div>
+      <div class="list-item-val" style="color:${WARNA[r.jenis]}">${ARAH[r.jenis]}${r.kuantiti}</div>
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada sejarah pergerakan gudang lagi</div></div>';
 }
 
 function updHItem(i,f,v) { hItems[i][f]=v; renderHItems(); }
