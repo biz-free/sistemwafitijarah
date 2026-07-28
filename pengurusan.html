@@ -794,6 +794,14 @@
       <div id="upah-saya-output"></div>
     </div>
 
+    <!-- Baucar Saya — dijana automatik selepas Thumb Out, hanya nampak selepas pemilik luluskan -->
+    <div class="card" id="baucar-saya-card">
+      <div class="card-title">🧾 Baucar Saya</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Baucar harian dijana automatik sebaik anda Thumb Out — akan muncul di sini sebaik pemilik semak & luluskan.</div>
+      <div class="form-group"><input type="month" class="form-input" id="baucar-saya-bulan" onchange="renderBaucarSaya()" /></div>
+      <div id="baucar-saya-list"></div>
+    </div>
+
     <!-- Serahan Duit Cash (pekerja kumpul & serah cash bila-bila masa, boleh bawa ke hari lain) -->
     <div class="card" id="serahan-cash-card">
       <div class="card-title">💵 Serahan Duit Cash</div>
@@ -1823,7 +1831,7 @@ async function showApp() {
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
   document.getElementById('nav-analisis').style.display = currentRole==='pekerja' ? 'none' : '';
 
-  loadSettings();
+  await loadSettings();
   await loadData();
   muatTetapanDiskaunUntukHantar();
   if (currentRole==='pemilik') await muatProfilNamaCache();
@@ -1881,6 +1889,8 @@ async function setPage(p) {
     document.getElementById('profil-telefon').value = DATA.currentUser?.telefon || '';
     if (!document.getElementById('upah-saya-bulan').value) document.getElementById('upah-saya-bulan').value = bulanTempatan();
     renderUpahSaya();
+    if (!document.getElementById('baucar-saya-bulan').value) document.getElementById('baucar-saya-bulan').value = bulanTempatan();
+    renderBaucarSaya();
     loadSerahanCashSaya();
     renderSenaraiCutiSaya();
     if (currentRole==='pemilik') {
@@ -4706,6 +4716,40 @@ async function janaBaucarHarian() {
   await renderBaucarList();
 }
 
+// Baucar Saya (pekerja) — tapis status != 'draf' supaya baucar auto-jana (Thumb Out)
+// kekal tersembunyi sehingga pemilik luluskan; "wujud di akaun pekerja" seperti diminta.
+async function renderBaucarSaya() {
+  const el = document.getElementById('baucar-saya-list');
+  if (!el) return;
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const bulan = document.getElementById('baucar-saya-bulan').value;
+  const { data, error } = await sb.from('baucar_bayaran').select('*').eq('pekerja_id', DATA.currentUser.id).eq('bulan', bulan).neq('status','draf').order('no_siri');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  BAUCAR_CACHE = data || [];
+  if (!PROFIL_NAMA_CACHE[DATA.currentUser.id]) PROFIL_NAMA_CACHE[DATA.currentUser.id] = DATA.currentUser.nama;
+  el.innerHTML = BAUCAR_CACHE.map(v => `
+    <div class="list-item" style="display:block">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div>
+          <div class="list-item-title">${esc(v.no_siri)} · ${BAUCAR_KATEGORI_LABEL[v.kategori]||v.kategori}</div>
+          <div class="list-item-sub">${v.tarikh?fmtD(v.tarikh):v.bulan}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="list-item-val">${fmt(v.kategori==='upah_harian'?v.baki:v.jumlah)}</div>
+          <span class="badge ${v.status==='dibayar'?'badge-green':'badge-teal'}">${BAUCAR_STATUS_LABEL[v.status]}</span>
+        </div>
+      </div>
+      ${v.kategori==='upah_harian'?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;background:var(--bg);border-radius:6px;padding:6px 8px">
+        ${v.butiran?`<div style="margin-bottom:4px">Upah ${fmt(v.butiran.upah)} + Minyak ${fmt(v.butiran.minyak)} (${(v.butiran.km||0).toFixed(1)}km) + Makan ${fmt(v.butiran.makan)} + Bonus ${fmt(v.butiran.bonus)}${v.butiran.upahEdagang?` + E-dagang ${fmt(v.butiran.upahEdagang)}`:''}</div>`:''}
+        Jumlah Upah ${fmt(v.jumlah)} − Cash ditangan ${fmt(v.cash_ditangan)} = <strong style="color:${v.baki>=0?'var(--green)':'var(--red)'}">${v.baki>=0?'Baki pemilik transfer':'Anda perlu serah lebihan'} ${fmt(Math.abs(v.baki))}</strong>
+      </div>`:''}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-secondary btn-sm" onclick="cetakBaucar('${v.id}')">🖨️ Cetak</button>
+        <button class="btn btn-gold btn-sm" onclick="muatTurunBaucarPDF('${v.id}')">📄 PDF</button>
+      </div>
+    </div>`).join('') || '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Tiada baucar diluluskan untuk bulan ini lagi</div></div>';
+}
+
 async function renderBaucarList() {
   const el = document.getElementById('baucar-list');
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
@@ -5069,17 +5113,32 @@ function bonusKedaiEvents(kedaiId) {
   return events;
 }
 
-function loadSettings() {
+async function loadSettings() {
   // Gabung dengan default — supaya medan BAHARU tetap ada nilai munasabah walaupun
   // localStorage peranti ini simpan tetapan versi lama.
   SETTINGS = { ...SETTINGS_DEF, ...(JSON.parse(localStorage.getItem('wafi_settings') || 'null') || {}) };
+  // Kadar SEBENAR disimpan di jadual "tetapan" (sejagat, semua akaun boleh baca) —
+  // localStorage cuma cache/fallback offline. Perlu supaya PEKERJA (peranti lain,
+  // tiada localStorage pemilik) dapat kadar yang SAMA bila auto-jana baucar harian
+  // sendiri selepas Thumb Out.
+  if (useCloud) {
+    const { data } = await sb.from('tetapan').select('minyak_rm_km,makan_rm_hari,upah_kedai_baru_bayar,upah_kedai_baru_consignment').eq('id',1).single();
+    if (data) {
+      SETTINGS = {
+        minyak: data.minyak_rm_km ?? SETTINGS.minyak,
+        makan: data.makan_rm_hari ?? SETTINGS.makan,
+        upahKedaiBaruBayar: data.upah_kedai_baru_bayar ?? SETTINGS.upahKedaiBaruBayar,
+        upahKedaiBaruConsignment: data.upah_kedai_baru_consignment ?? SETTINGS.upahKedaiBaruConsignment,
+      };
+    }
+  }
   document.getElementById('set-minyak').value = SETTINGS.minyak;
   document.getElementById('set-makan').value = SETTINGS.makan;
   document.getElementById('set-upah-kedai-baru-bayar').value = SETTINGS.upahKedaiBaruBayar;
   document.getElementById('set-upah-kedai-baru-consignment').value = SETTINGS.upahKedaiBaruConsignment;
 }
 
-function saveSettings() {
+async function saveSettings() {
   SETTINGS = {
     minyak: +document.getElementById('set-minyak').value || 0,
     makan: +document.getElementById('set-makan').value || 0,
@@ -5087,6 +5146,13 @@ function saveSettings() {
     upahKedaiBaruConsignment: +document.getElementById('set-upah-kedai-baru-consignment').value || 0,
   };
   localStorage.setItem('wafi_settings', JSON.stringify(SETTINGS));
+  if (useCloud) {
+    const { error } = await sb.from('tetapan').update({
+      minyak_rm_km: SETTINGS.minyak, makan_rm_hari: SETTINGS.makan,
+      upah_kedai_baru_bayar: SETTINGS.upahKedaiBaruBayar, upah_kedai_baru_consignment: SETTINGS.upahKedaiBaruConsignment,
+    }).eq('id', 1);
+    if (error) return toast('Gagal simpan tetapan ke server: '+error.message,'err');
+  }
   renderLaporan();
   toast('Tetapan kos dikemaskini');
 }
@@ -6705,6 +6771,7 @@ async function thumbOut() {
   const ok = await sahkanWebAuthn();
   if (!ok) return;
   const pos = await getGpsPosition();
+  const { data: sesiSemasa } = await sb.from('kehadiran').select('thumb_in_masa').eq('id', kehadiranAktif.id).single();
   const { error } = await sb.from('kehadiran').update({
     thumb_out_masa: new Date().toISOString(), thumb_out_lat: pos?.lat, thumb_out_lng: pos?.lng, status: 'selesai',
   }).eq('id', kehadiranAktif.id);
@@ -6714,6 +6781,24 @@ async function thumbOut() {
   localStorage.removeItem('wafi_kehadiran_aktif');
   toast('Thumb Out berjaya — kerja tamat');
   renderKehadiranStatus();
+  janaBaucarHarianAutomatik(sesiSemasa?.thumb_in_masa);
+}
+
+// Auto-jana draf Baucar Harian sebaik Thumb Out — pemilik tak perlu generate manual
+// setiap pekerja/hari. Kekal berstatus DRAF sehingga pemilik semak & luluskan (lihat
+// cipta_baucar_harian) — pekerja TAK nampak baucar sendiri sehingga diluluskan
+// (renderBaucarSaya() tapis status != 'draf'). Gagal senyap (tak ganggu Thumb Out)
+// sebab ini sekadar automasi bookkeeping, bukan tindakan kritikal thumb-out itu sendiri.
+async function janaBaucarHarianAutomatik(thumbInMasa) {
+  if (!useCloud) return;
+  try {
+    const tarikh = thumbInMasa ? tarikhTempatan(thumbInMasa) : tarikhTempatan();
+    const { jumlah, butiran } = await kiraUpahPenuhHari(DATA.currentUser.id, tarikh);
+    if (jumlah <= 0) return; // tiada kerja sebenar hari ni — elak baucar kosong
+    await sb.rpc('cipta_baucar_harian', { p_pekerja_id: DATA.currentUser.id, p_tarikh: tarikh, p_jumlah: jumlah, p_butiran: butiran });
+  } catch (e) {
+    console.log('Auto-jana baucar harian gagal (senyap):', e);
+  }
 }
 
 // GPS "on" berterusan (watchPosition) sepanjang Thumb In hingga Thumb Out.
