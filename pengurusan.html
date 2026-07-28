@@ -899,6 +899,18 @@
         <button class="btn btn-primary btn-sm" onclick="janaBaucarHarian()">🧮 Jana Baucar Harian</button>
       </div>
 
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tapis Pekerja</label>
+          <select class="form-input" id="baucar-filter-pekerja" onchange="renderBaucarList()">
+            <option value="">Semua Pekerja</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Tapis Tarikh</label><input type="date" class="form-input" id="baucar-filter-tarikh" onchange="renderBaucarList()" /></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div id="baucar-sub-tapis" style="font-size:11px;color:var(--muted)"></div>
+        <button class="btn-link" style="font-size:11px" onclick="document.getElementById('baucar-filter-pekerja').value='';document.getElementById('baucar-filter-tarikh').value='';renderBaucarList()">✕ Padam Tapisan</button>
+      </div>
       <div id="baucar-list"></div>
       <div id="baucar-print-preview"></div>
     </div>
@@ -4698,16 +4710,29 @@ async function renderBaucarList() {
   const el = document.getElementById('baucar-list');
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
   const pekerjaSel = document.getElementById('bh-pekerja');
+  const filterPekerjaSel = document.getElementById('baucar-filter-pekerja');
   if (pekerjaSel && !pekerjaSel.options.length) {
     const { data: pekerjaList } = await sb.from('profiles').select('id,nama').eq('role','pekerja');
     pekerjaSel.innerHTML = (pekerjaList||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('') || '<option value="">-- Tiada pekerja --</option>';
+    if (filterPekerjaSel) filterPekerjaSel.innerHTML = '<option value="">Semua Pekerja</option>' + ((pekerjaList||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join(''));
   }
   const bulan = document.getElementById('baucar-bulan').value;
   const { data, error } = await sb.from('baucar_bayaran').select('*').eq('bulan', bulan).order('no_siri');
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   BAUCAR_CACHE = data || [];
   if (BAUCAR_CACHE.length && !Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
-  el.innerHTML = BAUCAR_CACHE.map(v => `
+
+  // Tapis ikut pekerja & tarikh — elak senarai jadi terlalu panjang bila banyak
+  // baucar harian dijana merentasi ramai pekerja dalam bulan yang sama.
+  const pekerjaPilih = filterPekerjaSel?.value || '';
+  const tarikhPilih = document.getElementById('baucar-filter-tarikh')?.value || '';
+  let list = BAUCAR_CACHE;
+  if (pekerjaPilih) list = list.filter(v=>v.pekerja_id===pekerjaPilih);
+  if (tarikhPilih) list = list.filter(v=>v.tarikh===tarikhPilih);
+  const subTapisEl = document.getElementById('baucar-sub-tapis');
+  if (subTapisEl) subTapisEl.textContent = (pekerjaPilih||tarikhPilih) ? `Menapis: ${list.length} daripada ${BAUCAR_CACHE.length} baucar` : '';
+
+  el.innerHTML = list.map(v => `
     <div class="list-item" style="display:block">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <div>
@@ -4740,7 +4765,9 @@ async function renderBaucarList() {
         <button class="btn btn-whatsapp btn-sm" onclick="hantarBaucarWhatsapp('${v.id}')">📱 WhatsApp Pekerja</button>
         ${ikonPadam(`padamBaucarBayaran('${v.id}','${esc(v.no_siri)}')`, 'baucar_bayaran', v.id, `Baucar ${v.no_siri}`, 'Padam baucar', 'position:static')}
       </div>
-    </div>`).join('') || '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Tiada baucar untuk bulan ini — tekan "Jana Baucar Bulan Ini" dalam Laporan</div></div>';
+    </div>`).join('') || (pekerjaPilih||tarikhPilih
+      ? '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Tiada baucar sepadan dengan tapisan ini</div></div>'
+      : '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Tiada baucar untuk bulan ini — tekan "Jana Baucar Bulan Ini" dalam Laporan</div></div>');
 }
 
 async function padamBaucarBayaran(id, noSiri) {
