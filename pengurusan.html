@@ -2554,6 +2554,15 @@ async function renderSenaraiRoute() {
   if (tempohPilih === 'tiada') kedaiTapis = kedaiTapis.filter(k=>!tarikhServis(k));
   else if (tempohPilih) kedaiTapis = kedaiTapis.filter(k=>tarikhServis(k) && daysSince(tarikhServis(k))>=(+tempohPilih));
 
+  // Susun ikut tempoh paling lama tak servis dahulu (belum pernah = paling atas) —
+  // senang pekerja/pemilik nampak terus kedai mana paling perlu dilawat.
+  kedaiTapis = [...kedaiTapis].sort((a,b) => {
+    const ta = tarikhServis(a), tb = tarikhServis(b);
+    const da = ta ? daysSince(ta) : Infinity;
+    const db = tb ? daysSince(tb) : Infinity;
+    return db - da;
+  });
+
   el.innerHTML = (routes||[]).map(r => {
     const kedaiDalamRoute = DATA.kedai.filter(k=>k.route_id===r.id);
     return `<div class="list-item" style="display:block">
