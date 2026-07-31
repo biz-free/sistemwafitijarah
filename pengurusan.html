@@ -3594,9 +3594,18 @@ async function renderSerahanProdukSemua() {
       const fnSahkan = isAmbil ? `ubahStatusAmbilStok('${r.id}','disahkan')` : `ubahStatusSerahanProduk('${r.id}','disahkan')`;
       const fnTolak = isAmbil ? `ubahStatusAmbilStok('${r.id}','ditolak')` : `ubahStatusSerahanProduk('${r.id}','ditolak')`;
       const subLabel = isAmbil ? (r.sebab ? '📥 '+r.sebab : '📥 Minta Ambil Stok') : (SERAHAN_PRODUK_SEBAB_TXT[r.sebab]||r.sebab||'');
+      // Ambil Stok sahaja boleh edit kuantiti sebelum sahkan — kadang perlu ditambah/
+      // dikurangkan drpd apa pekerja mohon asal (cth: stok gudang tak cukup).
+      const stokGudang = isAmbil ? DATA.stok.find(s=>s.id===r.stok_id) : null;
       return `
       <div class="list-item" style="display:block;border-left:3px solid var(--gold);padding-left:8px;margin-bottom:8px">
-        <div><div class="list-item-title">${esc(namaPekerja(r.pekerja_id))} — ${esc(r.stok_nama)} ×${r.kuantiti}</div><div class="list-item-sub">${subLabel} · ${fmtDT(r.created_at)}</div></div>
+        <div><div class="list-item-title">${esc(namaPekerja(r.pekerja_id))} — ${esc(r.stok_nama)}${isAmbil?'':' ×'+r.kuantiti}</div><div class="list-item-sub">${subLabel} · ${fmtDT(r.created_at)}</div></div>
+        ${isAmbil?`<div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">
+          <label style="font-size:11px;color:var(--muted)">Kuantiti:</label>
+          <input type="number" min="1" value="${r.kuantiti}" id="rs-qty-${r.id}" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-weight:800;text-align:center" />
+          <button class="btn btn-secondary btn-sm" style="width:auto;padding:4px 10px" onclick="kemaskiniKuantitiAmbilStok('${r.id}')">💾 Simpan</button>
+          ${stokGudang?`<span style="font-size:10px;color:var(--muted)">(baki gudang: ${stokGudang.stok} ${esc(stokGudang.unit||'')})</span>`:''}
+        </div>`:''}
         <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
           ${!isAmbil?(r.gambar_url?`<button class="btn btn-secondary btn-sm" style="width:auto" onclick="lihatGambarSerahanProduk('${esc(r.gambar_url)}')">📎 Gambar</button>`:'<span style="font-size:11px;color:var(--red)">⚠️ Tiada gambar</span>'):''}
           <button class="btn btn-primary btn-sm" style="width:auto" onclick="${fnSahkan}">✅ Sahkan</button>
@@ -3634,6 +3643,19 @@ async function ubahStatusAmbilStok(id, status) {
   toast(status==='disahkan' ? '✅ Permohonan ambil stok disahkan — stok dipindah ke pekerja' : '✕ Permohonan ambil stok ditolak');
   await renderSerahanProdukSemua();
   await loadData(); // stok gudang berubah bila disahkan
+}
+
+// Pemilik boleh tambah/kurangkan kuantiti permohonan Ambil Stok SEBELUM sahkan —
+// cth: stok gudang tak cukup utk penuhi kuantiti asal pekerja mohon. Hanya berkesan
+// selagi permohonan masih 'menunggu' (RPC tolak kalau dah disahkan/ditolak).
+async function kemaskiniKuantitiAmbilStok(id) {
+  const input = document.getElementById(`rs-qty-${id}`);
+  const qty = +input.value;
+  if (!qty || qty < 1) return toast('Kuantiti tidak sah','err');
+  const { error } = await sb.rpc('kemaskini_kuantiti_ambil_stok', { p_id: id, p_kuantiti: qty });
+  if (error) return toast('Gagal kemaskini kuantiti: '+error.message,'err');
+  toast('✅ Kuantiti dikemaskini — sila semak & sahkan');
+  await renderSerahanProdukSemua();
 }
 
 // Tab Stok > Gudang (pemilik sahaja): sejarah pergerakan yang jejas stok gudang
