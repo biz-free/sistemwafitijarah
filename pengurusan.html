@@ -3244,7 +3244,7 @@ async function renderStokMobileSemua() {
     const subNilai = rows.reduce((a,r)=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return a+(s?s.harga_jual*r.kuantiti:0); },0);
     return `<div class="list-item" style="display:block">
       <div class="list-item-title" style="margin-bottom:4px;display:flex;justify-content:space-between"><span>${esc(namaPekerja(pid))}</span><span style="color:var(--muted);font-weight:400">${subUnit} unit · ${fmt(subNilai)}</span></div>
-      ${rows.map(r=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return `<div style="font-size:11px;color:var(--muted);display:flex;justify-content:space-between"><span>${esc(s?.nama||r.stok_id)}</span><span>${r.kuantiti} ${esc(s?.unit||'')}</span></div>`; }).join('')}
+      ${rows.map(r=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return `<div style="font-size:11px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:6px"><span>${esc(s?.nama||r.stok_id)}</span><span style="display:flex;align-items:center;gap:6px;flex-shrink:0"><span>${r.kuantiti} ${esc(s?.unit||'')}</span><button class="btn-delete-icon" style="position:static;background:var(--teal)" title="Pulangkan ke gudang" onclick="pulangkanStokPekerjaPemilik('${pid}','${r.stok_id}',${r.kuantiti})">↩️</button></span></div>`; }).join('')}
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-text">Tiada pekerja bawa stok buat masa ini</div></div>';
 
@@ -3297,6 +3297,23 @@ async function pindahStokPekerja() {
   document.getElementById('pindah-qty').value='';
   await renderStokMobileSemua();
   toast('Stok berjaya dipindahkan antara pekerja');
+}
+
+// Pemilik paksa pulangkan stok bawaan SESEORANG pekerja terus ke gudang (↩️ di kad
+// "Stok Bawaan Semua Pekerja") — beza dgn pulangStok() yang self-service (pekerja
+// pulangkan bawaan sendiri sahaja).
+async function pulangkanStokPekerjaPemilik(pekerjaId, stokId, qtySedia) {
+  const s = DATA.stok.find(x=>x.id===stokId);
+  const nama = s?.nama || stokId;
+  const input = prompt(`Pulangkan "${nama}" ke gudang bagi pihak pekerja ini.\n\nBaki bawaan semasa: ${qtySedia} ${s?.unit||''}\nMasukkan kuantiti nak pulangkan:`, qtySedia);
+  if (input === null) return;
+  const qty = +input;
+  if (!qty || qty < 1 || qty > qtySedia) return toast('Kuantiti tidak sah','err');
+  const { error } = await sb.rpc('pulangkan_stok_pekerja_pemilik', { p_pekerja_id: pekerjaId, p_stok_id: stokId, p_qty: qty });
+  if (error) return toast('Gagal pulangkan stok: '+error.message,'err');
+  await loadData();
+  await renderStokMobileSemua();
+  toast(`✅ ${qty} unit "${nama}" dipulangkan ke gudang`);
 }
 
 function bukaModalAmbilStok() {
@@ -6399,27 +6416,49 @@ async function renderUpahSaya() {
   const hariList = [...new Set([...fil.map(t=>(t.tarikh_masa||'').slice(0,10)), ...kedaiSayaBonus.map(x=>(x.tarikh_masa||'').slice(0,10)), ...edagangSaya.map(o=>(o.updated_at||o.created_at||'').slice(0,10))])].sort();
   const hariLayakMakan = await kiraHariLayakMakan(bulan+'-01T00:00:00', akhirBulanISO(bulan), DATA.currentUser.id);
   const hariKerja = hariLayakMakan.size;
-  const kosUpah = fil.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
-  const kosMinyak = jumlahKm*SETTINGS.minyak;
-  const kosMakan = hariKerja*SETTINGS.makan;
-  const kosKedaiBaru = kedaiSayaBonus.reduce((a,x)=>a+x.jumlah,0);
-  const kosUpahEdagang = edagangSaya.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
-  const jumlahUpah = kosUpah+kosMinyak+kosMakan+kosKedaiBaru+kosUpahEdagang;
+
+  // Hari yang SUDAH ada baucar harian dijana (draf/diluluskan/dibayar) mesti papar
+  // jumlah FROZEN yang disimpan dalam baucar tu, bukan kira semula ikut SETTINGS
+  // (minyak/makan/bonus) terkini — kadar ini nilai global "live" tanpa sejarah, jadi
+  // bila pemilik tukar kadar selepas baucar dijana, hari lampau yang dikira semula
+  // jadi tak padan dgn apa yang SEBENARNYA dibayar. Lihat siasatan PV-2026-0012
+  // (Aremier Ali) — km sama tapi kadar minyak berubah drpd RM0.50 → RM0.60 selepas
+  // baucar dijana, punca RM334.37 (dibayar) vs RM345.65 (dipaparkan) berbeza.
+  const { data: baucarHarianBulan } = await sb.from('baucar_bayaran').select('tarikh,jumlah,butiran').eq('pekerja_id', DATA.currentUser.id).eq('kategori','upah_harian').eq('bulan', bulan);
+  const baucarIkutTarikh = {};
+  (baucarHarianBulan||[]).forEach(v => { baucarIkutTarikh[v.tarikh] = v; });
 
   // Pecahan dibayar mengikut hari — setiap hari kerja dikira berasingan (upah + minyak + makan + bonus kedai + upah e-dagang hari itu)
   const pecahanHarian = hariList.map(tarikh => {
     const filHari = fil.filter(t=>(t.tarikh_masa||'').slice(0,10)===tarikh);
-    const upahHari = filHari.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
-    const kmHari = kmIkutHari[`${DATA.currentUser.id}|${tarikh}`] || 0;
     const kedaiListHari = kedaiSayaBonus.filter(x=>(x.tarikh_masa||'').slice(0,10)===tarikh);
     const kedaiHari = new Set(kedaiListHari.map(x=>x.kedai.id)).size;
-    const bonusKedaiHari = kedaiListHari.reduce((a,x)=>a+x.jumlah,0);
     const edagangHari = edagangSaya.filter(o=>(o.updated_at||o.created_at||'').slice(0,10)===tarikh);
-    const upahEdagangHari = edagangHari.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
-    const makanHari = hariLayakMakan.has(`${DATA.currentUser.id}|${tarikh}`) ? SETTINGS.makan : 0;
-    const jumlahHari = upahHari + kmHari*SETTINGS.minyak + makanHari + bonusKedaiHari + upahEdagangHari;
-    return { tarikh, bil: filHari.length, kedaiHari, edagangBil: edagangHari.length, jumlahHari };
+    const voucher = baucarIkutTarikh[tarikh];
+    let upahHari, minyakHari, makanHari, bonusKedaiHari, upahEdagangHari;
+    if (voucher) {
+      const b = voucher.butiran||{};
+      upahHari = +b.upah||0; minyakHari = +b.minyak||0; makanHari = +b.makan||0; bonusKedaiHari = +b.bonus||0; upahEdagangHari = +b.upahEdagang||0;
+    } else {
+      upahHari = filHari.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
+      const kmHari = kmIkutHari[`${DATA.currentUser.id}|${tarikh}`] || 0;
+      minyakHari = kmHari*SETTINGS.minyak;
+      bonusKedaiHari = kedaiListHari.reduce((a,x)=>a+x.jumlah,0);
+      upahEdagangHari = edagangHari.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
+      makanHari = hariLayakMakan.has(`${DATA.currentUser.id}|${tarikh}`) ? SETTINGS.makan : 0;
+    }
+    const jumlahHari = voucher ? voucher.jumlah : (upahHari + minyakHari + makanHari + bonusKedaiHari + upahEdagangHari);
+    return { tarikh, bil: filHari.length, kedaiHari, edagangBil: edagangHari.length, upahHari, minyakHari, makanHari, bonusKedaiHari, upahEdagangHari, jumlahHari, frozen: !!voucher };
   }).sort((a,b)=>b.tarikh.localeCompare(a.tarikh));
+
+  // Jumlah bulanan kini SUM drpd pecahan harian (bukan kira berasingan) — supaya
+  // jumlah header sentiasa padan dgn senarai "dibayar mengikut hari" di bawah.
+  const kosUpah = pecahanHarian.reduce((a,h)=>a+h.upahHari,0);
+  const kosMinyak = pecahanHarian.reduce((a,h)=>a+h.minyakHari,0);
+  const kosMakan = pecahanHarian.reduce((a,h)=>a+h.makanHari,0);
+  const kosKedaiBaru = pecahanHarian.reduce((a,h)=>a+h.bonusKedaiHari,0);
+  const kosUpahEdagang = pecahanHarian.reduce((a,h)=>a+h.upahEdagangHari,0);
+  const jumlahUpah = kosUpah+kosMinyak+kosMakan+kosKedaiBaru+kosUpahEdagang;
 
   document.getElementById('upah-saya-output').innerHTML = `
     <div class="list-item"><div class="list-item-title">Bilangan Penghantaran</div><div class="list-item-val">${fil.length}</div></div>
@@ -6431,7 +6470,7 @@ async function renderUpahSaya() {
     <div class="total-box" style="margin-top:10px"><span class="total-label">JUMLAH UPAH ANDA</span><span class="total-val">${fmt(jumlahUpah)}</span></div>
     <div class="divider" style="margin:14px 0"></div>
     <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">💰 DIBAYAR MENGIKUT HARI</div>
-    ${pecahanHarian.map(h=>`<div class="list-item"><div><div class="list-item-title">${fmtD(h.tarikh)}</div><div class="list-item-sub">${h.bil} penghantaran${h.kedaiHari?` · ${h.kedaiHari} kedai baru`:''}${h.edagangBil?` · ${h.edagangBil} e-dagang`:''}</div></div><div class="list-item-val">${fmt(h.jumlahHari)}</div></div>`).join('') || '<div class="empty"><div class="empty-text">Tiada hari kerja dalam bulan ini</div></div>'}`;
+    ${pecahanHarian.map(h=>`<div class="list-item"><div><div class="list-item-title">${fmtD(h.tarikh)}</div><div class="list-item-sub">${h.bil} penghantaran${h.kedaiHari?` · ${h.kedaiHari} kedai baru`:''}${h.edagangBil?` · ${h.edagangBil} e-dagang`:''}${h.frozen?' · 🧾 baucar dijana':''}</div></div><div class="list-item-val">${fmt(h.jumlahHari)}</div></div>`).join('') || '<div class="empty"><div class="empty-text">Tiada hari kerja dalam bulan ini</div></div>'}`;
 }
 
 // ════════════════════════════════════════════════════
