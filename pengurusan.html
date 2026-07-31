@@ -405,6 +405,20 @@
       <div id="preorder-saya-stok-list"></div>
     </div>
 
+    <!-- Request Stok Mobile (pekerja sahaja) — sekadar MAKLUMAN via WhatsApp kepada
+    pemilik, TIADA kaitan/pergerakan dgn stok sebenar (bukan Ambil Stok). -->
+    <div class="card" id="request-stok-mobile-card" style="border-left:4px solid var(--purple);display:none">
+      <div class="card-title" style="color:var(--purple)">📢 Request Stok Mobile</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Maklumkan pemilik stok yang anda perlukan untuk pick up — ciri ini TIDAK memindahkan stok secara automatik, cuma hantar mesej WhatsApp kepada pemilik.</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tarikh Pick Up</label><input type="date" class="form-input" id="rsm-tarikh" /></div>
+        <div class="form-group"><label class="form-label">Masa Pick Up</label><input type="time" class="form-input" id="rsm-masa" /></div>
+      </div>
+      <div id="rsm-items"></div>
+      <button class="btn btn-secondary btn-sm" onclick="addRsmItem()" style="margin-top:8px">+ Tambah Produk</button>
+      <button class="btn btn-whatsapp" style="width:100%;margin-top:12px" onclick="hantarRequestStokMobile()">📱 Request via WhatsApp</button>
+    </div>
+
     <div class="stat-grid" id="stat-grid">
       <div class="stat-box"><div class="stat-icon">🏪</div><div class="stat-label">Kedai Aktif</div><div class="stat-val" id="s-kedai" style="color:var(--teal)">—</div></div>
       <div class="stat-box"><div class="stat-icon">💰</div><div class="stat-label" id="s-hasil-label">Hasil Diterima</div><div class="stat-val" id="s-hasil" style="color:var(--green)">—</div></div>
@@ -2037,6 +2051,7 @@ function renderDashboard() {
   renderKehadiranStatus();
   renderTugasanBaru();
   renderPreorderSaya();
+  renderRequestStokMobileCard();
   renderJualanPekerjaHariIni();
   renderCashDipegangDashboard();
   kemaskiniNotifikasi();
@@ -4106,6 +4121,55 @@ async function renderPreorderSaya() {
   listEl.innerHTML = Object.entries(jumlahProduk).sort((a,b)=>b[1]-a[1]).map(([nama,qty])=>
     `<div class="list-item"><div class="list-item-title">${esc(nama)}</div><div class="list-item-val">${qty}</div></div>`
   ).join('') || '<div class="empty"><div class="empty-text">Tiada pre-order tertunggak buat masa ini</div></div>';
+}
+
+// ════════════════════════════════════════════════════
+//  REQUEST STOK MOBILE (pekerja sahaja) — sekadar MAKLUMAN via WhatsApp kepada
+//  pemilik, TIADA kaitan dgn stok_pekerja/stok gudang sebenar (bukan Ambil Stok).
+//  Tujuan: maklumkan awal stok yang bakal diperlukan supaya pemilik boleh sediakan.
+// ════════════════════════════════════════════════════
+let rsmItems = [{ stokId:'', qty:1 }];
+
+function renderRequestStokMobileCard() {
+  const card = document.getElementById('request-stok-mobile-card');
+  if (!card) return;
+  if (currentRole !== 'pekerja') { card.style.display = 'none'; return; }
+  card.style.display = '';
+  if (!document.getElementById('rsm-tarikh').value) document.getElementById('rsm-tarikh').value = tarikhTempatan();
+  renderRsmItems();
+}
+
+function renderRsmItems() {
+  document.getElementById('rsm-items').innerHTML = rsmItems.map((it,i)=>{
+    return `<div class="item-row">
+      <select class="form-input" onchange="updRsmItem(${i},'stokId',this.value)">
+        <option value="">-- Pilih produk --</option>
+        ${DATA.stok.filter(s=>s.aktif!==false||it.stokId===s.id).map(s=>`<option value="${s.id}" ${it.stokId===s.id?'selected':''}>${esc(s.nama)}</option>`).join('')}
+      </select>
+      <input type="number" class="form-input" min="1" value="${it.qty}" onchange="updRsmItem(${i},'qty',this.value)" />
+      ${rsmItems.length>1?`<button class="btn-remove" onclick="remRsmItem(${i})">✕</button>`:''}
+    </div>`;
+  }).join('');
+}
+function addRsmItem() { rsmItems.push({ stokId:'', qty:1 }); renderRsmItems(); }
+function remRsmItem(i) { rsmItems.splice(i,1); renderRsmItems(); }
+function updRsmItem(i,f,v) { rsmItems[i][f]=v; renderRsmItems(); }
+
+async function hantarRequestStokMobile() {
+  const tarikh = document.getElementById('rsm-tarikh').value;
+  const masa = document.getElementById('rsm-masa').value;
+  if (!tarikh || !masa) return toast('Sila isi tarikh & masa pick up','err');
+  const itemsSah = rsmItems.filter(it=>it.stokId && (+it.qty)>0);
+  if (!itemsSah.length) return toast('Sila pilih sekurang-kurangnya 1 produk','err');
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  const { data: pemilikProfil } = await sb.from('profiles').select('telefon').eq('role','pemilik').limit(1).single();
+  const tel = formatNoTelefonMY(pemilikProfil?.telefon);
+  if (!tel) return toast('No. telefon pemilik tiada — kemaskini profil pemilik dahulu','err');
+  const senaraiStr = itemsSah.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return `- ${s?.nama||it.stokId} × ${it.qty} ${s?.unit||''}`; }).join('\n');
+  const namaPekerja = DATA.currentUser?.nama || 'Pekerja';
+  const mesej = `Salam, saya *${namaPekerja}* ingin *request stok mobile* untuk pick up:\n\n📅 Tarikh: ${fmtD(tarikh)}\n🕒 Masa: ${masa}\n\n📦 Senarai Produk:\n${senaraiStr}\n\nMohon pemilik sediakan stok di atas. Terima kasih!`;
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`, '_blank');
+  toast('WhatsApp dibuka — hantar mesej kepada pemilik');
 }
 
 // Papan jualan semua pekerja hari ini — visible untuk SEMUA akaun pekerja (bukan pemilik
