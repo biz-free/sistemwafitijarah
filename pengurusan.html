@@ -4171,7 +4171,17 @@ async function hantarRequestStokMobile() {
   const itemsSah = rsmItems.filter(it=>it.stokId && (+it.qty)>0);
   if (!itemsSah.length) return toast('Sila pilih sekurang-kurangnya 1 produk','err');
   if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+
+  // Buka tab KOSONG SERTA-MERTA (sebelum sebarang await) — kalau window.open() dipanggil
+  // lepas await (RPC/fetch profil), browser anggap ia bukan lagi tindakan pengguna
+  // terus & SEKAT sebagai popup secara senyap (punca pemilik "tak terima" WhatsApp
+  // walaupun kod nampak betul). Tab ni diarah ke URL wa.me sebenar lepas kerja async siap.
+  const waTab = window.open('', '_blank');
+
   const nota = `Pick up dijadualkan ${fmtD(tarikh)}, ${masa}`;
+  const { data: pemilikProfil } = await sb.from('profiles').select('telefon').eq('role','pemilik').limit(1).single();
+  const tel = formatNoTelefonMY(pemilikProfil?.telefon);
+
   let bilangan = 0, ralat = 0, mesejRalat = '';
   for (let i=0; i<itemsSah.length; i++) {
     const it = itemsSah[i];
@@ -4181,17 +4191,17 @@ async function hantarRequestStokMobile() {
     if (error) { ralat++; mesejRalat = error.message; continue; }
     bilangan++;
   }
+
   // Permohonan berjaya masuk (medan sebab diisi) — trigger DB sengaja LANGKAU emel utk
   // laluan ni (lihat SQL_TAMBAHAN_74), jadi maklumkan pemilik via WhatsApp di sini.
-  if (bilangan) {
-    const { data: pemilikProfil } = await sb.from('profiles').select('telefon').eq('role','pemilik').limit(1).single();
-    const tel = formatNoTelefonMY(pemilikProfil?.telefon);
-    if (tel) {
-      const senaraiStr = itemsSah.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return `- ${s?.nama||it.stokId} × ${it.qty} ${s?.unit||''}`; }).join('\n');
-      const namaPekerja = DATA.currentUser?.nama || 'Pekerja';
-      const mesej = `Salam, saya *${namaPekerja}* ingin *request stok mobile* untuk pick up:\n\n📅 Tarikh: ${fmtD(tarikh)}\n🕒 Masa: ${masa}\n\n📦 Senarai Produk:\n${senaraiStr}\n\nPermohonan sudah dihantar dalam sistem — mohon pemilik approve. Terima kasih!`;
-      window.open(`https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`, '_blank');
-    }
+  if (bilangan && tel) {
+    const senaraiStr = itemsSah.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return `- ${s?.nama||it.stokId} × ${it.qty} ${s?.unit||''}`; }).join('\n');
+    const namaPekerja = DATA.currentUser?.nama || 'Pekerja';
+    const mesej = `Salam, saya *${namaPekerja}* ingin *request stok mobile* untuk pick up:\n\n📅 Tarikh: ${fmtD(tarikh)}\n🕒 Masa: ${masa}\n\n📦 Senarai Produk:\n${senaraiStr}\n\nPermohonan sudah dihantar dalam sistem — mohon pemilik approve. Terima kasih!`;
+    const waUrl = `https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`;
+    if (waTab) waTab.location.href = waUrl; else window.open(waUrl, '_blank');
+  } else if (waTab) {
+    waTab.close();
   }
   rsmItems = [{ stokId:'', qty:1 }];
   renderRsmItems();
