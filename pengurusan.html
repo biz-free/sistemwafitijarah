@@ -712,6 +712,10 @@
         <div class="card-title" style="color:var(--gold)">📦 Jumlah Produk — Status Diproses</div>
         <div id="edagang-diproses-list"></div>
       </div>
+      <div class="card" id="edagang-selesai-card" style="display:none;border-left:4px solid var(--green)">
+        <div class="card-title" style="color:var(--green)">📦 Jumlah Produk — Status Selesai</div>
+        <div id="edagang-selesai-list"></div>
+      </div>
       <div id="edagang-list"></div>
     </div>
   </div>
@@ -757,6 +761,26 @@
     <div class="card">
       <div class="card-title">🏆 Produk Paling Laris</div>
       <div id="an-produk-laris"></div>
+    </div>
+
+    <div class="card" id="rumusan-stok-card">
+      <div class="card-title">📦 Rumusan Stok Keluar Syarikat</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Jumlah stok keluar dari syarikat — gabung SEMUA transaksi kedai (termasuk hutang belum selesai) + pesanan e-dagang yang selesai, dalam julat bulan di atas.</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tapis Status</label>
+          <select class="form-input" id="rs-status" onchange="renderRumusanStokKeluar()">
+            <option value="">Semua (Transaksi + E-Dagang)</option>
+            <option value="trx_selesai">🏪 Transaksi Kedai — Selesai</option>
+            <option value="trx_hutang">🏪 Transaksi Kedai — Hutang</option>
+            <option value="edagang_selesai">🛒 E-Dagang — Selesai</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Tapis Pekerja</label>
+          <select class="form-input" id="rs-pekerja" onchange="renderRumusanStokKeluar()"><option value="">Semua Pekerja</option></select>
+        </div>
+      </div>
+      <div id="rs-ringkasan" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
+      <div id="rs-list"></div>
     </div>
 
     <div class="card">
@@ -4244,6 +4268,22 @@ async function renderEdagangList() {
     diprosesCard.style.display = 'none';
   }
 
+  // Jumlah produk ditempah status "Selesai" — sama corak dgn "Diproses" di atas.
+  const selesaiCard = document.getElementById('edagang-selesai-card');
+  if (currentRole==='pemilik') {
+    const selesai = list.filter(o=>o.status_pesanan==='selesai');
+    const jumlahProdukSelesai = {};
+    selesai.forEach(o => (o.items||[]).forEach(it => { jumlahProdukSelesai[it.nama] = (jumlahProdukSelesai[it.nama]||0) + (+it.qty||0); }));
+    const entriProdukSelesai = Object.entries(jumlahProdukSelesai).sort((a,b)=>b[1]-a[1]);
+    selesaiCard.style.display = selesai.length ? '' : 'none';
+    document.getElementById('edagang-selesai-list').innerHTML = entriProdukSelesai.length
+      ? `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${selesai.length} pesanan telah selesai</div>` +
+        entriProdukSelesai.map(([nama,qty])=>`<div class="list-item"><div class="list-item-title">${esc(nama)}</div><div class="list-item-val">${qty}</div></div>`).join('')
+      : '';
+  } else {
+    selesaiCard.style.display = 'none';
+  }
+
   el.innerHTML = list.map(o=>{
     const itemsStr = (o.items||[]).map(it=>`${it.nama} ×${it.qty}`).join(' · ');
     const pilihPekerjaSelect = currentRole==='pemilik' ? `
@@ -5153,6 +5193,63 @@ function renderAnalisis() {
   document.getElementById('an-bulanan-list').innerHTML = Object.entries(ikutBulan).sort((a,b)=>a[0].localeCompare(b[0])).map(([bln,d])=>
     `<div class="list-item"><div class="list-item-title">${bln}</div><div style="text-align:right;font-size:11px"><div>Jualan: ${fmt(d.jualan)}</div><div style="color:var(--gold)">Untung: ${fmt(d.untung)}</div></div></div>`
   ).join('') || '<div class="empty"><div class="empty-text">Tiada data dalam julat ini</div></div>';
+
+  renderRumusanStokKeluar();
+}
+
+// Rumusan stok keluar syarikat — gabung transaksi kedai (SEMUA status, termasuk
+// hutang belum selesai — stok dah keluar gudang tak kira status bayaran) dengan
+// pesanan e-dagang berstatus "selesai" sahaja, ditapis ikut bulan/status/pekerja.
+async function renderRumusanStokKeluar() {
+  const listEl = document.getElementById('rs-list');
+  if (!useCloud) { listEl.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  if (!Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
+
+  const dari = document.getElementById('an-dari').value;
+  const hingga = document.getElementById('an-hingga').value;
+  const statusPilih = document.getElementById('rs-status').value;
+  const pekerjaSel = document.getElementById('rs-pekerja');
+  const pekerjaPilih = pekerjaSel.value;
+
+  const trxDalamJulat = DATA.transaksi.filter(t=>{
+    const bln = (t.tarikh_masa||'').slice(0,7);
+    return bln >= dari && bln <= hingga;
+  });
+  const { data: edagangSemua } = await sb.from('pesanan_edagang').select('*').eq('status_pesanan','selesai');
+  const edagangDalamJulat = (edagangSemua||[]).filter(o=>{
+    const bln = (o.updated_at||o.created_at||'').slice(0,7);
+    return bln >= dari && bln <= hingga;
+  });
+
+  const idPekerja = [...new Set([...trxDalamJulat.map(t=>t.created_by), ...edagangDalamJulat.map(o=>o.assigned_pekerja_id)].filter(Boolean))];
+  pekerjaSel.innerHTML = '<option value="">Semua Pekerja</option>' + idPekerja.map(id=>`<option value="${id}" ${pekerjaPilih===id?'selected':''}>${esc(PROFIL_NAMA_CACHE[id]||id)}</option>`).join('');
+
+  let trxTapis = trxDalamJulat;
+  let edagangTapis = edagangDalamJulat;
+  if (statusPilih === 'trx_selesai') { trxTapis = trxTapis.filter(t=>t.status==='selesai'); edagangTapis = []; }
+  else if (statusPilih === 'trx_hutang') { trxTapis = trxTapis.filter(t=>t.status==='hutang'); edagangTapis = []; }
+  else if (statusPilih === 'edagang_selesai') { trxTapis = []; }
+  if (pekerjaPilih) {
+    trxTapis = trxTapis.filter(t=>t.created_by===pekerjaPilih);
+    edagangTapis = edagangTapis.filter(o=>o.assigned_pekerja_id===pekerjaPilih);
+  }
+
+  const jumlahProduk = {};
+  trxTapis.forEach(t=>t.items.forEach(it=>{
+    const s = DATA.stok.find(x=>x.id===it.stokId);
+    const nama = s?.nama || it.stokId;
+    jumlahProduk[nama] = (jumlahProduk[nama]||0) + (+it.qty||0);
+  }));
+  edagangTapis.forEach(o=>(o.items||[]).forEach(it=>{
+    jumlahProduk[it.nama] = (jumlahProduk[it.nama]||0) + (+it.qty||0);
+  }));
+
+  const entri = Object.entries(jumlahProduk).sort((a,b)=>b[1]-a[1]);
+  const jumlahUnit = entri.reduce((a,[,q])=>a+q,0);
+  document.getElementById('rs-ringkasan').textContent = `${trxTapis.length} transaksi kedai + ${edagangTapis.length} pesanan e-dagang selesai · ${jumlahUnit} unit stok keluar`;
+  listEl.innerHTML = entri.map(([nama,qty])=>
+    `<div class="list-item"><div class="list-item-title">${esc(nama)}</div><div class="list-item-val">${qty}</div></div>`
+  ).join('') || '<div class="empty"><div class="empty-text">Tiada stok keluar dalam julat/tapisan ini</div></div>';
 }
 
 function muatTurunCSV() {
