@@ -453,6 +453,22 @@
     </div>
 
     <div id="stok-mobile" style="display:none">
+      <!-- Request Stok Mobile (pekerja sahaja) — boleh hantar TANPA Thumb In. Senarai
+      request terus jadi permohonan "Ambil Stok" sebenar (sama seperti minta_ambil_stok),
+      pemilik cuma perlu approve lepas pekerja ambil stok secara fizikal. Pemilik
+      dimaklumkan via WHATSAPP (bukan emel) untuk laluan ini. -->
+      <div class="card" id="request-stok-mobile-card" style="border-left:4px solid var(--gold);display:none">
+        <div class="card-title" style="color:var(--gold)">📢 Request Stok Mobile</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Maklumkan stok yang anda perlukan + tarikh/masa nak pick up — akan masuk terus sebagai permohonan menunggu kelulusan pemilik (boleh hantar tanpa Thumb In).</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Tarikh Pick Up</label><input type="date" class="form-input" id="rsm-tarikh" /></div>
+          <div class="form-group"><label class="form-label">Masa Pick Up</label><input type="time" class="form-input" id="rsm-masa" /></div>
+        </div>
+        <div id="rsm-items"></div>
+        <button class="btn btn-secondary btn-sm" onclick="addRsmItem()" style="margin-top:8px">+ Tambah Produk</button>
+        <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="hantarRequestStokMobile()">📤 Hantar Request</button>
+      </div>
+
       <div class="card" style="border-left:4px solid var(--purple)">
         <div class="card-title" style="color:var(--purple)">🎒 Stok Bawaan Saya</div>
         <div id="stok-bawaan-ringkasan" style="display:flex;gap:8px;margin-bottom:10px"></div>
@@ -466,21 +482,6 @@
         <div class="divider" style="margin:14px 0"></div>
         <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SEJARAH SERAHAN SAYA</div>
         <div id="serahan-produk-saya-list"></div>
-      </div>
-
-      <!-- Request Stok Mobile (pekerja sahaja) — boleh hantar TANPA Thumb In. Senarai
-      request terus jadi permohonan "Ambil Stok" sebenar (sama seperti minta_ambil_stok),
-      pemilik cuma perlu approve lepas pekerja ambil stok secara fizikal. -->
-      <div class="card" id="request-stok-mobile-card" style="border-left:4px solid var(--gold);display:none">
-        <div class="card-title" style="color:var(--gold)">📢 Request Stok Mobile</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Maklumkan stok yang anda perlukan + tarikh/masa nak pick up — akan masuk terus sebagai permohonan menunggu kelulusan pemilik (boleh hantar tanpa Thumb In).</div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Tarikh Pick Up</label><input type="date" class="form-input" id="rsm-tarikh" /></div>
-          <div class="form-group"><label class="form-label">Masa Pick Up</label><input type="time" class="form-input" id="rsm-masa" /></div>
-        </div>
-        <div id="rsm-items"></div>
-        <button class="btn btn-secondary btn-sm" onclick="addRsmItem()" style="margin-top:8px">+ Tambah Produk</button>
-        <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="hantarRequestStokMobile()">📤 Hantar Request</button>
       </div>
 
       <div class="card" id="stok-mobile-semua-card">
@@ -4179,6 +4180,18 @@ async function hantarRequestStokMobile() {
     const { error } = await sb.rpc('minta_ambil_stok', { p_id: genId('AS')+'-'+i, p_stok_id: it.stokId, p_qty: +it.qty, p_sebab: nota });
     if (error) { ralat++; mesejRalat = error.message; continue; }
     bilangan++;
+  }
+  // Permohonan berjaya masuk (medan sebab diisi) — trigger DB sengaja LANGKAU emel utk
+  // laluan ni (lihat SQL_TAMBAHAN_74), jadi maklumkan pemilik via WhatsApp di sini.
+  if (bilangan) {
+    const { data: pemilikProfil } = await sb.from('profiles').select('telefon').eq('role','pemilik').limit(1).single();
+    const tel = formatNoTelefonMY(pemilikProfil?.telefon);
+    if (tel) {
+      const senaraiStr = itemsSah.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return `- ${s?.nama||it.stokId} × ${it.qty} ${s?.unit||''}`; }).join('\n');
+      const namaPekerja = DATA.currentUser?.nama || 'Pekerja';
+      const mesej = `Salam, saya *${namaPekerja}* ingin *request stok mobile* untuk pick up:\n\n📅 Tarikh: ${fmtD(tarikh)}\n🕒 Masa: ${masa}\n\n📦 Senarai Produk:\n${senaraiStr}\n\nPermohonan sudah dihantar dalam sistem — mohon pemilik approve. Terima kasih!`;
+      window.open(`https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`, '_blank');
+    }
   }
   rsmItems = [{ stokId:'', qty:1 }];
   renderRsmItems();
