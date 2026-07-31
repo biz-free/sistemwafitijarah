@@ -407,8 +407,8 @@
 
     <div class="stat-grid" id="stat-grid">
       <div class="stat-box"><div class="stat-icon">🏪</div><div class="stat-label">Kedai Aktif</div><div class="stat-val" id="s-kedai" style="color:var(--teal)">—</div></div>
-      <div class="stat-box"><div class="stat-icon">💰</div><div class="stat-label">Hasil Diterima</div><div class="stat-val" id="s-hasil" style="color:var(--green)">—</div></div>
-      <div class="stat-box"><div class="stat-icon">⚠️</div><div class="stat-label">Hutang</div><div class="stat-val" id="s-hutang" style="color:var(--red)">—</div></div>
+      <div class="stat-box"><div class="stat-icon">💰</div><div class="stat-label" id="s-hasil-label">Hasil Diterima</div><div class="stat-val" id="s-hasil" style="color:var(--green)">—</div></div>
+      <div class="stat-box"><div class="stat-icon">⚠️</div><div class="stat-label" id="s-hutang-label">Hutang</div><div class="stat-val" id="s-hutang" style="color:var(--red)">—</div></div>
       <div class="stat-box"><div class="stat-icon">📦</div><div class="stat-label">Produk</div><div class="stat-val" id="s-produk" style="color:var(--gold)">—</div></div>
       <div class="stat-box"><div class="stat-icon">💵</div><div class="stat-label" id="s-cash-label">Cash Dipegang</div><div class="stat-val" id="s-cash-pegang" style="color:var(--gold)">—</div></div>
     </div>
@@ -429,7 +429,7 @@
     <div class="section-title">📦 Stok Produk</div>
     <div class="section-sub" id="stok-sub">—</div>
 
-    <div style="display:flex;gap:0;background:var(--border);border-radius:10px;padding:3px;margin-bottom:14px">
+    <div id="stok-tab-switcher" style="display:flex;gap:0;background:var(--border);border-radius:10px;padding:3px;margin-bottom:14px">
       <button id="stab-gudang" onclick="setStokTab('gudang')" style="flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;background:var(--navy);color:#fff">🏢 Gudang</button>
       <button id="stab-mobile" onclick="setStokTab('mobile')" style="flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;background:transparent;color:var(--muted)">🎒 Mobile</button>
     </div>
@@ -439,7 +439,11 @@
         <button class="btn btn-primary" style="flex:1;margin-top:0;padding:11px" onclick="bukaModalStokBaru()">+ Produk Baru</button>
         <button class="btn btn-gold btn-sm" onclick="showModal('modal-restock')" style="padding:11px 14px">⚡ Restock</button>
       </div>
-      <input class="search-bar" placeholder="Cari produk..." oninput="renderStok(this.value)" />
+      <input class="search-bar" id="stok-search" placeholder="Cari produk..." oninput="renderStok(this.value)" />
+      <label id="stok-papar-tidak-aktif-wrap" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:8px 0 4px;cursor:pointer">
+        <input type="checkbox" id="stok-papar-tidak-aktif" onchange="renderStok(document.getElementById('stok-search').value)" />
+        Papar produk tidak aktif juga
+      </label>
       <div id="stok-list"></div>
       <div class="card" id="sejarah-stok-gudang-card">
         <div class="card-title">📜 Sejarah Pindahan Stok</div>
@@ -510,6 +514,10 @@
       <div class="form-row" style="margin-top:12px">
         <div class="form-group"><label class="form-label">Daerah</label><select class="form-input" id="kedai-filter-daerah" onchange="renderKedai(document.getElementById('kedai-search').value)"><option value="">Semua Daerah</option></select></div>
         <div class="form-group" id="kedai-filter-pendaftar-wrap" style="display:none"><label class="form-label">Didaftarkan Oleh</label><select class="form-input" id="kedai-filter-pendaftar" onchange="renderKedai(document.getElementById('kedai-search').value)"><option value="">Semua Pekerja</option></select></div>
+      </div>
+      <div class="form-group" id="kedai-filter-pekerja-hantar-wrap" style="display:none">
+        <label class="form-label">Tapis Ikut Pekerja (Pernah Hantar)</label>
+        <select class="form-input" id="kedai-filter-pekerja-hantar" onchange="renderKedai(document.getElementById('kedai-search').value)"><option value="">Semua Pekerja</option></select>
       </div>
       <div class="form-group">
         <label class="form-label">Tapis</label>
@@ -843,6 +851,23 @@
       <div id="serahan-cash-list"></div>
     </div>
 
+    <!-- Resit -->
+    <div class="card" id="resit-card">
+      <div class="card-title">🧾 Jana & Cetak Resit</div>
+      <div class="form-group">
+        <label class="form-label">Pilih Transaksi</label>
+        <select class="form-input" id="resit-sel" onchange="renderResit(this.value)">
+          <option value="">-- Pilih transaksi --</option>
+        </select>
+      </div>
+      <div id="resit-preview"></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="cetakResit()">🖨️ Cetak</button>
+        <button class="btn btn-gold" onclick="muatTurunResitPDF()">📄 Muat Turun PDF</button>
+      </div>
+      <button class="btn btn-whatsapp" style="width:100%;margin-top:8px" onclick="hantarResitWhatsapp()">📱 Hantar Resit via WhatsApp</button>
+    </div>
+
     <!-- Status Pekerja: Mohon Cuti/MC/Off -->
     <div class="card" id="status-pekerja-card">
       <div class="card-title">🗓️ Status Pekerja</div>
@@ -869,23 +894,6 @@
     <div class="card" id="kelulusan-cuti-card">
       <div class="card-title">✅ Kelulusan Permohonan Cuti</div>
       <div id="senarai-cuti-semua"></div>
-    </div>
-
-    <!-- Resit -->
-    <div class="card" id="resit-card">
-      <div class="card-title">🧾 Jana & Cetak Resit</div>
-      <div class="form-group">
-        <label class="form-label">Pilih Transaksi</label>
-        <select class="form-input" id="resit-sel" onchange="renderResit(this.value)">
-          <option value="">-- Pilih transaksi --</option>
-        </select>
-      </div>
-      <div id="resit-preview"></div>
-      <div class="btn-row">
-        <button class="btn btn-secondary" onclick="cetakResit()">🖨️ Cetak</button>
-        <button class="btn btn-gold" onclick="muatTurunResitPDF()">📄 Muat Turun PDF</button>
-      </div>
-      <button class="btn btn-whatsapp" style="width:100%;margin-top:8px" onclick="hantarResitWhatsapp()">📱 Hantar Resit via WhatsApp</button>
     </div>
 
     <!-- Cash Dipegang Semua Pekerja + Sahkan Serahan (pemilik sahaja) -->
@@ -1896,7 +1904,12 @@ async function setPage(p) {
     renderDashboard();
     document.getElementById('link-preorder').value = location.href.replace(/pengurusan\.html.*$/,'').replace(/\/$/,'') + '/pesan.html' + (DATA.currentUser?.id ? '?pekerja='+DATA.currentUser.id : '');
   }
-  if (p==='stok') { renderStok(); if (currentRole==='pemilik') renderSejarahStokGudang(); }
+  if (p==='stok') {
+    // Pekerja hanya perlu Stok Mobile (bawaan sendiri) — Gudang khusus pemilik.
+    document.getElementById('stok-tab-switcher').style.display = currentRole==='pemilik' ? 'flex' : 'none';
+    if (currentRole==='pemilik') { renderStok(); renderSejarahStokGudang(); }
+    else { setStokTab('mobile'); }
+  }
   if (p==='kedai') renderKedai();
   if (p==='hantar') {
     renderHantarSelects(); renderSejarah();
@@ -2028,8 +2041,14 @@ function renderDashboard() {
   renderCashDipegangDashboard();
   kemaskiniNotifikasi();
   const aktif = DATA.kedai.filter(k=>k.status==='aktif').length;
-  const hutang = DATA.kedai.reduce((a,k)=>a+k.hutang,0);
-  const hasil  = DATA.transaksi.filter(t=>t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
+  // Hasil Diterima & Hutang — pekerja nampak jumlah PENGHANTARAN SENDIRI sahaja
+  // (bukan jumlah keseluruhan syarikat), pemilik kekal nampak jumlah semua.
+  const isPemilik = currentRole==='pemilik';
+  const filSaya = isPemilik ? DATA.transaksi : DATA.transaksi.filter(t=>t.created_by===DATA.currentUser?.id);
+  const hutang = isPemilik ? DATA.kedai.reduce((a,k)=>a+k.hutang,0) : filSaya.filter(t=>t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
+  const hasil  = filSaya.filter(t=>t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
+  document.getElementById('s-hasil-label').textContent = isPemilik ? 'Hasil Diterima' : 'Hasil Diterima (Saya)';
+  document.getElementById('s-hutang-label').textContent = isPemilik ? 'Hutang' : 'Hutang (Saya)';
 
   document.getElementById('s-kedai').textContent = aktif;
   document.getElementById('s-hasil').textContent = fmt(hasil);
@@ -2104,27 +2123,33 @@ function jumlahTerjualStok(stokId) {
 function renderStok(q='') {
   document.getElementById('stok-admin-actions').style.display=currentRole==='pemilik'?'flex':'none';
   const isPemilik = currentRole==='pemilik';
-  const semua = [...DATA.stok].sort((a,b)=>jumlahTerjualStok(b.id)-jumlahTerjualStok(a.id)); // paling laris dulu
+  const paparTidakAktifWrap = document.getElementById('stok-papar-tidak-aktif-wrap');
+  if (paparTidakAktifWrap) paparTidakAktifWrap.style.display = isPemilik ? 'flex' : 'none';
+  const paparTidakAktif = isPemilik && document.getElementById('stok-papar-tidak-aktif')?.checked;
+  const semuaAktif = DATA.stok.filter(s=>s.aktif!==false);
+  const semua = [...(paparTidakAktif ? DATA.stok : semuaAktif)].sort((a,b)=>jumlahTerjualStok(b.id)-jumlahTerjualStok(a.id)); // paling laris dulu
   const list = q ? semua.filter(s=>s.nama.toLowerCase().includes(q.toLowerCase())) : semua;
   if (isPemilik) {
-    const totalModal = DATA.stok.reduce((a,s)=>a+(s.harga_beli*s.stok),0);
-    document.getElementById('stok-sub').textContent = `${DATA.stok.length} produk · Nilai modal: ${fmt(totalModal)}`;
+    const totalModal = semuaAktif.reduce((a,s)=>a+(s.harga_beli*s.stok),0);
+    document.getElementById('stok-sub').textContent = `${semuaAktif.length} produk · Nilai modal: ${fmt(totalModal)}`;
   } else {
-    document.getElementById('stok-sub').textContent = `${DATA.stok.length} produk`;
+    document.getElementById('stok-sub').textContent = `${semuaAktif.length} produk`;
   }
   document.getElementById('stok-list').innerHTML = list.map(s=>{
+    const tidakAktif = s.aktif===false;
     const margin = ((s.harga_jual-s.harga_beli)/s.harga_beli*100).toFixed(0);
     const rendah = s.stok<=10;
     const dLuput = s.tarikh_luput ? daysUntil(s.tarikh_luput) : null;
     const luputStatus = dLuput===null ? '' : dLuput<0 ? `<span class="badge badge-red">⏳ LUPUT ${fmtD(s.tarikh_luput)}</span>` : dLuput<=30 ? `<span class="badge badge-gold">⏳ Luput ${dLuput}h lagi</span>` : '';
-    return `<div class="card" style="border-left:4px solid ${rendah?'var(--red)':'var(--teal)'}">
-      ${ikonPadam(`padamStok('${s.id}','${esc(s.nama)}')`, 'stok', s.id, s.nama, 'Padam produk')}
+    return `<div class="card" style="border-left:4px solid ${tidakAktif?'var(--muted)':rendah?'var(--red)':'var(--teal)'};${tidakAktif?'opacity:0.6':''}">
+      ${isPemilik && !tidakAktif ? ikonPadam(`padamStok('${s.id}','${esc(s.nama)}')`, 'stok', s.id, s.nama, 'Nyahaktifkan produk') : ''}
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
           <div style="font-weight:800;font-size:14px">${esc(s.nama)}</div>
           <span class="badge badge-purple" style="margin-top:4px">${esc(s.kategori)}</span>
+          ${tidakAktif?'<span class="badge" style="margin-top:4px;margin-left:4px;background:var(--muted);color:#fff">Tidak Aktif</span>':''}
         </div>
-        <span class="badge ${rendah?'badge-red':'badge-green'}">${rendah?'⚠ Rendah':'✓ Cukup'}</span>
+        ${tidakAktif?'':`<span class="badge ${rendah?'badge-red':'badge-green'}">${rendah?'⚠ Rendah':'✓ Cukup'}</span>`}
       </div>
       <div style="display:grid;grid-template-columns:repeat(${isPemilik?4:2},1fr);gap:8px;font-size:12px;margin-bottom:10px">
         ${isPemilik?`<div><div style="color:var(--muted);font-size:10px">BELI</div><div style="font-weight:700">${fmt(s.harga_beli)}</div></div>`:''}
@@ -2134,15 +2159,16 @@ function renderStok(q='') {
       </div>
       ${luputStatus?`<div style="margin-bottom:10px">${luputStatus}</div>`:''}
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${isPemilik?`<button class="btn btn-secondary btn-sm" onclick="editStok('${s.id}')">✏️ Edit</button>`:''}
+        ${isPemilik && !tidakAktif?`<button class="btn btn-secondary btn-sm" onclick="editStok('${s.id}')">✏️ Edit</button>`:''}
         ${isPemilik&&dLuput!==null&&dLuput<0?`<button class="btn btn-danger btn-sm" onclick="bukaTukarLuput('${s.id}')">🔁 Tukar Stok Luput</button>`:''}
+        ${isPemilik&&tidakAktif?`<button class="btn btn-primary btn-sm" onclick="aktifkanStok('${s.id}','${esc(s.nama)}')">♻️ Aktifkan Semula</button>`:''}
       </div>
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Tiada produk dijumpai</div></div>';
 
-  // Restock select
+  // Restock select — produk AKTIF sahaja (jangan restock produk dah dinyahaktifkan)
   const rsSel = document.getElementById('rs-produk');
-  rsSel.innerHTML = semua.map(s=>`<option value="${s.id}">${s.nama} (baki: ${s.stok})</option>`).join('');
+  rsSel.innerHTML = semuaAktif.map(s=>`<option value="${s.id}">${s.nama} (baki: ${s.stok})</option>`).join('');
 }
 
 let stokGambarUrlsSedia = [];
@@ -2254,18 +2280,36 @@ async function bukaModalStokBaru() {
   showModal('modal-tambah-stok');
 }
 
+// "Padam Produk" kini nyahaktifkan (soft-delete), bukan padam kekal — padam kekal
+// SENTIASA gagal (foreign key) untuk produk yang pernah ada pergerakan (serahan_produk/
+// stok_pekerja/pelupusan_stok), dan padam kekal akan hilangkan sejarah tu. Nyahaktifkan
+// sembunyikan produk drpd senarai/pilihan aktif, sejarah lama kekal utuh, boleh
+// diaktifkan semula bila-bila masa (lihat aktifkanStok()).
 async function padamStok(id, nama) {
-  if (!confirm(`Padam produk "${nama}" secara kekal? Tindakan ini tidak boleh diundur.`)) return;
+  if (!confirm(`Nyahaktifkan produk "${nama}"? Produk ini akan disembunyikan drpd senarai & pilihan aktif, tapi sejarah/rekod lama kekal utuh. Boleh diaktifkan semula bila-bila masa.`)) return;
   if (useCloud) {
-    const { error } = await sb.from('stok').delete().eq('id', id);
-    if (error) return toast('Gagal padam: '+error.message,'err');
+    const { error } = await sb.from('stok').update({ aktif: false }).eq('id', id);
+    if (error) return toast('Gagal nyahaktifkan: '+error.message,'err');
     await loadData();
   } else {
-    DATA.stok = DATA.stok.filter(s=>s.id!==id);
+    DATA.stok = DATA.stok.map(s=>s.id===id?{...s,aktif:false}:s);
     saveData();
   }
   renderStok();
-  toast(`Produk "${nama}" dipadam`);
+  toast(`Produk "${nama}" dinyahaktifkan`);
+}
+
+async function aktifkanStok(id, nama) {
+  if (useCloud) {
+    const { error } = await sb.from('stok').update({ aktif: true }).eq('id', id);
+    if (error) return toast('Gagal aktifkan: '+error.message,'err');
+    await loadData();
+  } else {
+    DATA.stok = DATA.stok.map(s=>s.id===id?{...s,aktif:true}:s);
+    saveData();
+  }
+  renderStok();
+  toast(`Produk "${nama}" diaktifkan semula`);
 }
 
 async function editStok(id) {
@@ -2677,20 +2721,36 @@ function renderKedai(q='') {
     pendaftarSel.innerHTML = '<option value="">Semua Pekerja</option>' + idUnik.map(id=>`<option value="${id}">${esc(PROFIL_NAMA_CACHE[id]||id)}</option>`).join('');
   }
 
+  // Tapisan BERASINGAN drpd "Didaftarkan Oleh" — ini ikut SIAPA SEBENARNYA pernah
+  // hantar/berurusan dgn kedai tu (transaksi.created_by), bukan siapa daftarkan kedai
+  // (kedai boleh berdaftar oleh 1 pekerja tapi dihantar oleh pekerja lain kemudian).
+  const pekerjaHantarWrap = document.getElementById('kedai-filter-pekerja-hantar-wrap');
+  const pekerjaHantarSel = document.getElementById('kedai-filter-pekerja-hantar');
+  pekerjaHantarWrap.style.display = currentRole==='pemilik' ? '' : 'none';
+  if (currentRole==='pemilik' && pekerjaHantarSel.options.length <= 1) {
+    const idUnikHantar = [...new Set(DATA.transaksi.map(t=>t.created_by).filter(Boolean))];
+    pekerjaHantarSel.innerHTML = '<option value="">Semua Pekerja</option>' + idUnikHantar.map(id=>`<option value="${id}">${esc(PROFIL_NAMA_CACHE[id]||id)}</option>`).join('');
+  }
+
   const qq=q.toLowerCase();
   const daerahPilih = daerahSel.value;
   const pendaftarPilih = currentRole==='pemilik' ? pendaftarSel.value : '';
+  const pekerjaHantarPilih = currentRole==='pemilik' ? pekerjaHantarSel.value : '';
   const tapisPilih = document.getElementById('kedai-filter-lain').value;
 
   let list = q ? DATA.kedai.filter(k=>k.nama.toLowerCase().includes(qq)||k.daerah.toLowerCase().includes(qq)||(k.negeri||'').toLowerCase().includes(qq)) : DATA.kedai;
   if (daerahPilih) list = list.filter(k=>k.daerah===daerahPilih);
   if (pendaftarPilih) list = list.filter(k=>k.didaftarkan_oleh===pendaftarPilih);
+  if (pekerjaHantarPilih) {
+    const kedaiIdsPekerjaIni = new Set(DATA.transaksi.filter(t=>t.created_by===pekerjaHantarPilih && t.kedai_id).map(t=>t.kedai_id));
+    list = list.filter(k=>kedaiIdsPekerjaIni.has(k.id));
+  }
   if (tapisPilih==='aktif') list = list.filter(k=>k.status==='aktif');
   else if (tapisPilih==='tidak_aktif') list = list.filter(k=>k.status!=='aktif');
   else if (tapisPilih==='hutang') list = list.filter(k=>k.hutang>0);
   else if (tapisPilih==='lama') list = list.filter(k=>daysSince(k.last_visit)>=14);
 
-  document.getElementById('kedai-sub-tapis').textContent = (daerahPilih||pendaftarPilih||tapisPilih) ? `Menapis: ${list.length} kedai dipaparkan` : '';
+  document.getElementById('kedai-sub-tapis').textContent = (daerahPilih||pendaftarPilih||pekerjaHantarPilih||tapisPilih) ? `Menapis: ${list.length} kedai dipaparkan` : '';
 
   const hutangTotal=DATA.kedai.reduce((a,k)=>a+k.hutang,0);
   document.getElementById('kedai-sub').textContent = `${DATA.kedai.filter(k=>k.status==='aktif').length} aktif · Hutang: ${fmt(hutangTotal)}`;
@@ -3116,7 +3176,7 @@ function renderHItems() {
     return `<div class="item-row">
       <select class="form-input" onchange="updHItem(${i},'stokId',this.value)">
         <option value="">-- Pilih produk --</option>
-        ${DATA.stok.map(s=>`<option value="${s.id}" ${it.stokId===s.id?'selected':''}>${s.nama} (${bakiUntukHantar(s)} ${s.unit})</option>`).join('')}
+        ${DATA.stok.filter(s=>s.aktif!==false||it.stokId===s.id).map(s=>`<option value="${s.id}" ${it.stokId===s.id?'selected':''}>${s.nama} (${bakiUntukHantar(s)} ${s.unit})</option>`).join('')}
       </select>
       <input type="number" class="form-input" min="1" value="${it.qty}" onchange="updHItem(${i},'qty',this.value)" />
       <span class="item-price">${sub}</span>
@@ -3155,7 +3215,7 @@ function renderHItemsGantian() {
     return `<div class="item-row">
       <select class="form-input" onchange="updHItemGantian(${i},'stokId',this.value)">
         <option value="">-- Pilih produk --</option>
-        ${DATA.stok.map(s=>`<option value="${s.id}" ${it.stokId===s.id?'selected':''}>${s.nama} (${bakiUntukHantar(s)} ${s.unit})</option>`).join('')}
+        ${DATA.stok.filter(s=>s.aktif!==false||it.stokId===s.id).map(s=>`<option value="${s.id}" ${it.stokId===s.id?'selected':''}>${s.nama} (${bakiUntukHantar(s)} ${s.unit})</option>`).join('')}
       </select>
       <input type="number" class="form-input" min="1" value="${it.qty}" onchange="updHItemGantian(${i},'qty',this.value)" />
       <span class="item-price">${sub}</span>
@@ -3208,7 +3268,7 @@ function renderStokBawaanList() {
   }
 
   const ambilSel = document.getElementById('ambil-produk');
-  if (ambilSel) ambilSel.innerHTML = DATA.stok.map(s=>`<option value="${s.id}">${esc(s.nama)} (gudang: ${s.stok} ${esc(s.unit)})</option>`).join('');
+  if (ambilSel) ambilSel.innerHTML = DATA.stok.filter(s=>s.aktif!==false).map(s=>`<option value="${s.id}">${esc(s.nama)} (gudang: ${s.stok} ${esc(s.unit)})</option>`).join('');
   const pulangSel = document.getElementById('pulang-produk');
   if (pulangSel) pulangSel.innerHTML = entries.map(([id,qty])=>{ const s=DATA.stok.find(s=>s.id===id); return `<option value="${id}">${esc(s?.nama||id)} (bawaan: ${qty} ${esc(s?.unit||'')})</option>`; }).join('') || '<option value="">-- Tiada stok dibawa --</option>';
 }
@@ -4154,7 +4214,9 @@ async function renderTempahanList() {
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   const statusBadge = { baru:'badge-teal', diproses:'badge-gold', selesai:'badge-green', dibatalkan:'badge-red' };
   const statusTxt = { baru:'🆕 Baru', diproses:'⏳ Diproses', selesai:'✓ Selesai', dibatalkan:'✕ Dibatalkan' };
-  let list = bulan ? (data||[]).filter(po=>(po.created_at||'').slice(0,7)===bulan) : (data||[]);
+  // Pekerja hanya nampak tempahan yang ditugaskan kepada diri sendiri — pemilik nampak semua.
+  let list = currentRole==='pemilik' ? (data||[]) : (data||[]).filter(po=>po.assigned_pekerja_id===DATA.currentUser?.id);
+  list = bulan ? list.filter(po=>(po.created_at||'').slice(0,7)===bulan) : list;
   if (statusPilih) list = list.filter(po=>po.status===statusPilih);
   document.getElementById('tp-jumlah').textContent = `${list.length} tempahan${bulan?' pada '+bulan:' (semua)'}${statusPilih?' · '+statusTxt[statusPilih]:''}`;
 
@@ -4213,7 +4275,9 @@ async function renderTransaksiKedaiList() {
   const bulan = document.getElementById('tp-bulan').value;
   const statusPilih = document.getElementById('tp-filter-transaksi')?.value || '';
   const statusTxtTrx = { selesai:'✓ Selesai', hutang:'⏳ Hutang' };
+  // Pekerja hanya nampak transaksi yang dia sendiri hantar — pemilik nampak semua.
   const list = [...DATA.transaksi]
+    .filter(t=>currentRole==='pemilik' || t.created_by===DATA.currentUser?.id)
     .filter(t=>!bulan || (t.tarikh_masa||'').slice(0,7)===bulan)
     .filter(t=>!statusPilih || t.status===statusPilih)
     .sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
@@ -4264,7 +4328,9 @@ async function renderEdagangList() {
     currentRole==='pemilik' ? sb.from('profiles').select('id,nama').eq('role','pekerja') : Promise.resolve({ data: [] }),
   ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
-  const listBulan = bulan ? (data||[]).filter(o=>(o.created_at||'').slice(0,7)===bulan) : (data||[]);
+  // Pekerja hanya nampak pesanan e-dagang yang ditugaskan kepada diri sendiri — pemilik nampak semua.
+  const dataSaya = currentRole==='pemilik' ? (data||[]) : (data||[]).filter(o=>o.assigned_pekerja_id===DATA.currentUser?.id);
+  const listBulan = bulan ? dataSaya.filter(o=>(o.created_at||'').slice(0,7)===bulan) : dataSaya;
   const list = statusPilih ? listBulan.filter(o=>o.status_pesanan===statusPilih) : listBulan;
   document.getElementById('tp-jumlah').textContent = `${list.length} pesanan e-dagang${bulan?' pada '+bulan:' (semua)'}${statusPilih?' · '+EDAGANG_STATUS_TXT[statusPilih]:''}`;
   document.getElementById('badge-edagang-tab').style.display = listBulan.some(o=>o.status_pesanan==='baru') ? '' : 'none';
@@ -4518,7 +4584,8 @@ async function lihatBuktiBayaran(path) {
 // ════════════════════════════════════════════════════
 function renderResitSel() {
   const sel=document.getElementById('resit-sel');
-  const sorted=[...DATA.transaksi].sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
+  const sumber = currentRole==='pemilik' ? DATA.transaksi : DATA.transaksi.filter(t=>t.created_by===DATA.currentUser?.id);
+  const sorted=[...sumber].sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
   sel.innerHTML='<option value="">-- Pilih transaksi --</option>'+sorted.map(t=>{
     return `<option value="${t.id}">${t.resit||t.id} · ${esc(namaDestinasiTrx(t))} · ${fmt(t.jumlah)}</option>`;
   }).join('');
