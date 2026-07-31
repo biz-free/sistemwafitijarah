@@ -2072,8 +2072,9 @@ function renderDashboard() {
   document.getElementById('s-hutang').textContent = fmt(hutang);
   document.getElementById('s-produk').textContent = DATA.stok.length;
 
-  // Badges
-  const stokRendah = DATA.stok.filter(s=>s.stok<=10);
+  // Badges — produk dinyahaktifkan tak perlu amaran stok rendah/luput lagi (dah tak dijual).
+  const stokAktif = DATA.stok.filter(s=>s.aktif!==false);
+  const stokRendah = stokAktif.filter(s=>s.stok<=10);
   document.getElementById('badge-stok').style.display = stokRendah.length?'':'none';
   const hutangKedai = DATA.kedai.filter(k=>k.hutang>0);
   document.getElementById('badge-kedai').style.display = hutangKedai.length?'':'none';
@@ -2082,7 +2083,7 @@ function renderDashboard() {
   const amaranEl = document.getElementById('amaran-list');
   let aHTML = '';
   stokRendah.forEach(s=>{ aHTML+=`<div class="list-item"><div><div class="list-item-title">📦 ${esc(s.nama)}</div><div class="list-item-sub">Stok rendah</div></div><span class="badge badge-red">${s.stok} ${esc(s.unit)}</span></div>`; });
-  DATA.stok.filter(s=>s.tarikh_luput&&daysUntil(s.tarikh_luput)<=30).sort((a,b)=>daysUntil(a.tarikh_luput)-daysUntil(b.tarikh_luput)).forEach(s=>{
+  stokAktif.filter(s=>s.tarikh_luput&&daysUntil(s.tarikh_luput)<=30).sort((a,b)=>daysUntil(a.tarikh_luput)-daysUntil(b.tarikh_luput)).forEach(s=>{
     const d=daysUntil(s.tarikh_luput);
     aHTML+=`<div class="list-item"><div><div class="list-item-title">⏳ ${esc(s.nama)}</div><div class="list-item-sub">${d<0?'Sudah luput':'Luput dalam '+d+' hari'} · ${fmtD(s.tarikh_luput)}</div></div><span class="badge ${d<0?'badge-red':'badge-gold'}">${d<0?'LUPUT':d+'h'}</span></div>`;
   });
@@ -3609,7 +3610,7 @@ async function renderSerahanProdukSemua() {
       const rujuk = r.rujuk_pekerja_id ? ` (${esc(namaPekerja(r.rujuk_pekerja_id))})` : '';
       return `
       <div class="list-item" style="display:block">
-        ${ikonPadam(`padamSerahanProduk('${r.id}')`, 'serahan_produk', r.id, `Serahan ${r.stok_nama} ×${r.kuantiti}`, 'Padam serahan', 'position:static')}
+        ${r.status!=='menunggu' ? ikonPadam(`padamSerahanProduk('${r.id}')`, 'serahan_produk', r.id, `Serahan ${r.stok_nama} ×${r.kuantiti}`, 'Padam serahan', 'position:static') : ''}
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
           <div><div class="list-item-title">${esc(namaPekerja(r.pekerja_id))} — ${esc(r.stok_nama)} ×${r.kuantiti}</div><div class="list-item-sub">${labelSerahanProduk(r)}${rujuk} · ${fmtDT(r.created_at)}</div></div>
           <span class="badge ${SERAHAN_PRODUK_STATUS_BADGE[r.status]}" style="flex-shrink:0">${SERAHAN_PRODUK_STATUS_TXT[r.status]}</span>
@@ -4179,8 +4180,10 @@ async function hantarRequestStokMobile() {
   const waTab = window.open('', '_blank');
 
   const nota = `Pick up dijadualkan ${fmtD(tarikh)}, ${masa}`;
-  const { data: pemilikProfil } = await sb.from('profiles').select('telefon').eq('role','pemilik').limit(1).single();
-  const tel = formatNoTelefonMY(pemilikProfil?.telefon);
+  // RLS "profiles" tak benarkan pekerja baca profil pemilik terus (hanya baca sendiri
+  // atau pemilik baca semua) — guna RPC sempit yang hanya dedah no. telefon pemilik.
+  const { data: telPemilik } = await sb.rpc('ambil_telefon_pemilik');
+  const tel = formatNoTelefonMY(telPemilik);
 
   let bilangan = 0, ralat = 0, mesejRalat = '';
   for (let i=0; i<itemsSah.length; i++) {
@@ -4796,9 +4799,16 @@ async function hantarResitWhatsapp() {
   const k=DATA.kedai.find(k=>k.id===t.kedai_id);
   const tel=formatNoTelefonMY(k?.telefon);
   if (!tel) return toast('No. telefon kedai tiada — kemaskini profil kedai dahulu','err');
+
+  // Buka tab KOSONG SERTA-MERTA (sebelum sebarang await) — kalau window.open() dipanggil
+  // lepas await (jana PDF), browser anggap ia bukan lagi tindakan pengguna terus & SEKAT
+  // sebagai popup secara senyap. Tab ni diarah ke URL wa.me sebenar lepas PDF siap.
+  const waTab = window.open('', '_blank');
+
   await muatTurunResitPDF();
   const mesej = `Salam ${k.nama},\n\nResit penghantaran *Wafi Tijarah Trading*\nNo. Resit: ${t.resit||t.id}\nJumlah: ${fmt(t.jumlah)}\nStatus: ${t.status==='selesai'?'Telah Dibayar':'Hutang'}\n\nFail PDF resit baru sahaja dimuat turun di peranti ini — sila lampirkan (attach) fail tersebut dalam WhatsApp ini. Terima kasih atas kepercayaan anda!`;
-  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`, '_blank');
+  const waUrl = `https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`;
+  if (waTab) waTab.location.href = waUrl; else window.open(waUrl, '_blank');
   toast('PDF dimuat turun — lampirkan dalam WhatsApp yang baru dibuka');
 }
 
@@ -5286,15 +5296,23 @@ async function muatTurunBaucarPDF(id) {
 
 async function hantarBaucarWhatsapp(id) {
   const v = BAUCAR_CACHE.find(x=>x.id===id); if (!v) return;
+
+  // Buka tab KOSONG SERTA-MERTA (sebelum sebarang await) — kalau window.open() dipanggil
+  // lepas await (fetch profil / jana PDF), browser anggap ia bukan lagi tindakan pengguna
+  // terus & SEKAT sebagai popup secara senyap. Tab ni diarah ke URL wa.me sebenar lepas
+  // kerja async siap, atau ditutup semula kalau tak jadi hantar.
+  const waTab = window.open('', '_blank');
+
   const { data: profil } = await sb.from('profiles').select('nama,telefon').eq('id', v.pekerja_id).single();
   const tel = formatNoTelefonMY(profil?.telefon);
-  if (!tel) return toast('No. telefon pekerja tiada — kemaskini profil pekerja dahulu','err');
+  if (!tel) { if (waTab) waTab.close(); return toast('No. telefon pekerja tiada — kemaskini profil pekerja dahulu','err'); }
   const hasil = await muatTurunBaucarPDF(id);
-  if (!hasil) return;
+  if (!hasil) { if (waTab) waTab.close(); return; }
   const mesej = v.kategori==='upah_harian'
     ? `Salam ${hasil.nama},\n\nBaucar Upah Harian *Wafi Tijarah Trading*\nNo. Baucar: ${v.no_siri}\nTarikh: ${v.tarikh?fmtD(v.tarikh):v.bulan}\nJumlah Upah Harian: ${fmt(v.jumlah)}\nCash Ditangan: ${fmt(v.cash_ditangan)}\n${v.baki>=0?'Baki Akan Ditransfer':'Sila Serah Lebihan'}: ${fmt(Math.abs(v.baki))}\n\nFail PDF baucar baru sahaja dimuat turun di peranti ini — sila lampirkan (attach) fail tersebut dalam WhatsApp ini. Terima kasih!`
     : `Salam ${hasil.nama},\n\nBaucar Bayaran *Wafi Tijarah Trading*\nNo. Baucar: ${v.no_siri}\nKategori: ${BAUCAR_KATEGORI_LABEL[v.kategori]||v.kategori}\nJumlah: ${fmt(v.jumlah)}\n\nFail PDF baucar baru sahaja dimuat turun di peranti ini — sila lampirkan (attach) fail tersebut dalam WhatsApp ini. Terima kasih!`;
-  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`, '_blank');
+  const waUrl = `https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`;
+  if (waTab) waTab.location.href = waUrl; else window.open(waUrl, '_blank');
   toast('PDF dimuat turun — lampirkan dalam WhatsApp yang baru dibuka');
 }
 
