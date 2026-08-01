@@ -4207,22 +4207,32 @@ async function hantarRequestStokMobile() {
   const { data: telPemilik } = await sb.rpc('ambil_telefon_pemilik');
   const tel = formatNoTelefonMY(telPemilik);
 
-  let bilangan = 0, ralat = 0, mesejRalat = '';
+  // Rekod hasil SETIAP item secara berasingan — sebahagian produk boleh gagal (cth:
+  // stok gudang tak cukup utk kuantiti diminta) walaupun yang lain berjaya. Mesej
+  // WhatsApp MESTI cerminkan apa yang SEBENARNYA berjaya dihantar, bukan senarai asal
+  // pekerja pilih — jika tidak pemilik akan sangka semua produk dah masuk permohonan
+  // sedangkan sebahagian sebenarnya gagal senyap (lihat laporan produk hilang).
+  const hasilItem = [];
   for (let i=0; i<itemsSah.length; i++) {
     const it = itemsSah[i];
     // genId() ikut milisaat sahaja — beberapa panggilan berturutan dalam gelung ni boleh
     // jatuh milisaat SAMA (id sama = konflik primary key), jadi tambah index utk pastikan unik.
     const { error } = await sb.rpc('minta_ambil_stok', { p_id: genId('AS')+'-'+i, p_stok_id: it.stokId, p_qty: +it.qty, p_sebab: nota });
-    if (error) { ralat++; mesejRalat = error.message; continue; }
-    bilangan++;
+    hasilItem.push({ it, ok: !error, ralat: error?.message });
   }
+  const berjaya = hasilItem.filter(h=>h.ok);
+  const gagal = hasilItem.filter(h=>!h.ok);
+  const bilangan = berjaya.length, ralat = gagal.length;
 
   // Permohonan berjaya masuk (medan sebab diisi) — trigger DB sengaja LANGKAU emel utk
   // laluan ni (lihat SQL_TAMBAHAN_74), jadi maklumkan pemilik via WhatsApp di sini.
   if (bilangan && tel) {
-    const senaraiStr = itemsSah.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return `- ${s?.nama||it.stokId} × ${it.qty} ${s?.unit||''}`; }).join('\n');
+    const namaProduk = it => { const s=DATA.stok.find(s=>s.id===it.stokId); return s?.nama||it.stokId; };
+    const namaUnit = it => { const s=DATA.stok.find(s=>s.id===it.stokId); return s?.unit||''; };
+    const senaraiStr = berjaya.map(h=>`- ${namaProduk(h.it)} × ${h.it.qty} ${namaUnit(h.it)}`).join('\n');
+    const senaraiGagalStr = gagal.length ? `\n\n⚠️ GAGAL DIHANTAR (${gagal.length} produk — sila semak & request semula):\n` + gagal.map(h=>`- ${namaProduk(h.it)} × ${h.it.qty} ${namaUnit(h.it)} (${h.ralat})`).join('\n') : '';
     const namaPekerja = DATA.currentUser?.nama || 'Pekerja';
-    const mesej = `Salam, saya *${namaPekerja}* ingin *request stok mobile* untuk pick up:\n\n📅 Tarikh: ${fmtD(tarikh)}\n🕒 Masa: ${masa}\n\n📦 Senarai Produk:\n${senaraiStr}\n\nPermohonan sudah dihantar dalam sistem — mohon pemilik approve. Terima kasih!`;
+    const mesej = `Salam, saya *${namaPekerja}* ingin *request stok mobile* untuk pick up:\n\n📅 Tarikh: ${fmtD(tarikh)}\n🕒 Masa: ${masa}\n\n📦 Senarai Produk:\n${senaraiStr}${senaraiGagalStr}\n\nPermohonan sudah dihantar dalam sistem — mohon pemilik approve. Terima kasih!`;
     const waUrl = `https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`;
     if (waTab) waTab.location.href = waUrl; else window.open(waUrl, '_blank');
   } else if (waTab) {
@@ -4231,7 +4241,7 @@ async function hantarRequestStokMobile() {
   rsmItems = [{ stokId:'', qty:1 }];
   renderRsmItems();
   await loadSerahanProdukSaya();
-  toast(ralat ? `${bilangan} produk dihantar, ${ralat} gagal (${mesejRalat})` : `✅ ${bilangan} produk dihantar — menunggu kelulusan pemilik`, ralat?'err':'ok');
+  toast(ralat ? `${bilangan} produk dihantar, ${ralat} gagal (${gagal[0]?.ralat})` : `✅ ${bilangan} produk dihantar — menunggu kelulusan pemilik`, ralat?'err':'ok');
 }
 
 // Papan jualan semua pekerja hari ini — visible untuk SEMUA akaun pekerja (bukan pemilik
