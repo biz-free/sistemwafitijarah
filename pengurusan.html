@@ -438,6 +438,7 @@
       <div style="display:flex;gap:8px;margin-bottom:12px" id="stok-admin-actions">
         <button class="btn btn-primary" style="flex:1;margin-top:0;padding:11px" onclick="bukaModalStokBaru()">+ Produk Baru</button>
         <button class="btn btn-gold btn-sm" onclick="showModal('modal-restock')" style="padding:11px 14px">⚡ Restock</button>
+        <button class="btn btn-secondary btn-sm" onclick="bukaModalPindahPekerja()" style="padding:11px 14px">🔀 Pindah ke Pekerja</button>
       </div>
       <input class="search-bar" id="stok-search" placeholder="Cari produk..." oninput="renderStok(this.value)" />
       <label id="stok-papar-tidak-aktif-wrap" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:8px 0 4px;cursor:pointer">
@@ -1349,6 +1350,21 @@
       <div class="form-group"><label class="form-label">Tarikh Luput Baru (jika ada)</label><input type="date" class="form-input" id="rs-luput" /></div>
     </div>
     <button class="btn btn-primary" style="background:var(--gold)" onclick="doRestock()">⚡ Tambah Stok</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-pindah-pekerja">
+  <div class="modal-box">
+    <div class="modal-title">🔀 Pindah Stok ke Pekerja<button class="modal-close" onclick="closeModal('modal-pindah-pekerja')">✕ Tutup</button></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Stok gudang terus dipindah ke bawaan pekerja terpilih — tiada kelulusan diperlukan (anda pemilik).</div>
+    <div class="form-group"><label class="form-label">Pekerja</label>
+      <select class="form-input" id="pp-pekerja"></select>
+    </div>
+    <div class="form-group"><label class="form-label">Produk</label>
+      <select class="form-input" id="pp-produk"></select>
+    </div>
+    <div class="form-group"><label class="form-label">Kuantiti</label><input type="number" class="form-input" id="pp-qty" placeholder="0" min="1" /></div>
+    <button class="btn btn-primary" onclick="pindahStokKePekerja()">🔀 Pindah Stok</button>
   </div>
 </div>
 
@@ -3512,6 +3528,39 @@ async function ambilStok() {
   closeModal('modal-ambil-stok');
   document.getElementById('ambil-qty').value='';
   toast('📤 Permohonan ambil stok dihantar — menunggu kelulusan pemilik');
+}
+
+// Pemilik sahaja — pindah stok gudang terus ke bawaan PEKERJA LAIN yang dipilih
+// (bukan bawaan sendiri, lihat ambilStok() untuk itu). Guna RPC yang sama
+// (ambil_stok_pekerja) dgn override sasaran — auto-lulus, terus jejas gudang &
+// stok_pekerja pekerja terpilih, direkod dlm serahan_produk (jenis 'ambil').
+async function bukaModalPindahPekerja() {
+  const selPekerja = document.getElementById('pp-pekerja');
+  if (useCloud && !selPekerja.dataset.loaded) {
+    selPekerja.dataset.loaded = '1';
+    const { data } = await sb.from('profiles').select('id,nama').eq('role','pekerja').order('nama');
+    selPekerja.innerHTML = (data||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('') || '<option value="">-- Tiada pekerja --</option>';
+  }
+  const selProduk = document.getElementById('pp-produk');
+  selProduk.innerHTML = DATA.stok.filter(s=>s.aktif!==false).map(s=>`<option value="${s.id}">${esc(s.nama)} (baki gudang: ${s.stok})</option>`).join('');
+  document.getElementById('pp-qty').value = '';
+  showModal('modal-pindah-pekerja');
+}
+
+async function pindahStokKePekerja() {
+  const pekerjaId = document.getElementById('pp-pekerja').value;
+  const stokId = document.getElementById('pp-produk').value;
+  const qty = +document.getElementById('pp-qty').value;
+  if (!pekerjaId) return toast('Sila pilih pekerja','err');
+  if (!stokId || qty<1) return toast('Pilih produk dan kuantiti','err');
+  const namaPekerja = document.getElementById('pp-pekerja').selectedOptions[0]?.textContent || '?';
+  const { error } = await sb.rpc('ambil_stok_pekerja', { p_stok_id: stokId, p_qty: qty, p_pekerja_id_override: pekerjaId });
+  if (error) return toast('Gagal pindah stok: '+error.message,'err');
+  await loadData();
+  closeModal('modal-pindah-pekerja');
+  const namaProduk = DATA.stok.find(s=>s.id===stokId)?.nama || '?';
+  toast(`✅ ${qty} unit ${namaProduk} dipindah ke ${namaPekerja}`);
+  renderStok();
 }
 
 async function pulangStok() {
