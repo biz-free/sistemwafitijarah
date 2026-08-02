@@ -5054,7 +5054,13 @@ async function renderLaporan() {
   const fil=DATA.transaksi.filter(t=>t.tarikh_masa&&t.tarikh_masa.startsWith(bulan));
   const hasil=fil.filter(t=>t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
   const hutang=fil.filter(t=>t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
-  const untung=fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0); },0);
+  // Diskaun automatik Pre-Order (COD/Transfer ≥ minima, lihat kiraDiskaunHantarPeratus())
+  // potong terus dari HASIL yang dikutip (t.jumlah dah didiskaun), tapi kos barang
+  // (harga_beli) tak berubah — jadi diskaun ni 100% ambil dari margin. Untung kasar
+  // MESTI tolak jumlah diskaun sebenar (jumlah_asal-jumlah), bukan cuma kira ikut
+  // harga_jual penuh macam tiada diskaun langsung berlaku.
+  const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
+  const untung=fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0); },0) - diskaunKedai;
 
   const jumlahStok = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
   const { totalKm: jumlahKm, kmIkutPekerja } = await kiraJarakKehadiranJulat(bulan+'-01T00:00:00', akhirBulanISO(bulan));
@@ -5121,6 +5127,7 @@ async function renderLaporan() {
       <div class="stat-box"><div class="stat-label">Hutang</div><div class="stat-val" style="color:var(--red);font-size:16px">${fmt(hutang)}</div></div>
       <div class="stat-box"><div class="stat-label">Untung Kasar</div><div class="stat-val" style="color:var(--gold);font-size:16px">${fmt(untung)}</div></div>
     </div>
+    ${diskaunKedai>0?`<div class="list-item"><div class="list-item-title">💸 Diskaun Diberi Kedai (sudah ditolak dari Untung Kasar)</div><div class="list-item-val" style="color:var(--red)">−${fmt(diskaunKedai)}</div></div>`:''}
     <div class="divider"></div>
     <div class="card-title" style="font-size:13px">💰 Kos Operasi</div>
     <div class="list-item"><div class="list-item-title">Upah Pekerja</div><div class="list-item-val">${fmt(kosUpah)}</div></div>
@@ -5157,7 +5164,11 @@ async function renderLaporanHarian() {
   if (pekerjaPilih) fil = fil.filter(t=>t.created_by===pekerjaPilih);
   const hasil = fil.filter(t=>t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
   const hutang = fil.filter(t=>t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
-  const untung = fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0); },0);
+  // Diskaun automatik Pre-Order (COD/Transfer ≥ minima) potong dari HASIL (t.jumlah
+  // dah didiskaun) tapi kos barang tak berubah — diskaun ni 100% ambil dari margin,
+  // jadi untung kasar mesti tolak jumlah diskaun sebenar (jumlah_asal-jumlah).
+  const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
+  const untung = fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0); },0) - diskaunKedai;
 
   const { totalKm: jumlahKm, kmIkutPekerja } = await kiraJarakKehadiranJulat(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaPilih||null);
   const hariLayakMakan = await kiraHariLayakMakan(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaPilih||null);
@@ -5213,6 +5224,7 @@ async function renderLaporanHarian() {
       <div class="stat-box"><div class="stat-label">Hutang</div><div class="stat-val" style="color:var(--red);font-size:16px">${fmt(hutang)}</div></div>
       <div class="stat-box"><div class="stat-label">Untung Kasar</div><div class="stat-val" style="color:var(--gold);font-size:16px">${fmt(untung)}</div></div>
     </div>
+    ${diskaunKedai>0?`<div class="list-item"><div class="list-item-title">💸 Diskaun Diberi Kedai (sudah ditolak dari Untung Kasar)</div><div class="list-item-val" style="color:var(--red)">−${fmt(diskaunKedai)}</div></div>`:''}
     <div class="divider"></div>
     <div class="card-title" style="font-size:13px">💰 Kos Operasi</div>
     <div class="list-item"><div class="list-item-title">Upah Pekerja</div><div class="list-item-val">${fmt(kosUpah)}</div></div>
