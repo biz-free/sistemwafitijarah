@@ -594,6 +594,11 @@
             <option value="">👤 Diri Sendiri (Pemilik)</option>
           </select>
         </div>
+        <div class="form-group" id="h-tarikh-wrap" style="display:none">
+          <label class="form-label">Tarikh Transaksi</label>
+          <input type="date" class="form-input" id="h-tarikh" />
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Tukar tarikh untuk rekod transaksi lampau (cth: pekerja lupa rekod hari tu) — resit akan ikut tarikh ini. Baucar harian pekerja pada tarikh terbabit (jika sudah dijana) akan dibatalkan automatik supaya anda jana/luluskan semula dengan angka betul.</div>
+        </div>
         <div class="form-group">
           <label class="form-label">Jenis Rekod</label>
           <div class="bayar-toggle" style="margin-bottom:0;grid-template-columns:repeat(3,1fr)">
@@ -3221,9 +3226,16 @@ let PEKERJA_TARGET_STOK = {};
 async function renderHantarPekerjaSelector() {
   const wrap = document.getElementById('h-pekerja-target-wrap');
   const sel = document.getElementById('h-pekerja-target');
+  const tarikhWrap = document.getElementById('h-tarikh-wrap');
+  const tarikhInput = document.getElementById('h-tarikh');
   if (!wrap || !sel) return;
-  if (currentRole !== 'pemilik') { wrap.style.display = 'none'; return; }
+  if (currentRole !== 'pemilik') { wrap.style.display = 'none'; if (tarikhWrap) tarikhWrap.style.display = 'none'; return; }
   wrap.style.display = '';
+  if (tarikhWrap) tarikhWrap.style.display = '';
+  if (tarikhInput) {
+    tarikhInput.max = tarikhTempatan();
+    if (!tarikhInput.value) tarikhInput.value = tarikhTempatan();
+  }
   if (sel.options.length <= 1 && useCloud) {
     const { data } = await sb.from('profiles').select('id,nama').eq('role','pekerja');
     sel.innerHTML = '<option value="">👤 Diri Sendiri (Pemilik)</option>' + (data||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('');
@@ -3945,8 +3957,13 @@ async function submitHantar() {
 
   const statusBayar = (hBayar==='hutang'||hBayar==='consignment')?'hutang':'selesai';
   const LABEL_KAEDAH = { terus:'Tunai', transfer:'Online Transfer', hutang:'Catat Hutang', consignment:'Consignment' };
+  // Pemilik sahaja boleh backdate (lihat h-tarikh-wrap) — pilih tarikh lampau utk rekod
+  // transaksi yang terlepas dicatat live. Noon tempatan elak isu sempadan hari/timezone.
+  // Kosong/tarikh hari ini = guna masa sebenar (server tetapkan now() dlm RPC).
+  const tarikhPilih = document.getElementById('h-tarikh')?.value;
+  const tarikhMasaOverride = (tarikhPilih && tarikhPilih !== tarikhTempatan()) ? `${tarikhPilih}T12:00:00+08:00` : null;
   const trx={
-    id:genId('T'), tarikh_masa:new Date().toISOString(), kedai_id:kedaiId, nama_pembeli:namaPembeli||null,
+    id:genId('T'), tarikh_masa: tarikhMasaOverride || new Date().toISOString(), kedai_id:kedaiId, nama_pembeli:namaPembeli||null,
     items:hItems.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return{stokId:it.stokId,qty:+it.qty,harga:s.harga_jual}; }),
     jumlah, jumlah_asal: jumlahAsal, diskaun_peratus: peratusDiskaun,
     kaedah_bayaran: hBayar==='terus'?'tunai':hBayar, status:statusBayar,
@@ -3970,6 +3987,7 @@ async function submitHantar() {
       p_nama_pembeli:trx.nama_pembeli, p_kaedah_bayaran:trx.kaedah_bayaran,
       p_jumlah_asal:trx.jumlah_asal, p_diskaun_peratus:trx.diskaun_peratus,
       p_resit_bukti_url: resitBuktiPath, p_pekerja_id_override: PEKERJA_TARGET_ID,
+      p_tarikh_masa: tarikhMasaOverride,
     });
     if (error) return toast('Gagal rekod penghantaran: '+error.message,'err');
     if (preorderIdSelesai) {
@@ -3994,6 +4012,7 @@ async function submitHantar() {
   document.getElementById('h-kedai').value='';
   document.getElementById('h-nama-pembeli').value='';
   document.getElementById('h-nota').value='';
+  if (document.getElementById('h-tarikh')) document.getElementById('h-tarikh').value = tarikhTempatan();
   resitBuktiFilePilihan = null;
   document.getElementById('h-resit-bukti-file').value = '';
   document.getElementById('h-resit-bukti-preview').style.display = 'none';
@@ -5246,7 +5265,7 @@ async function renderLaporanHarian() {
 //  pengiraan baharu, sekadar formalkan angka yang sama menjadi dokumen bernombor siri.
 // ════════════════════════════════════════════════════
 const BAUCAR_KATEGORI_LABEL = { petrol:'⛽ Petrol', upah:'💰 Upah', makan:'🍽️ Duit Makan', upah_harian:'💵 Upah Harian (Netto Cash)' };
-const BAUCAR_STATUS_LABEL = { draf:'📝 Draf', diluluskan:'✅ Diluluskan', dibayar:'💵 Dibayar' };
+const BAUCAR_STATUS_LABEL = { draf:'📝 Draf', diluluskan:'✅ Diluluskan', dibayar:'💵 Dibayar', dibatalkan:'❌ Dibatalkan' };
 let BAUCAR_CACHE = [];
 
 async function janaBaucarBulanIni() {
@@ -5334,7 +5353,7 @@ async function renderBaucarSaya() {
   if (!el) return;
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
   const bulan = document.getElementById('baucar-saya-bulan').value;
-  const { data, error } = await sb.from('baucar_bayaran').select('*').eq('pekerja_id', DATA.currentUser.id).eq('bulan', bulan).neq('status','draf').order('no_siri');
+  const { data, error } = await sb.from('baucar_bayaran').select('*').eq('pekerja_id', DATA.currentUser.id).eq('bulan', bulan).not('status','in','(draf,dibatalkan)').order('no_siri');
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   BAUCAR_CACHE = data || [];
   if (!PROFIL_NAMA_CACHE[DATA.currentUser.id]) PROFIL_NAMA_CACHE[DATA.currentUser.id] = DATA.currentUser.nama;
@@ -5396,7 +5415,7 @@ async function renderBaucarList() {
         </div>
         <div style="text-align:right">
           <div class="list-item-val">${fmt(v.kategori==='upah_harian'?v.baki:v.jumlah)}</div>
-          <span class="badge ${v.status==='dibayar'?'badge-green':v.status==='diluluskan'?'badge-teal':'badge-gold'}">${BAUCAR_STATUS_LABEL[v.status]}</span>
+          <span class="badge ${v.status==='dibayar'?'badge-green':v.status==='diluluskan'?'badge-teal':v.status==='dibatalkan'?'badge-red':'badge-gold'}">${BAUCAR_STATUS_LABEL[v.status]}</span>
         </div>
       </div>
       ${v.kategori==='upah_harian'?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;background:var(--bg);border-radius:6px;padding:6px 8px">
