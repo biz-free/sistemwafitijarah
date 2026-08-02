@@ -2175,7 +2175,7 @@ async function renderCashDipegangDashboard() {
     labelEl.textContent = 'Cash Dipegang (Semua)';
     const [{ data: serahanSemua }, { data: baucarHarianSemua }] = await Promise.all([
       sb.from('serahan_cash').select('pekerja_id,jumlah,status'),
-      sb.from('baucar_bayaran').select('pekerja_id,tarikh,jumlah').eq('kategori','upah_harian'),
+      sb.from('baucar_bayaran').select('pekerja_id,tarikh,jumlah').eq('kategori','upah_harian').neq('status','dibatalkan'),
     ]);
     const pekerjaIds = [...new Set(DATA.transaksi.filter(t=>t.kaedah_bayaran==='tunai').map(t=>t.created_by))];
     const jumlah = pekerjaIds.reduce((a,pid)=>a+kiraCashDipegang(pid, serahanSemua||[], baucarHarianSemua||[]), 0);
@@ -2184,7 +2184,7 @@ async function renderCashDipegangDashboard() {
     labelEl.textContent = 'Cash Saya Dipegang';
     const [{ data: serahanSaya }, { data: baucarHarianSaya }] = await Promise.all([
       sb.from('serahan_cash').select('pekerja_id,jumlah,status').eq('pekerja_id', DATA.currentUser.id),
-      sb.from('baucar_bayaran').select('pekerja_id,tarikh,jumlah').eq('kategori','upah_harian').eq('pekerja_id', DATA.currentUser.id),
+      sb.from('baucar_bayaran').select('pekerja_id,tarikh,jumlah').eq('kategori','upah_harian').eq('pekerja_id', DATA.currentUser.id).neq('status','dibatalkan'),
     ]);
     valEl.textContent = fmt(kiraCashDipegang(DATA.currentUser.id, serahanSaya||[], baucarHarianSaya||[]));
   }
@@ -7076,7 +7076,7 @@ async function renderUpahSaya() {
   // jadi tak padan dgn apa yang SEBENARNYA dibayar. Lihat siasatan PV-2026-0012
   // (Aremier Ali) — km sama tapi kadar minyak berubah drpd RM0.50 → RM0.60 selepas
   // baucar dijana, punca RM334.37 (dibayar) vs RM345.65 (dipaparkan) berbeza.
-  const { data: baucarHarianBulan } = await sb.from('baucar_bayaran').select('tarikh,jumlah,butiran').eq('pekerja_id', DATA.currentUser.id).eq('kategori','upah_harian').eq('bulan', bulan);
+  const { data: baucarHarianBulan } = await sb.from('baucar_bayaran').select('tarikh,jumlah,butiran').eq('pekerja_id', DATA.currentUser.id).eq('kategori','upah_harian').eq('bulan', bulan).neq('status','dibatalkan');
   const baucarIkutTarikh = {};
   (baucarHarianBulan||[]).forEach(v => { baucarIkutTarikh[v.tarikh] = v; });
 
@@ -7138,7 +7138,7 @@ async function loadSerahanCashSaya() {
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
   const [{ data, error }, { data: baucarHarian }] = await Promise.all([
     sb.from('serahan_cash').select('*').eq('pekerja_id', DATA.currentUser.id).order('created_at',{ascending:false}),
-    sb.from('baucar_bayaran').select('pekerja_id,tarikh,jumlah').eq('kategori','upah_harian').eq('pekerja_id', DATA.currentUser.id),
+    sb.from('baucar_bayaran').select('pekerja_id,tarikh,jumlah').eq('kategori','upah_harian').eq('pekerja_id', DATA.currentUser.id).neq('status','dibatalkan'),
   ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   DATA.serahanCashSaya = data || [];
@@ -7211,7 +7211,7 @@ async function renderSerahanCashSemua() {
   if (!el) return;
   const [{ data, error }, { data: baucarHarianSemua }, { data: profil }] = await Promise.all([
     sb.from('serahan_cash').select('*').order('created_at',{ascending:false}),
-    sb.from('baucar_bayaran').select('pekerja_id,tarikh,jumlah').eq('kategori','upah_harian'),
+    sb.from('baucar_bayaran').select('pekerja_id,tarikh,jumlah').eq('kategori','upah_harian').neq('status','dibatalkan'),
     sb.from('profiles').select('id,nama').eq('role','pekerja'),
   ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
