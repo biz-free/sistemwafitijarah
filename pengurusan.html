@@ -5105,9 +5105,29 @@ function cetakResit() {
   window.print();
 }
 
+// iOS Safari (termasuk PWA "Add to Home Screen") sering GAGAL SENYAP pada pdf.save()
+// jsPDF — ia bergantung pada atribut HTML `download` utk Blob URL yang TAK konsisten
+// disokong di Safari/iOS (pekerja tekan butang PDF, tiada apa berlaku, tiada ralat pun).
+// Fallback iOS: buka PDF dlm tab baharu (native PDF viewer Safari) — pekerja boleh
+// guna ikon Share (⬆️) utk simpan/kongsi terus dari situ.
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// tabTerbuka (jika ada) MESTI dibuka SEBELUM sebarang await dlm fungsi pemanggil —
+// window.open() lepas await dianggap bukan lagi gerakan pengguna & disekat popup blocker.
+function simpanPdfSerasiIOS(pdf, namaFail, tabTerbuka) {
+  if (isIOS()) {
+    const blobUrl = pdf.output('bloburl');
+    if (tabTerbuka) tabTerbuka.location.href = blobUrl; else window.open(blobUrl, '_blank');
+    toast('📄 PDF dibuka dlm tab baharu — tekan ikon Share (⬆️) Safari utk simpan/kongsi');
+  } else {
+    pdf.save(`${namaFail}.pdf`);
+  }
+}
+
 async function muatTurunResitPDF() {
   const box=document.getElementById('resit-print');
   if(!box) { toast('Sila pilih transaksi dahulu','err'); return null; }
+  const tabPratonton = isIOS() ? window.open('', '_blank') : null;
   const id=document.getElementById('resit-sel').value;
   const isLupus = id.startsWith('LUPUS_');
   const t = isLupus ? null : DATA.transaksi.find(t=>t.id===id);
@@ -5127,7 +5147,7 @@ async function muatTurunResitPDF() {
   const namaFail = isLupus
     ? `${id.slice(6)}-Pelupusan`.replace(/[\/\\?%*:|"<>]/g,'-')
     : `${t?.resit||id}-${t?namaDestinasiTrx(t):'Kedai'}-RM${(t?.jumlah||0).toFixed(2)}`.replace(/[\/\\?%*:|"<>]/g,'-');
-  pdf.save(`${namaFail}.pdf`);
+  simpanPdfSerasiIOS(pdf, namaFail, tabPratonton);
   return t;
 }
 
@@ -5717,6 +5737,7 @@ async function cetakBaucar(id) {
 // yang boleh sertakan seluruh kad lain dalam halaman "Lebih" bila dieksport/simpan sebagai PDF.
 async function muatTurunBaucarPDF(id) {
   const v = BAUCAR_CACHE.find(x=>x.id===id); if (!v) return null;
+  const tabPratonton = isIOS() ? window.open('', '_blank') : null;
   if (!Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
   const nama = PROFIL_NAMA_CACHE[v.pekerja_id] || v.pekerja_id;
   document.getElementById('baucar-print-preview').innerHTML = bangunkanBaucarPrintBox(v, nama);
@@ -5735,7 +5756,7 @@ async function muatTurunBaucarPDF(id) {
   if (imgH > maxH) { imgH = maxH; imgW = imgH * (canvas.width/canvas.height); }
   pdf.addImage(img, 'PNG', (pageW-imgW)/2, margin, imgW, imgH);
   const namaFail = `${v.no_siri}-${nama}-RM${(v.baki??v.jumlah).toFixed(2)}`.replace(/[\/\\?%*:|"<>]/g,'-');
-  pdf.save(`${namaFail}.pdf`);
+  simpanPdfSerasiIOS(pdf, namaFail, tabPratonton);
   return { v, nama };
 }
 
