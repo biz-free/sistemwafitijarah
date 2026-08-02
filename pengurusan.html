@@ -490,6 +490,13 @@
         <div id="stok-mobile-semua-list"></div>
         <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="bukaModalPindahStok()">🔀 Pindah Stok Antara Pekerja</button>
       </div>
+      <!-- Jejak nilai modal (RM) stok yang diambil pekerja drpd gudang, berbanding
+      nilai yang dipulangkan (pulang sendiri, disahkan pemilik, atau padam transaksi). -->
+      <div class="card" id="kos-stok-pergerakan-card">
+        <div class="card-title">📊 Kos Stok: Diambil vs Dipulangkan</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Ikut harga beli SEMASA — jumlah "Belum Dipulangkan" anggaran sahaja (tak kira jualan/pelupusan yang turut kurangkan stok bawaan).</div>
+        <div id="kos-stok-pergerakan-list"></div>
+      </div>
       <div class="card" id="serahan-produk-semua-card">
         <div class="card-title">📋 Produk Dipulangkan</div>
         <div id="serahan-produk-semua-ringkasan" style="display:flex;gap:8px;margin-bottom:10px"></div>
@@ -578,6 +585,15 @@
       <div class="card" id="preorder-info-banner" style="display:none;border-left:4px solid var(--gold);background:#FFFBF0"></div>
 
       <div class="card" style="border-left:4px solid var(--teal)">
+        <!-- Pemilik sahaja — rekod bagi pihak pekerja lain (cth: pekerja tiada akses
+        peranti). Stok bawaan yang ditolak & created_by ikut PEKERJA YANG DIPILIH, bukan
+        pemilik sendiri. Kosongkan/pilih "Diri Sendiri" untuk rekod atas nama sendiri. -->
+        <div class="form-group" id="h-pekerja-target-wrap" style="display:none">
+          <label class="form-label">Rekod Bagi Pihak Pekerja</label>
+          <select class="form-input" id="h-pekerja-target" onchange="onPilihPekerjaHantar(this.value)">
+            <option value="">👤 Diri Sendiri (Pemilik)</option>
+          </select>
+        </div>
         <div class="form-group">
           <label class="form-label">Jenis Rekod</label>
           <div class="bayar-toggle" style="margin-bottom:0;grid-template-columns:repeat(3,1fr)">
@@ -588,6 +604,7 @@
         </div>
         <div class="form-group" id="h-kedai-wrap">
           <label class="form-label">Kedai Destinasi</label>
+          <input type="text" class="search-bar" id="h-kedai-search" placeholder="Cari nama kedai..." oninput="filterHantarKedai(this.value)" style="margin-bottom:8px" />
           <select class="form-input" id="h-kedai"></select>
         </div>
         <div class="form-group" id="h-pembeli-wrap" style="display:none">
@@ -3157,9 +3174,9 @@ function kiraDiskaunHantarPeratus(subjumlah) {
   return 0;
 }
 let poDestinasiCache = {}; // { '_PO_<id>': po } — pre-order kedai belum berdaftar, untuk pilihan destinasi Hantar
+let hantarKedaiOpsiPO = ''; // cache opsyen pre-order (HTML) — dikekalkan bila carian ditapis semula
 
 async function renderHantarSelects() {
-  const sel=document.getElementById('h-kedai');
   let opsiPO = '';
   poDestinasiCache = {};
   if (useCloud && DATA.currentUser?.id) {
@@ -3171,16 +3188,62 @@ async function renderHantarSelects() {
       opsiPO += `<option value="_PO_${po.id}">📦 ${esc(po.kedai_nama)} (Pre-Order)</option>`;
     });
   }
-  sel.innerHTML='<option value="">-- Pilih kedai --</option>'+opsiPO+DATA.kedai.filter(k=>k.status==='aktif').map(k=>`<option value="${k.id}">${k.nama} · ${k.daerah}</option>`).join('');
+  hantarKedaiOpsiPO = opsiPO;
+  filterHantarKedai(document.getElementById('h-kedai-search')?.value || '');
   const tukarSel = document.getElementById('h-tukar-kedai');
   if (tukarSel) tukarSel.innerHTML = '<option value="">-- Pilih kedai --</option>'+DATA.kedai.filter(k=>k.status==='aktif').map(k=>`<option value="${k.id}">${k.nama} · ${k.daerah}</option>`).join('');
+  await renderHantarPekerjaSelector();
   if (useCloud) await loadStokBawaan();
   renderHItems();
 }
 
+// Carian nama Kedai Destinasi — tapis senarai <option> secara langsung (kekalkan pilihan
+// semasa kalau ia masih dalam senarai tertapis), untuk semua peranan (pemilik & pekerja).
+function filterHantarKedai(q='') {
+  const sel = document.getElementById('h-kedai');
+  if (!sel) return;
+  const sediaAda = sel.value;
+  const qq = q.trim().toLowerCase();
+  const kedaiTapis = DATA.kedai.filter(k=>k.status==='aktif' && (!qq || k.nama.toLowerCase().includes(qq)));
+  sel.innerHTML = '<option value="">-- Pilih kedai --</option>' + hantarKedaiOpsiPO + kedaiTapis.map(k=>`<option value="${k.id}">${k.nama} · ${k.daerah}</option>`).join('');
+  if (sediaAda && [...sel.options].some(o=>o.value===sediaAda)) sel.value = sediaAda;
+}
+
+// Pemilik sahaja — rekod Hantar/Rosak-Expired bagi pihak pekerja lain (cth: pekerja
+// tiada akses peranti semasa itu). Stok bawaan yang disemak/ditolak ikut PEKERJA
+// TERPILIH, bukan pemilik sendiri — lihat bakiUntukHantar() & submitHantar/Pelupusan/TukarExpired.
+let PEKERJA_TARGET_ID = null;
+let PEKERJA_TARGET_STOK = {};
+
+async function renderHantarPekerjaSelector() {
+  const wrap = document.getElementById('h-pekerja-target-wrap');
+  const sel = document.getElementById('h-pekerja-target');
+  if (!wrap || !sel) return;
+  if (currentRole !== 'pemilik') { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  if (sel.options.length <= 1 && useCloud) {
+    const { data } = await sb.from('profiles').select('id,nama').eq('role','pekerja');
+    sel.innerHTML = '<option value="">👤 Diri Sendiri (Pemilik)</option>' + (data||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('');
+  }
+  sel.value = PEKERJA_TARGET_ID || '';
+}
+
+async function onPilihPekerjaHantar(pekerjaId) {
+  PEKERJA_TARGET_ID = pekerjaId || null;
+  PEKERJA_TARGET_STOK = {};
+  if (PEKERJA_TARGET_ID && useCloud) {
+    const { data } = await sb.from('stok_pekerja').select('stok_id,kuantiti').eq('pekerja_id', PEKERJA_TARGET_ID);
+    (data||[]).forEach(r => { PEKERJA_TARGET_STOK[r.stok_id] = r.kuantiti; });
+  }
+  renderHItems();
+  renderHItemsGantian();
+}
+
 function bakiUntukHantar(s) {
-  // Dalam mod cloud, pekerja hantar dari stok BAWAAN sendiri (bukan terus dari gudang).
-  return useCloud ? (DATA.stokPekerja[s.id]||0) : s.stok;
+  // Dalam mod cloud, pekerja hantar dari stok BAWAAN sendiri (bukan terus dari gudang) —
+  // ATAU stok bawaan PEKERJA TERPILIH kalau pemilik sedang rekod bagi pihak pekerja lain.
+  if (!useCloud) return s.stok;
+  return PEKERJA_TARGET_ID ? (PEKERJA_TARGET_STOK[s.id]||0) : (DATA.stokPekerja[s.id]||0);
 }
 
 function renderHItems() {
@@ -3301,7 +3364,7 @@ function setStokTab(t) {
     loadStokBawaan();
     loadSerahanProdukSaya();
     renderRequestStokMobileCard();
-    if (currentRole==='pemilik') { renderStokMobileSemua(); renderSerahanProdukSemua(); }
+    if (currentRole==='pemilik') { renderStokMobileSemua(); renderSerahanProdukSemua(); renderKosStokPergerakan(); }
   }
 }
 
@@ -3466,6 +3529,7 @@ const SERAHAN_PRODUK_JENIS_TXT = {
   pindah_keluar: '🔀 Pindah Keluar',
   pindah_masuk: '🔀 Pindah Masuk',
   restock: '⚡ Restock Gudang',
+  padam_pulang: '↩️ Pulang (Transaksi Dipadam)',
 };
 function labelSerahanProduk(r) {
   if (r.jenis === 'reject') return SERAHAN_PRODUK_SEBAB_TXT[r.sebab] || r.sebab || SERAHAN_PRODUK_JENIS_TXT.reject;
@@ -3628,6 +3692,42 @@ async function renderSerahanProdukSemua() {
     }).join('') || '<div class="empty"><div class="empty-text">Tiada sejarah lagi</div></div>');
 
   el.innerHTML = blokRejectIkutPekerja + blokMenunggu + blokSejarah;
+}
+
+// Jejak kos (RM, ikut harga beli SEMASA) stok yang diambil pekerja drpd gudang
+// ('ambil') berbanding dipulangkan ('baik' = pulang sendiri/disahkan pemilik,
+// 'padam_pulang' = transaksi kedai dipadam pemilik). "Belum Dipulangkan" ANGGARAN
+// sahaja — tak kira jualan/pelupusan sebenar yang turut kurangkan stok bawaan
+// (itu bukan "pulangan", tapi guna sah stok tu memang utk dijual/dilupuskan).
+async function renderKosStokPergerakan() {
+  const el = document.getElementById('kos-stok-pergerakan-list');
+  if (!el) return;
+  const { data, error } = await sb.from('serahan_produk').select('pekerja_id,stok_id,kuantiti,jenis').in('jenis', ['ambil','baik','padam_pulang']).eq('status','disahkan');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const { data: profil } = await sb.from('profiles').select('id,nama');
+  const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
+
+  const ringkasan = {};
+  (data||[]).forEach(r => {
+    const s = DATA.stok.find(s=>s.id===r.stok_id);
+    const kos = (s?.harga_beli||0) * r.kuantiti;
+    ringkasan[r.pekerja_id] ||= { diambil:0, dipulangkan:0 };
+    if (r.jenis === 'ambil') ringkasan[r.pekerja_id].diambil += kos;
+    else ringkasan[r.pekerja_id].dipulangkan += kos;
+  });
+
+  const baris = Object.entries(ringkasan).sort((a,b)=>b[1].diambil-a[1].diambil);
+  el.innerHTML = baris.map(([pid, d])=>{
+    const belumPulang = d.diambil - d.dipulangkan;
+    return `<div class="list-item" style="display:block">
+      <div class="list-item-title" style="margin-bottom:6px">${esc(namaPekerja(pid))}</div>
+      <div style="display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--muted)">
+        <span>📤 Diambil<br/><strong style="color:var(--text);font-size:13px">${fmt(d.diambil)}</strong></span>
+        <span>📥 Dipulangkan<br/><strong style="color:var(--text);font-size:13px">${fmt(d.dipulangkan)}</strong></span>
+        <span>Belum Dipulangkan<br/><strong style="color:${belumPulang>0?'var(--gold)':'var(--green)'};font-size:13px">${fmt(belumPulang)}</strong></span>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-text">Tiada pergerakan stok direkod lagi</div></div>';
 }
 
 async function ubahStatusSerahanProduk(id, status) {
@@ -3866,7 +3966,7 @@ async function submitHantar() {
       p_jumlah:trx.jumlah, p_status:trx.status, p_nota:trx.nota, p_resit:trx.resit, p_jarak_km:trx.jarak_km,
       p_nama_pembeli:trx.nama_pembeli, p_kaedah_bayaran:trx.kaedah_bayaran,
       p_jumlah_asal:trx.jumlah_asal, p_diskaun_peratus:trx.diskaun_peratus,
-      p_resit_bukti_url: resitBuktiPath,
+      p_resit_bukti_url: resitBuktiPath, p_pekerja_id_override: PEKERJA_TARGET_ID,
     });
     if (error) return toast('Gagal rekod penghantaran: '+error.message,'err');
     if (preorderIdSelesai) {
@@ -3915,9 +4015,10 @@ async function submitPelupusan() {
   const nota = document.getElementById('h-nota').value;
   const items = hItems.map(it=>({ stokId: it.stokId, qty: +it.qty }));
   const kerugian = items.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_beli*it.qty:0); },0);
+  const resit = genResit();
 
   if (useCloud) {
-    const { error } = await sb.rpc('lupus_stok_pekerja', { p_items: items, p_sebab: sebab, p_nota: nota });
+    const { error } = await sb.rpc('lupus_stok_pekerja', { p_items: items, p_sebab: sebab, p_nota: nota, p_resit: resit, p_pekerja_id_override: PEKERJA_TARGET_ID });
     if (error) return toast('Gagal rekod pelupusan: '+error.message,'err');
     await loadData();
     await loadStokBawaan();
@@ -3929,7 +4030,14 @@ async function submitPelupusan() {
   hItems=[{stokId:'',qty:1}]; setHJenis('kedai');
   document.getElementById('h-nota').value='';
   renderHItems();
-  await setHantarTab('sejarah');
+  if (useCloud) {
+    await setPage('lebih');
+    document.getElementById('resit-sel').value = 'LUPUS_'+resit;
+    await renderResit('LUPUS_'+resit);
+    document.getElementById('resit-preview').scrollIntoView({behavior:'smooth', block:'start'});
+  } else {
+    await setHantarTab('sejarah');
+  }
 }
 
 // ── Tukar barang expired dengan barang lain (kedai) — DUA belah kerugian, TIADA jualan/diskaun.
@@ -3950,11 +4058,12 @@ async function submitTukarExpired() {
   const itemsGantian = hItemsGantian.map(it=>({ stokId: it.stokId, qty: +it.qty }));
   const rmExpired = itemsExpired.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*it.qty:0); },0);
   const rmGantian = itemsGantian.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*it.qty:0); },0);
+  const resit = genResit();
 
   if (useCloud) {
     const { error } = await sb.rpc('tukar_stok_expired_kedai', {
       p_kedai_id: kedaiId, p_items_expired: itemsExpired, p_items_gantian: itemsGantian,
-      p_sebab_expired: sebabExpired, p_nota: nota,
+      p_sebab_expired: sebabExpired, p_nota: nota, p_resit: resit, p_pekerja_id_override: PEKERJA_TARGET_ID,
     });
     if (error) return toast('Gagal rekod pertukaran: '+error.message,'err');
     await loadData();
@@ -3970,7 +4079,14 @@ async function submitTukarExpired() {
   setHJenis('kedai');
   document.getElementById('h-nota').value='';
   renderHItems();
-  await setHantarTab('sejarah');
+  if (useCloud) {
+    await setPage('lebih');
+    document.getElementById('resit-sel').value = 'LUPUS_'+resit;
+    await renderResit('LUPUS_'+resit);
+    document.getElementById('resit-preview').scrollIntoView({behavior:'smooth', block:'start'});
+  } else {
+    await setHantarTab('sejarah');
+  }
 }
 
 // Nama destinasi paparan untuk 1 transaksi — kedai berdaftar, atau "Belian Peribadi" jika tiada kedai
@@ -4441,12 +4557,12 @@ async function renderTransaksiKedaiList() {
 }
 
 async function padamTransaksiKedai(id) {
-  if (!confirm('Padam rekod transaksi ini secara kekal? Stok akan dipulangkan ke stok gudang pusat. Tindakan ini tidak boleh diundur.')) return;
+  if (!confirm('Padam rekod transaksi ini secara kekal? Stok akan dipulangkan ke stok bawaan pekerja yang menghantar. Tindakan ini tidak boleh diundur.')) return;
   const { error } = await sb.rpc('padam_transaksi_kedai', { p_id: id });
   if (error) return toast('Gagal padam: '+error.message,'err');
   await loadData();
   renderTransaksiKedaiList();
-  toast('Transaksi dipadam & stok dipulangkan ke gudang');
+  toast('Transaksi dipadam & stok dipulangkan ke bawaan pekerja');
 }
 
 // ════════════════════════════════════════════════════
@@ -4718,11 +4834,30 @@ async function lihatBuktiBayaran(path) {
 // ════════════════════════════════════════════════════
 //  RESIT
 // ════════════════════════════════════════════════════
-function renderResitSel() {
+// Resit kini merangkumi 2 sumber: transaksi (jualan/hantar) DAN pelupusan_stok
+// (Rosak/Expired — dikumpul ikut medan "resit" kongsi, lihat submitPelupusan/
+// submitTukarExpired) — dibezakan via prefix "LUPUS_" pada value <option>.
+async function renderResitSel() {
   const sel=document.getElementById('resit-sel');
   const sumber = currentRole==='pemilik' ? DATA.transaksi : DATA.transaksi.filter(t=>t.created_by===DATA.currentUser?.id);
   const sorted=[...sumber].sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
-  sel.innerHTML='<option value="">-- Pilih transaksi --</option>'+sorted.map(t=>{
+
+  let opsiLupus = '';
+  if (useCloud) {
+    let q = sb.from('pelupusan_stok').select('*').not('resit','is',null).order('created_at',{ascending:false}).limit(200);
+    if (currentRole!=='pemilik') q = q.eq('pekerja_id', DATA.currentUser?.id);
+    const { data } = await q;
+    const kumpulan = {};
+    (data||[]).forEach(r => { (kumpulan[r.resit] ||= []).push(r); });
+    opsiLupus = Object.entries(kumpulan).sort((a,b)=>new Date(b[1][0].created_at)-new Date(a[1][0].created_at)).map(([resitNo, rows])=>{
+      const kosTotal = rows.reduce((a,r)=>a+(r.kos||0),0);
+      const kedaiNama = rows[0].kedai_id ? (DATA.kedai.find(k=>k.id===rows[0].kedai_id)?.nama||rows[0].kedai_id) : null;
+      const label = kedaiNama ? `🔄 ${resitNo} · ${kedaiNama}` : `🗑️ ${resitNo} · Pelupusan (${fmt(kosTotal)})`;
+      return `<option value="LUPUS_${resitNo}">${esc(label)}</option>`;
+    }).join('');
+  }
+
+  sel.innerHTML='<option value="">-- Pilih transaksi --</option>'+opsiLupus+sorted.map(t=>{
     return `<option value="${t.id}">${t.resit||t.id} · ${esc(namaDestinasiTrx(t))} · ${fmt(t.jumlah)}</option>`;
   }).join('');
 }
@@ -4730,6 +4865,7 @@ function renderResitSel() {
 async function renderResit(id) {
   const el=document.getElementById('resit-preview');
   if(!id){el.innerHTML='';return;}
+  if (id.startsWith('LUPUS_')) return renderResitPelupusan(id.slice(6));
   const t=DATA.transaksi.find(t=>t.id===id); if(!t){el.innerHTML='';return;}
   const peribadi = !t.kedai_id;
   const k=DATA.kedai.find(k=>k.id===t.kedai_id)||{nama:t.nama_pembeli||'Belian Peribadi',alamat:'—'};
@@ -4787,6 +4923,61 @@ async function renderResit(id) {
   }
 }
 
+// Resit Rosak/Expired — kumpulan pelupusan_stok yang kongsi no. resit sama (1 hantaran
+// borang = 1 resit, walaupun beberapa produk/baris). Guna semula CSS .resit-box sama
+// dgn resit jualan supaya konsisten dari segi jenama/susun atur.
+async function renderResitPelupusan(resitNo) {
+  const el = document.getElementById('resit-preview');
+  const { data, error } = await sb.from('pelupusan_stok').select('*').eq('resit', resitNo).order('created_at');
+  if (error || !data?.length) { el.innerHTML = '<div class="empty"><div class="empty-text">Rekod pelupusan tidak dijumpai</div></div>'; return; }
+
+  const isTukar = data.some(r=>r.jenis==='tukar_ambil'||r.jenis==='tukar_beri');
+  const diambil = data.filter(r=>r.jenis!=='tukar_beri'); // pelupusan biasa ATAU barang expired diambil balik
+  const gantian = data.filter(r=>r.jenis==='tukar_beri'); // barang gantian diberi percuma (tukar sahaja)
+  const kedaiId = data[0].kedai_id;
+  const kedai = kedaiId ? DATA.kedai.find(k=>k.id===kedaiId) : null;
+
+  let pekerja = null;
+  if (useCloud && data[0].pekerja_id) {
+    const { data: pf } = await sb.from('profiles').select('nama,telefon').eq('id', data[0].pekerja_id).single();
+    pekerja = pf;
+  }
+
+  const baris = r => { const s=DATA.stok.find(s=>s.id===r.stok_id)||{nama:r.stok_id,unit:''}; return `<div class="resit-item-row"><span>${esc(s.nama)}</span><span style="text-align:center">${r.kuantiti} ${esc(s.unit||'')}</span><span style="text-align:right;font-weight:700">RM${(r.kos||0).toFixed(2)}</span></div>`; };
+  const jumlahDiambil = diambil.reduce((a,r)=>a+(r.kos||0),0);
+  const jumlahGantian = gantian.reduce((a,r)=>a+(r.kos||0),0);
+
+  el.innerHTML = `<div class="resit-box" id="resit-print">
+    <div class="resit-header">
+      <img src="logo.png" alt="Wafi Tijarah Trading" style="width:36px;height:36px;border-radius:50%;margin-bottom:6px" />
+      <div style="font-weight:900;font-size:15px;letter-spacing:1px">SYARIKAT WAFI TIJARAH TRADING</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">Pembekal Produk Halal Berkualiti · Kedah, Perlis, P.Pinang & Perak</div>
+      <div style="font-size:9px;color:var(--muted)">No. Pendaftaran: AS0462205-D</div>
+      <div style="font-size:10px;color:var(--muted)">wafitijarahtrading@gmail.com · 014-6363831</div>
+    </div>
+    <div class="resit-row" style="font-weight:700"><span>NO. RESIT</span><span>${esc(resitNo)}</span></div>
+    <div class="resit-row"><span>TARIKH</span><span>${fmtDT(data[0].created_at)}</span></div>
+    ${pekerja?`<div class="resit-row"><span>PEKERJA</span><span>${esc(pekerja.nama||'-')}</span></div>`:''}
+    ${kedai?`<div class="resit-row"><span>KEDAI</span><span style="text-align:right;max-width:60%">${esc(kedai.nama)}</span></div>`:''}
+    <div class="resit-items">
+      <div class="resit-item-row" style="font-weight:700;color:var(--muted);font-size:10px;padding-bottom:6px">
+        <span>PRODUK</span><span style="text-align:center">QTY</span><span style="text-align:right">NILAI</span>
+      </div>
+      <div style="font-size:10px;font-weight:700;color:var(--red);margin:4px 0">${isTukar?'🔄 BARANG DIAMBIL BALIK (EXPIRED)':'🗑️ BARANG DILUPUSKAN'}</div>
+      ${diambil.map(baris).join('')}
+    </div>
+    ${gantian.length?`<div class="resit-items" style="margin-top:8px">
+      <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px">🔄 BARANG GANTIAN DIBERI (PERCUMA)</div>
+      ${gantian.map(baris).join('')}
+    </div>`:''}
+    <div class="resit-total" style="display:flex;justify-content:space-between"><span>${isTukar?'NILAI EXPIRED:':'JUMLAH KERUGIAN:'}</span><span>RM ${jumlahDiambil.toFixed(2)}</span></div>
+    ${gantian.length?`<div class="resit-row" style="margin-top:4px"><span style="font-weight:700">NILAI GANTIAN</span><span>RM ${jumlahGantian.toFixed(2)}</span></div>`:''}
+    <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">SEBAB</span><span>${LABEL_SEBAB_LUPUS[data[0].sebab]||esc(data[0].sebab)}</span></div>
+    ${data[0].nota?`<div style="margin-top:8px;font-size:10px;color:var(--muted)">Nota: ${esc(data[0].nota)}</div>`:''}
+    <div class="resit-footer">Terima kasih atas kepercayaan anda!<br/>Produk Halal · Berkualiti · Amanah<br/><strong>— WAFI TIJARAH TRADING —</strong></div>
+  </div>`;
+}
+
 function cetakResit() {
   const box=document.getElementById('resit-print');
   if(!box) return toast('Sila pilih transaksi dahulu','err');
@@ -4797,7 +4988,8 @@ async function muatTurunResitPDF() {
   const box=document.getElementById('resit-print');
   if(!box) { toast('Sila pilih transaksi dahulu','err'); return null; }
   const id=document.getElementById('resit-sel').value;
-  const t=DATA.transaksi.find(t=>t.id===id);
+  const isLupus = id.startsWith('LUPUS_');
+  const t = isLupus ? null : DATA.transaksi.find(t=>t.id===id);
   toast('Menjana PDF...');
   const canvas = await html2canvas(box, { scale:2, backgroundColor:'#ffffff', useCORS:true });
   const img = canvas.toDataURL('image/png');
@@ -4811,7 +5003,9 @@ async function muatTurunResitPDF() {
   const maxH = pageH - margin*2;
   if (imgH > maxH) { imgH = maxH; imgW = imgH * (canvas.width/canvas.height); }
   pdf.addImage(img, 'PNG', (pageW-imgW)/2, margin, imgW, imgH);
-  const namaFail = `${t?.resit||id}-${t?namaDestinasiTrx(t):'Kedai'}-RM${(t?.jumlah||0).toFixed(2)}`.replace(/[\/\\?%*:|"<>]/g,'-');
+  const namaFail = isLupus
+    ? `${id.slice(6)}-Pelupusan`.replace(/[\/\\?%*:|"<>]/g,'-')
+    : `${t?.resit||id}-${t?namaDestinasiTrx(t):'Kedai'}-RM${(t?.jumlah||0).toFixed(2)}`.replace(/[\/\\?%*:|"<>]/g,'-');
   pdf.save(`${namaFail}.pdf`);
   return t;
 }
@@ -4827,6 +5021,7 @@ function formatNoTelefonMY(tel) {
 async function hantarResitWhatsapp() {
   const id=document.getElementById('resit-sel').value;
   if(!id) return toast('Sila pilih transaksi dahulu','err');
+  if (id.startsWith('LUPUS_')) return toast('Hantar WhatsApp belum disokong untuk resit pelupusan — guna Cetak/Muat Turun PDF','err');
   const t=DATA.transaksi.find(t=>t.id===id); if(!t) return;
   const k=DATA.kedai.find(k=>k.id===t.kedai_id);
   const tel=formatNoTelefonMY(k?.telefon);
