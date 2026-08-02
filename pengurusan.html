@@ -381,6 +381,13 @@
       <div id="jualan-pekerja-list"></div>
     </div>
 
+    <!-- Bonus Kedai Baru Terkumpul — bonus dikumpul & dibayar berasingan (bukan harian),
+    matang selepas genap 1 bulan. Setiap pekerja lihat jumlah SENDIRI sahaja. -->
+    <div class="card" id="bonus-kedai-saya-card" style="border-left:4px solid var(--purple);display:none">
+      <div class="card-title" style="color:var(--purple)">🏪 Bonus Kedai Baru Terkumpul</div>
+      <div id="bonus-kedai-saya-list"></div>
+    </div>
+
     <!-- Link Pre-Order Kedai -->
     <div class="card" style="border-left:4px solid var(--gold);background:#FFFBF0">
       <div class="card-title" style="color:var(--gold)">🔗 Link Pre-Order Kedai Saya</div>
@@ -996,6 +1003,15 @@
       </div>
       <div id="baucar-list"></div>
       <div id="baucar-print-preview"></div>
+    </div>
+
+    <!-- Bonus Kedai Baru Terkumpul (pemilik sahaja) — dikumpul berasingan drpd upah
+    harian, matang selepas genap 1 bulan (kitaran tetap). Pemilik tick bayar bila-bila
+    tarikh, boleh sekalikan dgn baucar harian hari ini atau berasingan. -->
+    <div class="card" id="bonus-kedai-semua-card">
+      <div class="card-title">🏪 Bonus Kedai Baru Terkumpul</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Bonus kedai baru TIDAK lagi dibayar terus dlm baucar harian — dikumpul di sini, matang (boleh dibayar) selepas genap 1 bulan. Tick "Bayar Sekarang" utk lulus SEMUA jumlah matang pekerja terbabit sekaligus.</div>
+      <div id="bonus-kedai-semua-list"></div>
     </div>
 
     <!-- Tetapan Kos Operasi (pemilik sahaja) -->
@@ -1931,7 +1947,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
+  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','bonus-kedai-semua-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -1995,7 +2011,7 @@ async function setPage(p) {
   if (p==='lebih') {
     renderLebihShortcuts();
     renderResitSel(); renderLaporan();
-    if (currentRole==='pemilik') { renderBaucarList(); renderLaporanHarian(); }
+    if (currentRole==='pemilik') { renderBaucarList(); renderLaporanHarian(); renderBonusKedaiSemua(); }
     document.getElementById('profil-nama').value = DATA.currentUser?.nama || '';
     document.getElementById('profil-telefon').value = DATA.currentUser?.telefon || '';
     if (!document.getElementById('upah-saya-bulan').value) document.getElementById('upah-saya-bulan').value = bulanTempatan();
@@ -2038,6 +2054,7 @@ const LEBIH_SHORTCUTS = [
   { id: 'laporan-harian-card', icon: '📅', label: 'Laporan Harian' },
   { id: 'laporan-card', icon: '📊', label: 'Laporan' },
   { id: 'baucar-card', icon: '🧾', label: 'Baucar' },
+  { id: 'bonus-kedai-semua-card', icon: '🏪', label: 'Bonus Kedai' },
   { id: 'permohonan-padam-card', icon: '🗑️', label: 'Minta Padam' },
   { id: 'tetapan-kos-card', icon: '⚙️', label: 'Kos Operasi' },
   { id: 'tetapan-diskaun-card', icon: '💳', label: 'Diskaun' },
@@ -2096,6 +2113,7 @@ function renderDashboard() {
   renderTugasanBaru();
   renderPreorderSaya();
   renderJualanPekerjaHariIni();
+  renderBonusKedaiSaya();
   renderCashDipegangDashboard();
   kemaskiniNotifikasi();
   const aktif = DATA.kedai.filter(k=>k.status==='aktif').length;
@@ -4451,6 +4469,38 @@ async function renderJualanPekerjaHariIni() {
   }).join('') || '<div class="empty"><div class="empty-text">Tiada jualan direkod hari ini lagi</div></div>';
 }
 
+// Dashboard: bonus kedai baru pekerja SENDIRI (RLS "staff lihat bonus kedai sendiri"
+// benarkan baca terus, tiada RPC diperlukan) — dikumpul berasingan drpd upah harian,
+// matang selepas genap 1 bulan ikut kitaran tetap (tetapan.bonus_anchor_tarikh).
+// Kad disembunyikan kalau tiada bonus terkumpul langsung (pekerja tak pernah daftar kedai baru).
+async function renderBonusKedaiSaya() {
+  const card = document.getElementById('bonus-kedai-saya-card');
+  const el = document.getElementById('bonus-kedai-saya-list');
+  if (!card || !el || !useCloud || !DATA.currentUser?.id) return;
+  const { data, error } = await sb.from('bonus_kedai_baru').select('jumlah,tarikh_matang').eq('pekerja_id', DATA.currentUser.id).eq('status','belum_dibayar');
+  if (error || !data || !data.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const hariIni = tarikhTempatan();
+  let matang = 0, belumMatang = 0, tarikhMatangTerdekat = null;
+  data.forEach(r => {
+    if (r.tarikh_matang <= hariIni) matang += r.jumlah;
+    else { belumMatang += r.jumlah; if (!tarikhMatangTerdekat || r.tarikh_matang < tarikhMatangTerdekat) tarikhMatangTerdekat = r.tarikh_matang; }
+  });
+  el.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:120px;background:var(--bg);border-radius:8px;padding:10px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">✅ Matang (Boleh Dibayar)</div>
+        <div style="font-size:18px;font-weight:800;color:var(--green)">${fmt(matang)}</div>
+      </div>
+      <div style="flex:1;min-width:120px;background:var(--bg);border-radius:8px;padding:10px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">⏳ Belum Matang</div>
+        <div style="font-size:18px;font-weight:800;color:var(--gold)">${fmt(belumMatang)}</div>
+      </div>
+    </div>
+    ${tarikhMatangTerdekat?`<div style="font-size:11px;color:var(--muted);margin-top:8px">Matang seterusnya: ${fmtD(tarikhMatangTerdekat)}</div>`:''}
+    <div style="font-size:10px;color:var(--muted);margin-top:6px">Bonus kedai baru dikumpul &amp; dibayar berasingan drpd upah harian — matang selepas genap 1 bulan, pemilik akan sahkan bayaran.</div>`;
+}
+
 async function renderPreorderList() {
   const el = document.getElementById('preorder-list');
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
@@ -5201,7 +5251,8 @@ async function renderLaporan() {
     <div class="list-item"><div class="list-item-title">Upah Pekerja</div><div class="list-item-val">${fmt(kosUpah)}</div></div>
     <div class="list-item"><div class="list-item-title">Minyak Kenderaan (${jumlahKm} km)</div><div class="list-item-val">${fmt(kosMinyak)}</div></div>
     <div class="list-item"><div class="list-item-title">Duit Makan (${hariKerja} hari-kerja)</div><div class="list-item-val">${fmt(kosMakan)}</div></div>
-    ${kedaiBonusList.length?`<div class="list-item"><div class="list-item-title">Bonus Kedai Baru (${kedaiBonusKedaiUnik} kedai)</div><div class="list-item-val">${fmt(kosKedaiBaru)}</div></div>`:''}
+    ${kedaiBonusList.length?`<div class="list-item"><div class="list-item-title">Bonus Kedai Baru (${kedaiBonusKedaiUnik} kedai)</div><div class="list-item-val">${fmt(kosKedaiBaru)}</div></div>
+    <div class="list-item" style="background:var(--bg);border-radius:8px;padding:8px 10px"><div class="list-item-title" style="font-weight:700">💰 Untung Bersih Selepas Bonus Kedai</div><div class="list-item-val" style="font-weight:800">${fmt(untung-kosKedaiBaru)}</div></div>`:''}
     ${edagangLayakUpah.length?`<div class="list-item"><div class="list-item-title">Upah E-Dagang (${edagangLayakUpah.length} pesanan)</div><div class="list-item-val">${fmt(kosUpahEdagang)}</div></div>`:''}
     <div class="total-box" style="margin-top:10px">
       <span class="total-label">UNTUNG BERSIH</span>
@@ -5298,7 +5349,8 @@ async function renderLaporanHarian() {
     <div class="list-item"><div class="list-item-title">Upah Pekerja</div><div class="list-item-val">${fmt(kosUpah)}</div></div>
     <div class="list-item"><div class="list-item-title">Minyak Kenderaan (${jumlahKm.toFixed(1)} km)</div><div class="list-item-val">${fmt(kosMinyak)}</div></div>
     <div class="list-item"><div class="list-item-title">Duit Makan (${hariKerja} pekerja layak)</div><div class="list-item-val">${fmt(kosMakan)}</div></div>
-    ${kedaiBonusList.length?`<div class="list-item"><div class="list-item-title">Bonus Kedai Baru (${kedaiBonusKedaiUnik} kedai)</div><div class="list-item-val">${fmt(kosKedaiBaru)}</div></div>`:''}
+    ${kedaiBonusList.length?`<div class="list-item"><div class="list-item-title">Bonus Kedai Baru (${kedaiBonusKedaiUnik} kedai)</div><div class="list-item-val">${fmt(kosKedaiBaru)}</div></div>
+    <div class="list-item" style="background:var(--bg);border-radius:8px;padding:8px 10px"><div class="list-item-title" style="font-weight:700">💰 Untung Bersih Selepas Bonus Kedai</div><div class="list-item-val" style="font-weight:800">${fmt(untung-kosKedaiBaru)}</div></div>`:''}
     ${edagangLayakUpah.length?`<div class="list-item"><div class="list-item-title">Upah E-Dagang (${edagangLayakUpah.length} pesanan)</div><div class="list-item-val">${fmt(kosUpahEdagang)}</div></div>`:''}
     <div class="total-box" style="margin-top:10px">
       <span class="total-label">UNTUNG BERSIH</span>
@@ -5313,7 +5365,7 @@ async function renderLaporanHarian() {
 //  Jumlah diambil terus daripada Laporan Bulanan (LAPORAN_PEKERJA_TERKINI) — tiada
 //  pengiraan baharu, sekadar formalkan angka yang sama menjadi dokumen bernombor siri.
 // ════════════════════════════════════════════════════
-const BAUCAR_KATEGORI_LABEL = { petrol:'⛽ Petrol', upah:'💰 Upah', makan:'🍽️ Duit Makan', upah_harian:'💵 Upah Harian (Netto Cash)' };
+const BAUCAR_KATEGORI_LABEL = { petrol:'⛽ Petrol', upah:'💰 Upah', makan:'🍽️ Duit Makan', upah_harian:'💵 Upah Harian (Netto Cash)', bonus_kedai:'🏪 Bonus Kedai Baru' };
 const BAUCAR_STATUS_LABEL = { draf:'📝 Draf', diluluskan:'✅ Diluluskan', dibayar:'💵 Dibayar', dibatalkan:'❌ Dibatalkan' };
 let BAUCAR_CACHE = [];
 
@@ -5362,11 +5414,22 @@ async function kiraUpahPenuhHari(pekerjaId, tarikh) {
   const kmHari = kmIkutHari[`${pekerjaId}|${tarikh}`] || 0;
   const minyakHari = kmHari * SETTINGS.minyak;
 
+  // Bonus kedai baru hari ini — MAKLUMAN sahaja, TIDAK dimasukkan ke jumlah boleh
+  // bayar baucar harian. Mulai ciri "Bonus Kedai Baru Terkumpul", bonus dikumpul
+  // berasingan (jadual bonus_kedai_baru) & cuma dibayar selepas matang (bayar_bonus_
+  // kedai_terkumpul) — lihat renderBonusKedaiTerkumpul()/pindahStokKePekerja pattern.
   const kedaiListHari = DATA.kedai
     .filter(k => k.didaftarkan_oleh===pekerjaId)
     .flatMap(k => bonusKedaiEvents(k.id).map(ev => ({ kedai:k, ...ev })))
     .filter(x => (x.tarikh_masa||'').slice(0,10)===tarikh);
   const bonusHari = kedaiListHari.reduce((a,x)=>a+x.jumlah,0);
+
+  let bonusTerkumpulMatang = 0, bonusTerkumpulBelumMatang = 0;
+  if (useCloud) {
+    const { data } = await sb.from('bonus_kedai_baru').select('jumlah,tarikh_matang').eq('pekerja_id', pekerjaId).eq('status','belum_dibayar');
+    const hariIni = tarikhTempatan();
+    (data||[]).forEach(r => { if (r.tarikh_matang <= hariIni) bonusTerkumpulMatang += r.jumlah; else bonusTerkumpulBelumMatang += r.jumlah; });
+  }
 
   const { data: edagangData } = await sb.from('pesanan_edagang').select('*').eq('assigned_pekerja_id', pekerjaId);
   const edagangHari = (edagangData||[]).filter(o=>['dihantar','selesai'].includes(o.status_pesanan) && (o.updated_at||o.created_at||'').slice(0,10)===tarikh);
@@ -5377,8 +5440,8 @@ async function kiraUpahPenuhHari(pekerjaId, tarikh) {
   const hariLayakMakan = await kiraHariLayakMakan(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaId);
   const makanHari = hariLayakMakan.has(`${pekerjaId}|${tarikh}`) ? SETTINGS.makan : 0;
 
-  const jumlah = upahHari + minyakHari + makanHari + bonusHari + upahEdagangHari;
-  return { jumlah, butiran: { upah:upahHari, minyak:minyakHari, km:kmHari, makan:makanHari, bonus:bonusHari, upahEdagang:upahEdagangHari } };
+  const jumlah = upahHari + minyakHari + makanHari + upahEdagangHari;
+  return { jumlah, butiran: { upah:upahHari, minyak:minyakHari, km:kmHari, makan:makanHari, bonus:bonusHari, upahEdagang:upahEdagangHari, bonusTerkumpulMatang, bonusTerkumpulBelumMatang } };
 }
 
 async function janaBaucarHarian() {
@@ -5390,7 +5453,7 @@ async function janaBaucarHarian() {
   const { jumlah, butiran } = await kiraUpahPenuhHari(pekerjaId, tarikh);
   const { error } = await sb.rpc('cipta_baucar_harian', { p_pekerja_id: pekerjaId, p_tarikh: tarikh, p_jumlah: jumlah, p_butiran: butiran });
   if (error) return toast('Gagal jana baucar harian: '+error.message,'err');
-  toast(`🧮 Baucar harian dijana · Upah ${fmt(butiran.upah)} + Minyak ${fmt(butiran.minyak)} + Makan ${fmt(butiran.makan)} + Bonus ${fmt(butiran.bonus)}${butiran.upahEdagang?` + E-dagang ${fmt(butiran.upahEdagang)}`:''} = ${fmt(jumlah)}`);
+  toast(`🧮 Baucar harian dijana · Upah ${fmt(butiran.upah)} + Minyak ${fmt(butiran.minyak)} + Makan ${fmt(butiran.makan)}${butiran.upahEdagang?` + E-dagang ${fmt(butiran.upahEdagang)}`:''} = ${fmt(jumlah)}${butiran.bonus>0?` (Bonus Kedai Baru hari ini ${fmt(butiran.bonus)} dikumpul berasingan, bukan dlm jumlah ini)`:''}`);
   document.getElementById('baucar-bulan').value = tarikh.slice(0,7);
   await renderBaucarList();
 }
@@ -5419,7 +5482,9 @@ async function renderBaucarSaya() {
         </div>
       </div>
       ${v.kategori==='upah_harian'?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;background:var(--bg);border-radius:6px;padding:6px 8px">
-        ${v.butiran?`<div style="margin-bottom:4px">Upah ${fmt(v.butiran.upah)} + Minyak ${fmt(v.butiran.minyak)} (${(v.butiran.km||0).toFixed(1)}km) + Makan ${fmt(v.butiran.makan)} + Bonus ${fmt(v.butiran.bonus)}${v.butiran.upahEdagang?` + E-dagang ${fmt(v.butiran.upahEdagang)}`:''}</div>`:''}
+        ${v.butiran?`<div style="margin-bottom:4px">Upah ${fmt(v.butiran.upah)} + Minyak ${fmt(v.butiran.minyak)} (${(v.butiran.km||0).toFixed(1)}km) + Makan ${fmt(v.butiran.makan)}${v.butiran.upahEdagang?` + E-dagang ${fmt(v.butiran.upahEdagang)}`:''}</div>
+        ${v.butiran.bonus>0?`<div style="margin-bottom:4px;color:var(--gold)">🏪 Bonus Kedai Baru hari ini: ${fmt(v.butiran.bonus)} (dikumpul berasingan, tiada dlm jumlah di atas)</div>`:''}
+        ${(v.butiran.bonusTerkumpulMatang||v.butiran.bonusTerkumpulBelumMatang)?`<div style="margin-bottom:4px">📦 Bonus Kedai Terkumpul — Matang: <strong style="color:var(--green)">${fmt(v.butiran.bonusTerkumpulMatang||0)}</strong> · Belum Matang: ${fmt(v.butiran.bonusTerkumpulBelumMatang||0)}</div>`:''}`:''}
         Jumlah Upah ${fmt(v.jumlah)} − Cash ditangan ${fmt(v.cash_ditangan)} = <strong style="color:${v.baki>=0?'var(--green)':'var(--red)'}">${v.baki>=0?'Baki pemilik transfer':'Anda perlu serah lebihan'} ${fmt(Math.abs(v.baki))}</strong>
       </div>`:''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
@@ -5468,7 +5533,9 @@ async function renderBaucarList() {
         </div>
       </div>
       ${v.kategori==='upah_harian'?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;background:var(--bg);border-radius:6px;padding:6px 8px">
-        ${v.butiran?`<div style="margin-bottom:4px">Upah ${fmt(v.butiran.upah)} + Minyak ${fmt(v.butiran.minyak)} (${(v.butiran.km||0).toFixed(1)}km) + Makan ${fmt(v.butiran.makan)} + Bonus ${fmt(v.butiran.bonus)}${v.butiran.upahEdagang?` + E-dagang ${fmt(v.butiran.upahEdagang)}`:''}</div>`:''}
+        ${v.butiran?`<div style="margin-bottom:4px">Upah ${fmt(v.butiran.upah)} + Minyak ${fmt(v.butiran.minyak)} (${(v.butiran.km||0).toFixed(1)}km) + Makan ${fmt(v.butiran.makan)}${v.butiran.upahEdagang?` + E-dagang ${fmt(v.butiran.upahEdagang)}`:''}</div>
+        ${v.butiran.bonus>0?`<div style="margin-bottom:4px;color:var(--gold)">🏪 Bonus Kedai Baru hari ini: ${fmt(v.butiran.bonus)} (dikumpul berasingan, tiada dlm jumlah di atas)</div>`:''}
+        ${(v.butiran.bonusTerkumpulMatang||v.butiran.bonusTerkumpulBelumMatang)?`<div style="margin-bottom:4px">📦 Bonus Kedai Terkumpul — Matang: <strong style="color:var(--green)">${fmt(v.butiran.bonusTerkumpulMatang||0)}</strong> · Belum Matang: ${fmt(v.butiran.bonusTerkumpulBelumMatang||0)}</div>`:''}`:''}
         Jumlah Upah ${fmt(v.jumlah)} − Cash ditangan ${fmt(v.cash_ditangan)} = <strong style="color:${v.baki>=0?'var(--green)':'var(--red)'}">${v.baki>=0?'Baki pemilik transfer':'Pekerja perlu serah lebihan'} ${fmt(Math.abs(v.baki))}</strong>
       </div>`:''}
       ${v.resit_url
@@ -5525,6 +5592,58 @@ async function ubahStatusBaucar(id, status) {
   const { error } = await sb.from('baucar_bayaran').update(kemaskini).eq('id', id);
   if (error) return toast('Gagal kemaskini status: '+error.message,'err');
   toast('Status baucar dikemaskini');
+  await renderBaucarList();
+}
+
+// Pemilik: senarai SEMUA pekerja dgn bonus kedai baru terkumpul (belum dibayar) — tick
+// "Bayar Sekarang" utk lulus SEMUA jumlah MATANG pekerja itu sekaligus (RPC bayar_
+// bonus_kedai_terkumpul), pilihan sekalikan dgn baucar upah_harian hari ini atau
+// jana baucar 'bonus_kedai' berasingan (kekal ikut alur kelulusan draf/diluluskan/
+// dibayar sedia ada di senarai Baucar di atas).
+async function renderBonusKedaiSemua() {
+  const el = document.getElementById('bonus-kedai-semua-list');
+  if (!el) return;
+  const { data, error } = await sb.from('bonus_kedai_baru').select('pekerja_id,jumlah,tarikh_matang').eq('status','belum_dibayar');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const senarai = data || [];
+  if (!senarai.length) { el.innerHTML = '<div class="empty"><div class="empty-text">Tiada bonus kedai baru terkumpul lagi</div></div>'; return; }
+  const { data: profil } = await sb.from('profiles').select('id,nama');
+  const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
+  const hariIni = tarikhTempatan();
+  const ringkasan = {};
+  senarai.forEach(r => {
+    ringkasan[r.pekerja_id] ||= { matang: 0, belumMatang: 0, tarikhTerdekat: null };
+    if (r.tarikh_matang <= hariIni) ringkasan[r.pekerja_id].matang += r.jumlah;
+    else {
+      ringkasan[r.pekerja_id].belumMatang += r.jumlah;
+      if (!ringkasan[r.pekerja_id].tarikhTerdekat || r.tarikh_matang < ringkasan[r.pekerja_id].tarikhTerdekat) ringkasan[r.pekerja_id].tarikhTerdekat = r.tarikh_matang;
+    }
+  });
+  el.innerHTML = Object.entries(ringkasan).sort((a,b)=>b[1].matang-a[1].matang).map(([pid,d])=>`
+    <div class="list-item" style="display:block">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div class="list-item-title">${esc(namaPekerja(pid))}</div>
+        <div style="text-align:right;font-size:11px;color:var(--muted)">
+          Matang: <strong style="color:var(--green);font-size:13px">${fmt(d.matang)}</strong>
+          ${d.belumMatang?` · Belum Matang: ${fmt(d.belumMatang)}${d.tarikhTerdekat?` (${fmtD(d.tarikhTerdekat)})`:''}`:''}
+        </div>
+      </div>
+      ${d.matang>0?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer">
+          <input type="checkbox" id="bk-gabung-${pid}" style="width:14px;height:14px" /> Sekalikan dgn baucar harian hari ini
+        </label>
+        <button class="btn btn-primary btn-sm" onclick="bayarBonusKedai('${pid}')">💰 Bayar Sekarang (${fmt(d.matang)})</button>
+      </div>`:'<div style="font-size:11px;color:var(--muted)">Belum matang lagi — belum boleh dibayar</div>'}
+    </div>`).join('');
+}
+
+async function bayarBonusKedai(pekerjaId) {
+  const gabung = document.getElementById(`bk-gabung-${pekerjaId}`)?.checked || false;
+  if (!confirm(`Sahkan bayar SEMUA bonus kedai baru yang matang untuk pekerja ini?${gabung?' (akan disekalikan dengan baucar upah harian hari ini)':' (baucar berasingan akan dijana)'}`)) return;
+  const { data, error } = await sb.rpc('bayar_bonus_kedai_terkumpul', { p_pekerja_id: pekerjaId, p_gabung_baucar: gabung });
+  if (error) return toast('Gagal proses bayaran: '+error.message,'err');
+  toast(`✅ Bonus kedai baru ${fmt(data)} berjaya diproses`);
+  await renderBonusKedaiSemua();
   await renderBaucarList();
 }
 
