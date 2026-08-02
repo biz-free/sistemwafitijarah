@@ -948,6 +948,23 @@
       <div class="card-title">👥 Cash Dipegang Semua Pekerja</div>
       <div id="serahan-cash-semua-ringkasan" style="display:flex;gap:8px;margin-bottom:10px"></div>
       <div id="serahan-cash-semua-list"></div>
+
+      <div class="divider" style="margin:14px 0"></div>
+      <div class="card-title" style="font-size:13px">📜 Sejarah Serahan Cash</div>
+      <div class="form-group"><label class="form-label">Tapis Pekerja</label>
+        <select class="form-input" id="sc-sejarah-pekerja" onchange="renderSejarahSerahanCash()">
+          <option value="">Semua Pekerja</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Dari Tarikh</label><input type="date" class="form-input" id="sc-sejarah-dari" onchange="renderSejarahSerahanCash()" /></div>
+        <div class="form-group"><label class="form-label">Hingga Tarikh</label><input type="date" class="form-input" id="sc-sejarah-hingga" onchange="renderSejarahSerahanCash()" /></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div id="sc-sejarah-sub-tapis" style="font-size:11px;color:var(--muted)"></div>
+        <button class="btn-link" style="font-size:11px" onclick="document.getElementById('sc-sejarah-pekerja').value='';document.getElementById('sc-sejarah-dari').value='';document.getElementById('sc-sejarah-hingga').value='';renderSejarahSerahanCash()">✕ Padam Tapisan</button>
+      </div>
+      <div id="sc-sejarah-list"></div>
     </div>
 
     <!-- Laporan Harian (pemilik sahaja) -->
@@ -2036,6 +2053,7 @@ async function setPage(p) {
       renderSenaraiPemohon();
       renderPermohonanPadam();
       renderSerahanCashSemua();
+      renderSejarahSerahanCash();
     }
   }
 }
@@ -7211,7 +7229,7 @@ async function padamSerahanCash(id) {
   const { error } = await sb.from('serahan_cash').delete().eq('id', id);
   if (error) return toast('Gagal padam: '+error.message,'err');
   toast('Rekod serahan dipadam');
-  if (currentRole==='pemilik') await renderSerahanCashSemua(); else await loadSerahanCashSaya();
+  if (currentRole==='pemilik') { await renderSerahanCashSemua(); await renderSejarahSerahanCash(); } else await loadSerahanCashSaya();
 }
 
 // Pemilik: sahkan/tolak serahan cash + lihat berapa cash dipegang SETIAP pekerja.
@@ -7221,6 +7239,55 @@ async function ubahStatusSerahanCash(id, status) {
   if (error) return toast('Gagal kemaskini status: '+error.message,'err');
   toast(status==='disahkan' ? '✅ Serahan cash disahkan' : '✕ Serahan cash ditolak');
   await renderSerahanCashSemua();
+  await renderSejarahSerahanCash();
+}
+
+// Sejarah PENUH serahan cash (semua status), boleh tapis ikut pekerja & julat tarikh —
+// utk pemilik semak semula bukti serahan yang PERNAH dibuat, bukan cuma yang menunggu.
+async function renderSejarahSerahanCash() {
+  const el = document.getElementById('sc-sejarah-list');
+  if (!el) return;
+  const selPekerja = document.getElementById('sc-sejarah-pekerja');
+  if (selPekerja && !selPekerja.dataset.loaded) {
+    selPekerja.dataset.loaded = '1';
+    const { data: pekerjaList } = await sb.from('profiles').select('id,nama').eq('role','pekerja').order('nama');
+    selPekerja.innerHTML = '<option value="">Semua Pekerja</option>' + (pekerjaList||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('');
+  }
+  const pekerjaPilih = selPekerja?.value || '';
+  const dariPilih = document.getElementById('sc-sejarah-dari')?.value || '';
+  const hinggaPilih = document.getElementById('sc-sejarah-hingga')?.value || '';
+
+  let q = sb.from('serahan_cash').select('*').order('created_at',{ascending:false});
+  if (pekerjaPilih) q = q.eq('pekerja_id', pekerjaPilih);
+  if (dariPilih) q = q.gte('created_at', dariPilih+'T00:00:00+08:00');
+  if (hinggaPilih) q = q.lte('created_at', hinggaPilih+'T23:59:59+08:00');
+  const { data, error } = await q;
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const senarai = data || [];
+
+  const { data: profil } = await sb.from('profiles').select('id,nama');
+  const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
+
+  const subTapisEl = document.getElementById('sc-sejarah-sub-tapis');
+  if (subTapisEl) subTapisEl.textContent = `${senarai.length} rekod`;
+
+  const STATUS_LABEL = { menunggu:'⏳ Menunggu', disahkan:'✅ Disahkan', ditolak:'✕ Ditolak' };
+  const STATUS_BADGE = { menunggu:'badge-gold', disahkan:'badge-green', ditolak:'badge-red' };
+
+  el.innerHTML = senarai.map(r=>`
+    <div class="list-item" style="display:block">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div>
+          <div class="list-item-title">${esc(namaPekerja(r.pekerja_id))}</div>
+          <div class="list-item-sub">${fmtDT(r.created_at)}${r.nota?' · '+esc(r.nota):''}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="list-item-val">${fmt(r.jumlah)}</div>
+          <span class="badge ${STATUS_BADGE[r.status]||'badge-teal'}">${STATUS_LABEL[r.status]||r.status}</span>
+        </div>
+      </div>
+      ${r.resit_url?`<div style="margin-top:6px"><button class="btn btn-secondary btn-sm" onclick="lihatResitSerahanCash('${esc(r.resit_url)}')">📎 Lihat Resit</button></div>`:''}
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada rekod sepadan dengan tapisan ini</div></div>';
 }
 
 async function renderSerahanCashSemua() {
