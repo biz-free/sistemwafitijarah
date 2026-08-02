@@ -940,8 +940,11 @@
     <!-- Laporan Harian (pemilik sahaja) -->
     <div class="card" id="laporan-harian-card">
       <div class="card-title">📅 Laporan Harian</div>
-      <div class="form-group">
+      <div class="form-row">
         <input type="date" class="form-input" id="lap-harian-tarikh" onchange="renderLaporanHarian()" />
+        <select class="form-input" id="lap-harian-pekerja" onchange="renderLaporanHarian()">
+          <option value="">Semua Pekerja</option>
+        </select>
       </div>
       <div id="laporan-harian-output"></div>
     </div>
@@ -5141,21 +5144,32 @@ async function renderLaporanHarian() {
   if (currentRole!=='pemilik') return;
   const tarikh = document.getElementById('lap-harian-tarikh').value;
   if (!tarikh) return;
-  const fil = DATA.transaksi.filter(t=>t.tarikh_masa && tarikhTempatan(t.tarikh_masa)===tarikh);
+
+  const pekerjaSel = document.getElementById('lap-harian-pekerja');
+  if (useCloud && pekerjaSel && !pekerjaSel.dataset.loaded) {
+    pekerjaSel.dataset.loaded = '1';
+    const { data: pekerjaList } = await sb.from('profiles').select('id,nama').eq('role','pekerja').order('nama');
+    pekerjaSel.innerHTML = '<option value="">Semua Pekerja</option>' + (pekerjaList||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('');
+  }
+  const pekerjaPilih = pekerjaSel?.value || '';
+
+  let fil = DATA.transaksi.filter(t=>t.tarikh_masa && tarikhTempatan(t.tarikh_masa)===tarikh);
+  if (pekerjaPilih) fil = fil.filter(t=>t.created_by===pekerjaPilih);
   const hasil = fil.filter(t=>t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
   const hutang = fil.filter(t=>t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
   const untung = fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0); },0);
 
-  const { totalKm: jumlahKm, kmIkutPekerja } = await kiraJarakKehadiranJulat(tarikh+'T00:00:00', tarikh+'T23:59:59');
-  const hariLayakMakan = await kiraHariLayakMakan(tarikh+'T00:00:00', tarikh+'T23:59:59');
+  const { totalKm: jumlahKm, kmIkutPekerja } = await kiraJarakKehadiranJulat(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaPilih||null);
+  const hariLayakMakan = await kiraHariLayakMakan(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaPilih||null);
   const hariKerja = hariLayakMakan.size;
   const kosUpah = fil.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
   const kosMinyak = jumlahKm*SETTINGS.minyak;
   const kosMakan = hariKerja*SETTINGS.makan;
-  const kedaiBonusList = DATA.kedai
+  let kedaiBonusList = DATA.kedai
     .filter(k => k.didaftarkan_oleh)
     .flatMap(k => bonusKedaiEvents(k.id).map(ev => ({ kedai: k, ...ev })))
     .filter(x => (x.tarikh_masa||'').slice(0,10) === tarikh);
+  if (pekerjaPilih) kedaiBonusList = kedaiBonusList.filter(x=>x.kedai.didaftarkan_oleh===pekerjaPilih);
   const kosKedaiBaru = kedaiBonusList.reduce((a,x)=>a+x.jumlah,0);
   const kedaiBonusKedaiUnik = new Set(kedaiBonusList.map(x=>x.kedai.id)).size;
 
@@ -5164,11 +5178,12 @@ async function renderLaporanHarian() {
     const { data } = await sb.from('pesanan_edagang').select('*');
     edagangLayakUpah = (data||[]).filter(o=>(o.updated_at||o.created_at||'').slice(0,10)===tarikh && o.assigned_pekerja_id && ['dihantar','selesai'].includes(o.status_pesanan));
   }
+  if (pekerjaPilih) edagangLayakUpah = edagangLayakUpah.filter(o=>o.assigned_pekerja_id===pekerjaPilih);
   const kosUpahEdagang = edagangLayakUpah.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
   const kosOperasi = kosUpah+kosMinyak+kosMakan+kosKedaiBaru+kosUpahEdagang;
   const untungBersih = untung-kosOperasi;
 
-  const pekerjaIds = [...new Set([...fil.map(t=>t.created_by), ...kedaiBonusList.map(x=>x.kedai.didaftarkan_oleh), ...edagangLayakUpah.map(o=>o.assigned_pekerja_id)].filter(Boolean))];
+  const pekerjaIds = pekerjaPilih ? [pekerjaPilih] : [...new Set([...fil.map(t=>t.created_by), ...kedaiBonusList.map(x=>x.kedai.didaftarkan_oleh), ...edagangLayakUpah.map(o=>o.assigned_pekerja_id)].filter(Boolean))];
   let profilMap = {};
   if (useCloud && pekerjaIds.length) {
     const { data } = await sb.from('profiles').select('id,nama');
