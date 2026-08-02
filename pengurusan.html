@@ -5603,15 +5603,18 @@ async function ubahStatusBaucar(id, status) {
 async function renderBonusKedaiSemua() {
   const el = document.getElementById('bonus-kedai-semua-list');
   if (!el) return;
-  const { data, error } = await sb.from('bonus_kedai_baru').select('pekerja_id,jumlah,tarikh_matang').eq('status','belum_dibayar');
-  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
-  const senarai = data || [];
-  if (!senarai.length) { el.innerHTML = '<div class="empty"><div class="empty-text">Tiada bonus kedai baru terkumpul lagi</div></div>'; return; }
-  const { data: profil } = await sb.from('profiles').select('id,nama');
+  // Senaraikan SEMUA pekerja (bukan cuma yang ada rekod bonus) supaya pemilik nampak
+  // roster penuh — pekerja dgn RM0 tetap dipapar, elak nampak "tak lengkap".
+  const [{ data: profil, error: errProfil }, { data, error }] = await Promise.all([
+    sb.from('profiles').select('id,nama').eq('role','pekerja').order('nama'),
+    sb.from('bonus_kedai_baru').select('pekerja_id,jumlah,tarikh_matang').eq('status','belum_dibayar'),
+  ]);
+  if (errProfil || error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc((errProfil||error).message)}</div></div>`; return; }
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
   const hariIni = tarikhTempatan();
   const ringkasan = {};
-  senarai.forEach(r => {
+  (profil||[]).forEach(p => { ringkasan[p.id] = { matang: 0, belumMatang: 0, tarikhTerdekat: null }; });
+  (data||[]).forEach(r => {
     ringkasan[r.pekerja_id] ||= { matang: 0, belumMatang: 0, tarikhTerdekat: null };
     if (r.tarikh_matang <= hariIni) ringkasan[r.pekerja_id].matang += r.jumlah;
     else {
@@ -5619,12 +5622,13 @@ async function renderBonusKedaiSemua() {
       if (!ringkasan[r.pekerja_id].tarikhTerdekat || r.tarikh_matang < ringkasan[r.pekerja_id].tarikhTerdekat) ringkasan[r.pekerja_id].tarikhTerdekat = r.tarikh_matang;
     }
   });
-  el.innerHTML = Object.entries(ringkasan).sort((a,b)=>b[1].matang-a[1].matang).map(([pid,d])=>`
+  if (!Object.keys(ringkasan).length) { el.innerHTML = '<div class="empty"><div class="empty-text">Tiada pekerja didaftarkan lagi</div></div>'; return; }
+  el.innerHTML = Object.entries(ringkasan).sort((a,b)=>b[1].matang-a[1].matang || b[1].belumMatang-a[1].belumMatang).map(([pid,d])=>`
     <div class="list-item" style="display:block">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <div class="list-item-title">${esc(namaPekerja(pid))}</div>
         <div style="text-align:right;font-size:11px;color:var(--muted)">
-          Matang: <strong style="color:var(--green);font-size:13px">${fmt(d.matang)}</strong>
+          Matang: <strong style="color:${d.matang>0?'var(--green)':'var(--muted)'};font-size:13px">${fmt(d.matang)}</strong>
           ${d.belumMatang?` · Belum Matang: ${fmt(d.belumMatang)}${d.tarikhTerdekat?` (${fmtD(d.tarikhTerdekat)})`:''}`:''}
         </div>
       </div>
@@ -5633,7 +5637,7 @@ async function renderBonusKedaiSemua() {
           <input type="checkbox" id="bk-gabung-${pid}" style="width:14px;height:14px" /> Sekalikan dgn baucar harian hari ini
         </label>
         <button class="btn btn-primary btn-sm" onclick="bayarBonusKedai('${pid}')">💰 Bayar Sekarang (${fmt(d.matang)})</button>
-      </div>`:'<div style="font-size:11px;color:var(--muted)">Belum matang lagi — belum boleh dibayar</div>'}
+      </div>`:d.belumMatang>0?'<div style="font-size:11px;color:var(--muted)">Belum matang lagi — belum boleh dibayar</div>':'<div style="font-size:11px;color:var(--muted)">Tiada bonus terkumpul</div>'}
     </div>`).join('');
 }
 
