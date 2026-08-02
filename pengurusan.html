@@ -5108,17 +5108,26 @@ function cetakResit() {
 // iOS Safari (termasuk PWA "Add to Home Screen") sering GAGAL SENYAP pada pdf.save()
 // jsPDF — ia bergantung pada atribut HTML `download` utk Blob URL yang TAK konsisten
 // disokong di Safari/iOS (pekerja tekan butang PDF, tiada apa berlaku, tiada ralat pun).
-// Fallback iOS: buka PDF dlm tab baharu (native PDF viewer Safari) — pekerja boleh
-// guna ikon Share (⬆️) utk simpan/kongsi terus dari situ.
+// PERCUBAAN PERTAMA (window.open(blobUrl) ke tab pra-buka) MASIH gagal di peranti
+// sebenar (Aremier, iPhone) — kemungkinan besar app dijalankan dlm mod PWA "standalone"
+// (Add to Home Screen), di mana window.open() sering diabaikan/tak berfungsi terus oleh
+// iOS (tiada UI tab utk dibuka), dan blob: URL turut tak sah merentasi konteks jika
+// window.open still berjaya "lompat" ke Safari berasingan. Fallback PALING STABIL:
+// cipta <a> dgn DATA URI (bukan blob — kandungan penuh terkandung dlm href itu sendiri,
+// jadi sah tak kira konteks) + klik terus — iOS layan klik pautan sebagai navigasi
+// luaran biasa (buka Safari dgn PDF terus), walaupun dicetuskan dari app standalone.
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-// tabTerbuka (jika ada) MESTI dibuka SEBELUM sebarang await dlm fungsi pemanggil —
-// window.open() lepas await dianggap bukan lagi gerakan pengguna & disekat popup blocker.
-function simpanPdfSerasiIOS(pdf, namaFail, tabTerbuka) {
+function simpanPdfSerasiIOS(pdf, namaFail) {
   if (isIOS()) {
-    const blobUrl = pdf.output('bloburl');
-    if (tabTerbuka) tabTerbuka.location.href = blobUrl; else window.open(blobUrl, '_blank');
-    toast('📄 PDF dibuka dlm tab baharu — tekan ikon Share (⬆️) Safari utk simpan/kongsi');
+    const a = document.createElement('a');
+    a.href = pdf.output('datauristring');
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast('📄 PDF dibuka — tekan ikon Share (⬆️) Safari utk simpan/kongsi');
   } else {
     pdf.save(`${namaFail}.pdf`);
   }
@@ -5127,7 +5136,6 @@ function simpanPdfSerasiIOS(pdf, namaFail, tabTerbuka) {
 async function muatTurunResitPDF() {
   const box=document.getElementById('resit-print');
   if(!box) { toast('Sila pilih transaksi dahulu','err'); return null; }
-  const tabPratonton = isIOS() ? window.open('', '_blank') : null;
   const id=document.getElementById('resit-sel').value;
   const isLupus = id.startsWith('LUPUS_');
   const t = isLupus ? null : DATA.transaksi.find(t=>t.id===id);
@@ -5147,7 +5155,7 @@ async function muatTurunResitPDF() {
   const namaFail = isLupus
     ? `${id.slice(6)}-Pelupusan`.replace(/[\/\\?%*:|"<>]/g,'-')
     : `${t?.resit||id}-${t?namaDestinasiTrx(t):'Kedai'}-RM${(t?.jumlah||0).toFixed(2)}`.replace(/[\/\\?%*:|"<>]/g,'-');
-  simpanPdfSerasiIOS(pdf, namaFail, tabPratonton);
+  simpanPdfSerasiIOS(pdf, namaFail);
   return t;
 }
 
@@ -5170,14 +5178,19 @@ async function hantarResitWhatsapp() {
 
   // Buka tab KOSONG SERTA-MERTA (sebelum sebarang await) — kalau window.open() dipanggil
   // lepas await (jana PDF), browser anggap ia bukan lagi tindakan pengguna terus & SEKAT
-  // sebagai popup secara senyap. Tab ni diarah ke URL wa.me sebenar lepas PDF siap.
+  // sebagai popup secara senyap. Tab ni diarah ke URL wa.me sebenar lepas PDF siap. (PDF
+  // sendiri — lihat simpanPdfSerasiIOS — guna klik <a> data URI terus, bukan window.open,
+  // supaya berfungsi dalam mod PWA "standalone" iOS juga.)
   const waTab = window.open('', '_blank');
 
   await muatTurunResitPDF();
-  const mesej = `Salam ${k.nama},\n\nResit penghantaran *Wafi Tijarah Trading*\nNo. Resit: ${t.resit||t.id}\nJumlah: ${fmt(t.jumlah)}\nStatus: ${t.status==='selesai'?'Telah Dibayar':'Hutang'}\n\nFail PDF resit baru sahaja dimuat turun di peranti ini — sila lampirkan (attach) fail tersebut dalam WhatsApp ini. Terima kasih atas kepercayaan anda!`;
+  const notaPdf = isIOS()
+    ? 'Fail PDF resit dibuka dalam tab baharu di peranti ini — tekan ikon Share (⬆️) Safari, simpan PDF, kemudian lampirkan (attach) fail tersebut dalam WhatsApp ini.'
+    : 'Fail PDF resit baru sahaja dimuat turun di peranti ini — sila lampirkan (attach) fail tersebut dalam WhatsApp ini.';
+  const mesej = `Salam ${k.nama},\n\nResit penghantaran *Wafi Tijarah Trading*\nNo. Resit: ${t.resit||t.id}\nJumlah: ${fmt(t.jumlah)}\nStatus: ${t.status==='selesai'?'Telah Dibayar':'Hutang'}\n\n${notaPdf} Terima kasih atas kepercayaan anda!`;
   const waUrl = `https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`;
   if (waTab) waTab.location.href = waUrl; else window.open(waUrl, '_blank');
-  toast('PDF dimuat turun — lampirkan dalam WhatsApp yang baru dibuka');
+  toast(isIOS() ? 'PDF dibuka dalam tab — guna Share ikon Safari utk simpan, lalu lampirkan dalam WhatsApp' : 'PDF dimuat turun — lampirkan dalam WhatsApp yang baru dibuka');
 }
 
 // ════════════════════════════════════════════════════
@@ -5737,7 +5750,6 @@ async function cetakBaucar(id) {
 // yang boleh sertakan seluruh kad lain dalam halaman "Lebih" bila dieksport/simpan sebagai PDF.
 async function muatTurunBaucarPDF(id) {
   const v = BAUCAR_CACHE.find(x=>x.id===id); if (!v) return null;
-  const tabPratonton = isIOS() ? window.open('', '_blank') : null;
   if (!Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
   const nama = PROFIL_NAMA_CACHE[v.pekerja_id] || v.pekerja_id;
   document.getElementById('baucar-print-preview').innerHTML = bangunkanBaucarPrintBox(v, nama);
@@ -5756,7 +5768,7 @@ async function muatTurunBaucarPDF(id) {
   if (imgH > maxH) { imgH = maxH; imgW = imgH * (canvas.width/canvas.height); }
   pdf.addImage(img, 'PNG', (pageW-imgW)/2, margin, imgW, imgH);
   const namaFail = `${v.no_siri}-${nama}-RM${(v.baki??v.jumlah).toFixed(2)}`.replace(/[\/\\?%*:|"<>]/g,'-');
-  simpanPdfSerasiIOS(pdf, namaFail, tabPratonton);
+  simpanPdfSerasiIOS(pdf, namaFail);
   return { v, nama };
 }
 
@@ -5766,7 +5778,9 @@ async function hantarBaucarWhatsapp(id) {
   // Buka tab KOSONG SERTA-MERTA (sebelum sebarang await) — kalau window.open() dipanggil
   // lepas await (fetch profil / jana PDF), browser anggap ia bukan lagi tindakan pengguna
   // terus & SEKAT sebagai popup secara senyap. Tab ni diarah ke URL wa.me sebenar lepas
-  // kerja async siap, atau ditutup semula kalau tak jadi hantar.
+  // kerja async siap, atau ditutup semula kalau tak jadi hantar. (PDF sendiri — lihat
+  // simpanPdfSerasiIOS — guna klik <a> data URI terus, bukan window.open, supaya
+  // berfungsi dalam mod PWA "standalone" iOS juga.)
   const waTab = window.open('', '_blank');
 
   const { data: profil } = await sb.from('profiles').select('nama,telefon').eq('id', v.pekerja_id).single();
@@ -5774,12 +5788,15 @@ async function hantarBaucarWhatsapp(id) {
   if (!tel) { if (waTab) waTab.close(); return toast('No. telefon pekerja tiada — kemaskini profil pekerja dahulu','err'); }
   const hasil = await muatTurunBaucarPDF(id);
   if (!hasil) { if (waTab) waTab.close(); return; }
+  const notaPdf = isIOS()
+    ? 'Fail PDF baucar dibuka dalam tab baharu di peranti ini — tekan ikon Share (⬆️) Safari, simpan PDF, kemudian lampirkan (attach) fail tersebut dalam WhatsApp ini.'
+    : 'Fail PDF baucar baru sahaja dimuat turun di peranti ini — sila lampirkan (attach) fail tersebut dalam WhatsApp ini.';
   const mesej = v.kategori==='upah_harian'
-    ? `Salam ${hasil.nama},\n\nBaucar Upah Harian *Wafi Tijarah Trading*\nNo. Baucar: ${v.no_siri}\nTarikh: ${v.tarikh?fmtD(v.tarikh):v.bulan}\nJumlah Upah Harian: ${fmt(v.jumlah)}\nCash Ditangan: ${fmt(v.cash_ditangan)}\n${v.baki>=0?'Baki Akan Ditransfer':'Sila Serah Lebihan'}: ${fmt(Math.abs(v.baki))}\n\nFail PDF baucar baru sahaja dimuat turun di peranti ini — sila lampirkan (attach) fail tersebut dalam WhatsApp ini. Terima kasih!`
-    : `Salam ${hasil.nama},\n\nBaucar Bayaran *Wafi Tijarah Trading*\nNo. Baucar: ${v.no_siri}\nKategori: ${BAUCAR_KATEGORI_LABEL[v.kategori]||v.kategori}\nJumlah: ${fmt(v.jumlah)}\n\nFail PDF baucar baru sahaja dimuat turun di peranti ini — sila lampirkan (attach) fail tersebut dalam WhatsApp ini. Terima kasih!`;
+    ? `Salam ${hasil.nama},\n\nBaucar Upah Harian *Wafi Tijarah Trading*\nNo. Baucar: ${v.no_siri}\nTarikh: ${v.tarikh?fmtD(v.tarikh):v.bulan}\nJumlah Upah Harian: ${fmt(v.jumlah)}\nCash Ditangan: ${fmt(v.cash_ditangan)}\n${v.baki>=0?'Baki Akan Ditransfer':'Sila Serah Lebihan'}: ${fmt(Math.abs(v.baki))}\n\n${notaPdf} Terima kasih!`
+    : `Salam ${hasil.nama},\n\nBaucar Bayaran *Wafi Tijarah Trading*\nNo. Baucar: ${v.no_siri}\nKategori: ${BAUCAR_KATEGORI_LABEL[v.kategori]||v.kategori}\nJumlah: ${fmt(v.jumlah)}\n\n${notaPdf} Terima kasih!`;
   const waUrl = `https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`;
   if (waTab) waTab.location.href = waUrl; else window.open(waUrl, '_blank');
-  toast('PDF dimuat turun — lampirkan dalam WhatsApp yang baru dibuka');
+  toast(isIOS() ? 'PDF dibuka dalam tab — guna Share ikon Safari utk simpan, lalu lampirkan dalam WhatsApp' : 'PDF dimuat turun — lampirkan dalam WhatsApp yang baru dibuka');
 }
 
 // ════════════════════════════════════════════════════
