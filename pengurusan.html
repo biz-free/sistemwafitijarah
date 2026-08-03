@@ -5537,6 +5537,7 @@ async function renderBaucarSaya() {
         ${v.butiran.bonus>0?`<div style="margin-bottom:4px;color:var(--gold)">🏪 Bonus Kedai Baru hari ini: ${fmt(v.butiran.bonus)} (dikumpul berasingan, tiada dlm jumlah di atas)</div>`:''}
         ${(v.butiran.bonusTerkumpulMatang||v.butiran.bonusTerkumpulBelumMatang)?`<div style="margin-bottom:4px">📦 Bonus Kedai Terkumpul — Matang: <strong style="color:var(--green)">${fmt(v.butiran.bonusTerkumpulMatang||0)}</strong> · Belum Matang: ${fmt(v.butiran.bonusTerkumpulBelumMatang||0)}</div>`:''}`:''}
         Jumlah Upah ${fmt(v.jumlah)} − Cash ditangan ${fmt(v.cash_ditangan)} = <strong style="color:${v.baki>=0?'var(--green)':'var(--red)'}">${v.baki>=0?'Baki pemilik transfer':'Anda perlu serah lebihan'} ${fmt(Math.abs(v.baki))}</strong>
+        ${v.baki<0?`<div style="margin-top:4px;font-size:10px;color:var(--muted)">ℹ️ Snapshot hari ini sahaja — kalau sudah serah cash (hari ini/hari lain) yang menutup jumlah ni, semak "Cash Saya Dipegang" di Dashboard utk status TERKINI sebenar.</div>`:''}
       </div>`:''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-secondary btn-sm" onclick="cetakBaucar('${v.id}')">🖨️ Cetak</button>
@@ -5588,6 +5589,7 @@ async function renderBaucarList() {
         ${v.butiran.bonus>0?`<div style="margin-bottom:4px;color:var(--gold)">🏪 Bonus Kedai Baru hari ini: ${fmt(v.butiran.bonus)} (dikumpul berasingan, tiada dlm jumlah di atas)</div>`:''}
         ${(v.butiran.bonusTerkumpulMatang||v.butiran.bonusTerkumpulBelumMatang)?`<div style="margin-bottom:4px">📦 Bonus Kedai Terkumpul — Matang: <strong style="color:var(--green)">${fmt(v.butiran.bonusTerkumpulMatang||0)}</strong> · Belum Matang: ${fmt(v.butiran.bonusTerkumpulBelumMatang||0)}</div>`:''}`:''}
         Jumlah Upah ${fmt(v.jumlah)} − Cash ditangan ${fmt(v.cash_ditangan)} = <strong style="color:${v.baki>=0?'var(--green)':'var(--red)'}">${v.baki>=0?'Baki pemilik transfer':'Pekerja perlu serah lebihan'} ${fmt(Math.abs(v.baki))}</strong>
+        ${v.baki<0?`<div style="margin-top:4px;font-size:10px;color:var(--muted)">ℹ️ Snapshot hari ini sahaja — kalau pekerja sudah serah cash (hari ini/hari lain) yang menutup jumlah ni, semak "Cash Dipegang Semua Pekerja" utk status TERKINI sebenar.</div>`:''}
       </div>`:''}
       ${v.resit_url
         ? `<div style="font-size:11px;margin-bottom:6px"><button class="btn-link" onclick="lihatResitBaucar('${esc(v.resit_url)}')">📎 Lihat Resit</button></div>`
