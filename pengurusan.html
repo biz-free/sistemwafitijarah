@@ -7288,8 +7288,26 @@ async function renderSejarahSerahanCash() {
           <span class="badge ${STATUS_BADGE[r.status]||'badge-teal'}">${STATUS_LABEL[r.status]||r.status}</span>
         </div>
       </div>
-      ${r.resit_url?`<div style="margin-top:6px"><button class="btn btn-secondary btn-sm" onclick="lihatResitSerahanCash('${esc(r.resit_url)}')">📎 Lihat Resit</button></div>`:''}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        ${r.resit_url?`<button class="btn btn-secondary btn-sm" onclick="lihatResitSerahanCash('${esc(r.resit_url)}')">📎 Lihat Resit</button>`:''}
+        <button class="btn btn-secondary btn-sm" onclick="editJumlahSerahanCash('${r.id}',${r.jumlah})">✏️ Edit Jumlah</button>
+      </div>
     </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada rekod sepadan dengan tapisan ini</div></div>';
+}
+
+// Pemilik boleh betulkan jumlah serahan cash yang tersilap key-in (cth: pekerja
+// taip salah angka) — tanpa perlu padam & minta pekerja hantar semula. Direct
+// UPDATE (RLS "pemilik sahkan serahan cash" benarkan pemilik sahaja).
+async function editJumlahSerahanCash(id, jumlahSemasa) {
+  const input = prompt(`Betulkan jumlah serahan cash (RM):\n\nJumlah semasa: ${fmt(jumlahSemasa)}`, jumlahSemasa);
+  if (input === null) return;
+  const jumlahBaru = +input;
+  if (!jumlahBaru || jumlahBaru <= 0) return toast('Jumlah tidak sah','err');
+  const { error } = await sb.from('serahan_cash').update({ jumlah: jumlahBaru }).eq('id', id);
+  if (error) return toast('Gagal kemaskini: '+error.message,'err');
+  toast(`✅ Jumlah dikemaskini kepada ${fmt(jumlahBaru)}`);
+  await renderSejarahSerahanCash();
+  await renderSerahanCashSemua();
 }
 
 async function renderSerahanCashSemua() {
