@@ -1608,6 +1608,15 @@
 
     <div class="form-group"><label class="form-label">Nota Servis</label><textarea class="form-input" id="f-kedai-nota" placeholder="cth: servis setiap 2 minggu, bayar Jumaat"></textarea></div>
 
+    <!-- Edit hutang manual (pemilik sahaja, kedai sedia ada sahaja) — betulkan
+    jumlah hutang kedai yang tersilap/tak padan akibat data lampau, TANPA perlu
+    padam/ubah transaksi sebenar. -->
+    <div class="form-group" id="f-kedai-hutang-wrap" style="display:none">
+      <label class="form-label">Hutang Kedai (RM)</label>
+      <input type="number" class="form-input" id="f-kedai-hutang" step="0.01" min="0" />
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">⚠️ Betulkan terus jumlah hutang kedai ini sahaja — tidak ubah rekod transaksi sebenar. Guna hanya utk pembetulan jumlah yang tak padan.</div>
+    </div>
+
     <div class="form-group">
       <label class="form-label">📸 Galeri Gambar Kedai</label>
       <input type="file" accept="image/*" capture="environment" id="f-kedai-gambar" onchange="previewGambarKedai()" class="form-input" />
@@ -3065,6 +3074,7 @@ async function bukaModalKedaiBaru() {
   document.getElementById('f-kedai-tel').value='';
   document.getElementById('f-kedai-nota').value='';
   document.getElementById('f-kedai-gambar').value='';
+  document.getElementById('f-kedai-hutang-wrap').style.display='none';
   kedaiGambarUrlsSedia = []; kedaiGambarFilesPilihan = [];
   renderKedaiGambarPreview();
   showModal('modal-tambah-kedai');
@@ -3100,6 +3110,9 @@ function editKedai(id) {
   document.getElementById('f-kedai-lng').value=k.lng||100.3678;
   document.getElementById('f-kedai-nota').value=k.nota||'';
   document.getElementById('f-kedai-gambar').value='';
+  const hutangWrap = document.getElementById('f-kedai-hutang-wrap');
+  if (currentRole==='pemilik') { hutangWrap.style.display=''; document.getElementById('f-kedai-hutang').value=k.hutang||0; }
+  else hutangWrap.style.display='none';
   kedaiGambarUrlsSedia = k.gambar_urls && k.gambar_urls.length ? [...k.gambar_urls] : [];
   kedaiGambarFilesPilihan = [];
   renderKedaiGambarPreview();
@@ -3182,7 +3195,12 @@ async function saveKedai() {
     lat:+document.getElementById('f-kedai-lat').value||6.1248,
     lng:+document.getElementById('f-kedai-lng').value||100.3678,
     nota:document.getElementById('f-kedai-nota').value,
-    status:'aktif',hutang:id?DATA.kedai.find(k=>k.id===id)?.hutang||0:0,
+    status:'aktif',
+    // Pemilik boleh betulkan hutang terus (medan hanya nampak semasa edit + pemilik,
+    // lihat editKedai()) — kalau tak nampak/kedai baru, kekalkan/mula dari 0 macam biasa.
+    hutang: (currentRole==='pemilik' && id && document.getElementById('f-kedai-hutang-wrap').style.display!=='none')
+      ? Math.max(0, +document.getElementById('f-kedai-hutang').value || 0)
+      : (id?DATA.kedai.find(k=>k.id===id)?.hutang||0:0),
     last_visit:id?DATA.kedai.find(k=>k.id===id)?.last_visit||null:null,
     // Simpan siapa daftarkan kedai ni — untuk bonus "kedai baru" dalam Kiraan Upah.
     // Bila EDIT (bukan daftar baru), kekalkan rekod asal, jangan tulis ganti.
