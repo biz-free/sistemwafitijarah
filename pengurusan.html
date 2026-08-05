@@ -4762,6 +4762,15 @@ async function renderTransaksiKedaiList() {
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
       ${t.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(t.nota)}</div>`:''}
       <div style="font-size:12px;font-weight:700;margin-top:6px">${fmt(t.jumlah)}</div>
+      ${currentRole==='pemilik' ? `<div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+        <label style="font-size:10px;color:var(--muted)">Kaedah Bayar:</label>
+        <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="tukarKaedahBayaranTransaksi('${t.id}', this.value)">
+          <option value="tunai" ${t.kaedah_bayaran==='tunai'?'selected':''}>Tunai</option>
+          <option value="transfer" ${t.kaedah_bayaran==='transfer'?'selected':''}>Online Transfer</option>
+          <option value="hutang" ${t.kaedah_bayaran==='hutang'?'selected':''}>Catat Hutang</option>
+          <option value="consignment" ${t.kaedah_bayaran==='consignment'?'selected':''}>Consignment</option>
+        </select>
+      </div>`:''}
       ${t.kaedah_bayaran==='consignment' && !t.jualan_disahkan ? `
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
         <div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:6px">🤝 Follow-up: barang sudah habis dijual atau belum?</div>
@@ -4777,6 +4786,20 @@ async function renderTransaksiKedaiList() {
       ${k?.lat&&k?.lng?`<a class="btn btn-secondary btn-sm" style="text-decoration:none;margin-top:8px;display:inline-block" href="https://www.google.com/maps/search/?api=1&query=${k.lat},${k.lng}" target="_blank" rel="noopener">🗺️ Lihat di Google Maps</a>`:''}
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Tiada transaksi dalam julat ini</div></div>';
+}
+
+// Pemilik betulkan kaedah bayaran transaksi yang tersilap key-in oleh pekerja
+// (cth: pilih Tunai sepatutnya Consignment). Status (selesai/hutang) & hutang kedai
+// dilaraskan sama, dan baucar harian usang (jika ada) dibatalkan — sama pattern
+// spt padam/tambah transaksi, sebab kaedah bayaran ubah kelayakan upah pekerja.
+async function tukarKaedahBayaranTransaksi(id, kaedahBaru) {
+  const LABEL_KAEDAH = { tunai:'Tunai', transfer:'Online Transfer', hutang:'Catat Hutang', consignment:'Consignment' };
+  if (!confirm(`Tukar kaedah bayaran kepada "${LABEL_KAEDAH[kaedahBaru]}"?`)) { renderTransaksiKedaiList(); return; }
+  const { error } = await sb.rpc('tukar_kaedah_bayaran_transaksi', { p_id: id, p_kaedah_bayaran_baru: kaedahBaru });
+  if (error) { toast('Gagal tukar kaedah bayaran: '+error.message,'err'); renderTransaksiKedaiList(); return; }
+  await loadData();
+  renderTransaksiKedaiList();
+  toast(`✅ Kaedah bayaran ditukar kepada ${LABEL_KAEDAH[kaedahBaru]}`);
 }
 
 async function padamTransaksiKedai(id) {
