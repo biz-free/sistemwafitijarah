@@ -536,9 +536,12 @@
         <button class="btn btn-secondary" id="btn-urus-route-senarai" style="display:none;flex-shrink:0" onclick="bukaModalRoute()">🗺️ Urus Route</button>
       </div>
 
-      <!-- Bayar hutang -->
+      <!-- Bayar hutang — pekerja boleh KUTIP & MOHON, tapi kedai.hutang cuma berkurang
+      SELEPAS pemilik sahkan (elak pekerja "sahkan" bayaran tak sah sendiri). Pemilik
+      sendiri kekal terus (auto-lulus, tiada sebab tunggu kelulusan sendiri). -->
       <div class="card" style="border-left:4px solid var(--gold);background:#FFFBF0;margin-top:12px;display:none" id="bayar-section">
-        <div class="card-title" style="color:var(--gold)">💳 Terima Bayaran Hutang</div>
+        <div class="card-title" style="color:var(--gold)">💳 <span id="bayar-section-title">Terima Bayaran Hutang</span></div>
+        <div id="bayar-section-hint" style="font-size:11px;color:var(--muted);margin-bottom:10px;display:none">Permohonan anda perlu disahkan pemilik dahulu sebelum hutang kedai berkurang.</div>
         <div class="form-group">
           <label class="form-label">Kedai</label>
           <select class="form-input" id="bayar-kedai-sel"></select>
@@ -547,7 +550,25 @@
           <label class="form-label">Jumlah Bayaran (RM)</label>
           <input type="number" class="form-input" id="bayar-jum" placeholder="0.00" min="0" step="0.50" />
         </div>
-        <button class="btn btn-primary" style="background:var(--green)" onclick="rekodBayaran()">✅ Rekod Bayaran Diterima</button>
+        <div class="form-group">
+          <label class="form-label">Kaedah Bayaran</label>
+          <select class="form-input" id="bayar-kaedah" onchange="document.getElementById('bayar-resit-wrap').style.display=this.value==='transfer'?'':'none'">
+            <option value="tunai">Tunai</option>
+            <option value="transfer">Online Transfer</option>
+          </select>
+        </div>
+        <div class="form-group" id="bayar-resit-wrap" style="display:none">
+          <label class="form-label">Gambar Resit/Bukti Transfer</label>
+          <input type="file" accept="image/*" class="form-input" id="bayar-resit-file" />
+        </div>
+        <div class="form-group"><label class="form-label">Nota (Pilihan)</label><input type="text" class="form-input" id="bayar-nota" placeholder="cth: bayar sebahagian, baki minggu depan" /></div>
+        <button class="btn btn-primary" style="background:var(--green)" id="bayar-btn" onclick="rekodBayaran()">✅ Rekod Bayaran Diterima</button>
+      </div>
+
+      <!-- Menunggu Sahkan: Permohonan Bayaran Hutang (pemilik sahaja) -->
+      <div class="card" id="bayar-hutang-menunggu-card" style="display:none;margin-top:12px">
+        <div class="card-title">⏳ Menunggu Sahkan: Bayaran Hutang</div>
+        <div id="bayar-hutang-menunggu-list"></div>
       </div>
 
       <div class="form-row" style="margin-top:12px">
@@ -2894,12 +2915,18 @@ function renderKedai(q='') {
   const hutangTotal=DATA.kedai.reduce((a,k)=>a+k.hutang,0);
   document.getElementById('kedai-sub').textContent = `${DATA.kedai.filter(k=>k.status==='aktif').length} aktif · Hutang: ${fmt(hutangTotal)}`;
 
-  // Bayar hutang section — pemilik sahaja (melibatkan kewangan)
+  // Bayar hutang section — semua pekerja boleh kutip & MOHON (pemilik kekal terus
+  // sahkan sendiri), lihat mohon_bayaran_hutang()/rekodBayaran().
   const bKedai=DATA.kedai.filter(k=>k.hutang>0);
   const bSec=document.getElementById('bayar-section');
-  bSec.style.display=(currentRole==='pemilik'&&bKedai.length)?'block':'none';
+  bSec.style.display=bKedai.length?'block':'none';
   const bSel=document.getElementById('bayar-kedai-sel');
   bSel.innerHTML=bKedai.map(k=>`<option value="${k.id}">${k.nama} · Hutang: ${fmt(k.hutang)}</option>`).join('');
+  document.getElementById('bayar-section-title').textContent = currentRole==='pemilik' ? 'Terima Bayaran Hutang' : 'Mohon Rekod Bayaran Hutang';
+  document.getElementById('bayar-section-hint').style.display = currentRole==='pemilik' ? 'none' : '';
+  document.getElementById('bayar-btn').textContent = currentRole==='pemilik' ? '✅ Rekod Bayaran Diterima' : '📤 Hantar Permohonan';
+  const bMenungguCard = document.getElementById('bayar-hutang-menunggu-card');
+  if (bMenungguCard) { bMenungguCard.style.display = currentRole==='pemilik' ? '' : 'none'; if (currentRole==='pemilik') renderMenungguBayaranHutang(); }
 
   // Filter sel for hantar
   const fSel=document.getElementById('filter-kedai-trx');
@@ -3247,11 +3274,26 @@ async function saveKedai() {
 async function rekodBayaran() {
   const id=document.getElementById('bayar-kedai-sel').value;
   const jum=+document.getElementById('bayar-jum').value;
+  const kaedah=document.getElementById('bayar-kaedah').value;
+  const nota=document.getElementById('bayar-nota').value.trim();
+  const resitFile=document.getElementById('bayar-resit-file').files[0];
   if(!id||jum<=0) return toast('Pilih kedai dan masukkan jumlah','err');
+  if(kaedah==='transfer' && !resitFile) return toast('Sila lampir gambar resit/bukti transfer','err');
   if (useCloud) {
-    const { error } = await sb.rpc('rekod_bayaran', { p_kedai_id:id, p_jumlah:jum });
-    if (error) return toast('Gagal rekod bayaran: '+error.message,'err');
+    const permohonanId = genId('PBH');
+    let resitPath = null;
+    if (resitFile) {
+      resitPath = `${permohonanId}-${Date.now()}.jpg`;
+      const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(resitPath, resitFile);
+      if (upErr) return toast('Gagal muat naik resit: '+upErr.message,'err');
+    }
+    const { error } = await sb.rpc('mohon_bayaran_hutang', {
+      p_id: permohonanId, p_kedai_id: id, p_jumlah: jum, p_kaedah_bayaran: kaedah,
+      p_resit_bukti_url: resitPath, p_nota: nota||null,
+    });
+    if (error) return toast('Gagal: '+error.message,'err');
     await loadData();
+    if (currentRole==='pemilik') { renderKedai(); renderMenungguBayaranHutang(); }
   } else {
     DATA.kedai=DATA.kedai.map(k=>k.id===id?{...k,hutang:Math.max(0,k.hutang-jum)}:k);
     let baki=jum;
@@ -3261,8 +3303,54 @@ async function rekodBayaran() {
     });
     saveData();
   }
-  document.getElementById('bayar-jum').value=''; renderKedai();
-  toast(`Bayaran ${fmt(jum)} diterima`);
+  document.getElementById('bayar-jum').value='';
+  document.getElementById('bayar-nota').value='';
+  document.getElementById('bayar-resit-file').value='';
+  renderKedai();
+  toast(currentRole==='pemilik' ? `Bayaran ${fmt(jum)} diterima` : `📤 Permohonan bayaran ${fmt(jum)} dihantar — menunggu sahkan pemilik`);
+}
+
+// Pemilik: senarai permohonan bayaran hutang menunggu sahkan (dihantar pekerja).
+async function renderMenungguBayaranHutang() {
+  const el = document.getElementById('bayar-hutang-menunggu-list');
+  if (!el) return;
+  const { data, error } = await sb.from('permohonan_bayaran_hutang').select('*').eq('status','menunggu').order('created_at',{ascending:false});
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const senarai = data || [];
+  document.getElementById('bayar-hutang-menunggu-card').style.display = senarai.length ? '' : 'none';
+  if (!senarai.length) return;
+  const { data: profil } = await sb.from('profiles').select('id,nama');
+  const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
+  const LABEL_KAEDAH = { tunai:'Tunai', transfer:'Online Transfer' };
+  el.innerHTML = senarai.map(r=>{
+    const k = DATA.kedai.find(k=>k.id===r.kedai_id);
+    return `<div class="list-item" style="display:block;border-left:3px solid var(--gold);padding-left:8px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div><div class="list-item-title">${esc(k?.nama||r.kedai_id)}</div><div class="list-item-sub">${esc(namaPekerja(r.pekerja_id))} · ${LABEL_KAEDAH[r.kaedah_bayaran]} · ${fmtDT(r.created_at)}${r.nota?' · '+esc(r.nota):''}</div></div>
+        <div class="list-item-val">${fmt(r.jumlah)}</div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
+        ${r.resit_bukti_url?`<button class="btn btn-secondary btn-sm" onclick="lihatResitBayaranHutang('${esc(r.resit_bukti_url)}')">📎 Resit</button>`:'<span style="font-size:11px;color:var(--red)">⚠️ Tiada resit</span>'}
+        <button class="btn btn-primary btn-sm" onclick="putuskanBayaranHutang('${r.id}','disahkan')">✅ Sahkan</button>
+        <button class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="putuskanBayaranHutang('${r.id}','ditolak')">✕ Tolak</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function lihatResitBayaranHutang(path) {
+  const { data, error } = await sb.storage.from('bukti-bayaran').createSignedUrl(path, 3600);
+  if (error) return toast('Gagal buka resit: '+error.message,'err');
+  window.open(data.signedUrl, '_blank');
+}
+
+async function putuskanBayaranHutang(id, status) {
+  const { error } = await sb.rpc('putuskan_bayaran_hutang', { p_id:id, p_status:status });
+  if (error) return toast('Gagal kemaskini: '+error.message,'err');
+  toast(status==='disahkan' ? '✅ Bayaran hutang disahkan' : '✕ Permohonan bayaran ditolak');
+  await loadData();
+  renderKedai();
+  renderMenungguBayaranHutang();
 }
 
 // ════════════════════════════════════════════════════
