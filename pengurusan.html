@@ -544,8 +544,12 @@
         <div id="bayar-section-hint" style="font-size:11px;color:var(--muted);margin-bottom:10px;display:none">Permohonan anda perlu disahkan pemilik dahulu sebelum hutang kedai berkurang.</div>
         <div class="form-group">
           <label class="form-label">Kedai</label>
-          <select class="form-input" id="bayar-kedai-sel"></select>
+          <select class="form-input" id="bayar-kedai-sel" onchange="kemaskiniInfoDiskaunHutang()"></select>
         </div>
+        <div id="bayar-diskaun-info" style="display:none;background:#FFF3CD;border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px"></div>
+        <label id="bayar-settlement-wrap" style="display:none;align-items:center;gap:8px;font-size:12px;font-weight:700;margin-bottom:10px">
+          <input type="checkbox" id="bayar-settlement-penuh" style="width:auto" onchange="toggleBayarSettlementPenuh()" /> Bayaran PENUH dgn diskaun (hutang clear ke RM0)
+        </label>
         <div class="form-group">
           <label class="form-label">Jumlah Bayaran (RM)</label>
           <input type="number" class="form-input" id="bayar-jum" placeholder="0.00" min="0" step="0.50" />
@@ -1651,6 +1655,15 @@
       <label class="form-label">Hutang Kedai (RM)</label>
       <input type="number" class="form-input" id="f-kedai-hutang" step="0.01" min="0" />
       <div style="font-size:10px;color:var(--muted);margin-top:4px">⚠️ Betulkan terus jumlah hutang kedai ini sahaja — tidak ubah rekod transaksi sebenar. Guna hanya utk pembetulan jumlah yang tak padan.</div>
+    </div>
+
+    <!-- Diskaun bayaran hutang PENUH (pemilik sahaja) — sesetengah kedai dapat
+    diskaun tetap (cth 10%) bila mereka jelaskan SEMUA hutang sekaligus. Lihat
+    "Bayar Hutang" di Tab Kedai (rekodBayaran()/rekod_bayaran_penuh()). -->
+    <div class="form-group" id="f-kedai-diskaun-hutang-wrap" style="display:none">
+      <label class="form-label">Diskaun Bayaran Hutang PENUH (%)</label>
+      <input type="number" class="form-input" id="f-kedai-diskaun-hutang" step="1" min="0" max="100" />
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">Jika &gt;0, kedai ini akan ditawarkan pilihan "Bayaran PENUH dgn diskaun" semasa rekod bayaran hutang — hutang akan clear ke RM0 walaupun jumlah dibayar kurang drpd hutang asal.</div>
     </div>
 
     <div class="form-group">
@@ -2931,7 +2944,8 @@ function renderKedai(q='') {
   const bSec=document.getElementById('bayar-section');
   bSec.style.display=bKedai.length?'block':'none';
   const bSel=document.getElementById('bayar-kedai-sel');
-  bSel.innerHTML=bKedai.map(k=>`<option value="${k.id}">${k.nama} · Hutang: ${fmt(k.hutang)}</option>`).join('');
+  bSel.innerHTML=bKedai.map(k=>`<option value="${k.id}">${k.nama} · Hutang: ${fmt(k.hutang)}${k.diskaun_hutang_peratus>0?` (diskaun ${k.diskaun_hutang_peratus}% bayar penuh)`:''}</option>`).join('');
+  kemaskiniInfoDiskaunHutang();
   document.getElementById('bayar-section-title').textContent = currentRole==='pemilik' ? 'Terima Bayaran Hutang' : 'Mohon Rekod Bayaran Hutang';
   document.getElementById('bayar-section-hint').style.display = currentRole==='pemilik' ? 'none' : '';
   document.getElementById('bayar-btn').textContent = currentRole==='pemilik' ? '✅ Rekod Bayaran Diterima' : '📤 Hantar Permohonan';
@@ -2958,6 +2972,7 @@ function renderKedai(q='') {
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
         <span class="badge badge-teal">${trxK.length} penghantaran</span>
         ${k.hutang>0?`<span class="badge badge-red">Hutang: ${fmt(k.hutang)}</span>`:''}
+        ${k.diskaun_hutang_peratus>0?`<span class="badge badge-gold">💯 Diskaun ${k.diskaun_hutang_peratus}% bayar penuh</span>`:''}
         ${lama?`<span class="badge badge-gold">${daysSince(k.last_visit)} hari tak lawat</span>`:''}
         ${k.last_visit?`<span class="badge badge-muted">Terakhir: ${fmtD(k.last_visit)}</span>`:''}
       </div>
@@ -3136,6 +3151,7 @@ async function bukaModalKedaiBaru() {
   document.getElementById('f-kedai-nota').value='';
   document.getElementById('f-kedai-gambar').value='';
   document.getElementById('f-kedai-hutang-wrap').style.display='none';
+  document.getElementById('f-kedai-diskaun-hutang-wrap').style.display='none';
   kedaiGambarUrlsSedia = []; kedaiGambarFilesPilihan = [];
   renderKedaiGambarPreview();
   showModal('modal-tambah-kedai');
@@ -3172,8 +3188,11 @@ function editKedai(id) {
   document.getElementById('f-kedai-nota').value=k.nota||'';
   document.getElementById('f-kedai-gambar').value='';
   const hutangWrap = document.getElementById('f-kedai-hutang-wrap');
-  if (currentRole==='pemilik') { hutangWrap.style.display=''; document.getElementById('f-kedai-hutang').value=k.hutang||0; }
-  else hutangWrap.style.display='none';
+  const diskaunHutangWrap = document.getElementById('f-kedai-diskaun-hutang-wrap');
+  if (currentRole==='pemilik') {
+    hutangWrap.style.display=''; document.getElementById('f-kedai-hutang').value=k.hutang||0;
+    diskaunHutangWrap.style.display=''; document.getElementById('f-kedai-diskaun-hutang').value=k.diskaun_hutang_peratus||0;
+  } else { hutangWrap.style.display='none'; diskaunHutangWrap.style.display='none'; }
   kedaiGambarUrlsSedia = k.gambar_urls && k.gambar_urls.length ? [...k.gambar_urls] : [];
   kedaiGambarFilesPilihan = [];
   renderKedaiGambarPreview();
@@ -3262,6 +3281,10 @@ async function saveKedai() {
     hutang: (currentRole==='pemilik' && id && document.getElementById('f-kedai-hutang-wrap').style.display!=='none')
       ? Math.max(0, +document.getElementById('f-kedai-hutang').value || 0)
       : (id?DATA.kedai.find(k=>k.id===id)?.hutang||0:0),
+    // Diskaun bayaran hutang PENUH (%) — sama corak spt override hutang di atas.
+    diskaun_hutang_peratus: (currentRole==='pemilik' && id && document.getElementById('f-kedai-diskaun-hutang-wrap').style.display!=='none')
+      ? Math.min(100, Math.max(0, +document.getElementById('f-kedai-diskaun-hutang').value || 0))
+      : (id?DATA.kedai.find(k=>k.id===id)?.diskaun_hutang_peratus||0:0),
     last_visit:id?DATA.kedai.find(k=>k.id===id)?.last_visit||null:null,
     // Simpan siapa daftarkan kedai ni — untuk bonus "kedai baru" dalam Kiraan Upah.
     // Bila EDIT (bukan daftar baru), kekalkan rekod asal, jangan tulis ganti.
@@ -3281,12 +3304,50 @@ async function saveKedai() {
   toast(adalahBaru?'Kedai baru didaftarkan — bonus akan masuk Kiraan Upah selepas penghantaran/transaksi pertama':'Kedai dikemaskini');
 }
 
+// Kedai dgn diskaun_hutang_peratus>0 boleh "Bayaran PENUH dgn diskaun" — hutang
+// clear ke RM0 walaupun jumlah dibayar (selepas diskaun) kurang drpd hutang asal.
+// Lihat rekod_bayaran_penuh() (SQL_TAMBAHAN_94).
+function kemaskiniInfoDiskaunHutang() {
+  const id = document.getElementById('bayar-kedai-sel').value;
+  const k = DATA.kedai.find(k=>k.id===id);
+  const infoEl = document.getElementById('bayar-diskaun-info');
+  const wrapEl = document.getElementById('bayar-settlement-wrap');
+  const cb = document.getElementById('bayar-settlement-penuh');
+  if (!infoEl || !wrapEl || !cb) return;
+  cb.checked = false;
+  document.getElementById('bayar-jum').readOnly = false;
+  if (k && k.diskaun_hutang_peratus > 0) {
+    const jumlahDiskaun = k.hutang * (1 - k.diskaun_hutang_peratus/100);
+    infoEl.style.display = '';
+    infoEl.innerHTML = `💡 Kedai ini layak diskaun <b>${k.diskaun_hutang_peratus}%</b> jika bayar PENUH — Hutang: ${fmt(k.hutang)} → Jumlah selepas diskaun: <b>${fmt(jumlahDiskaun)}</b>`;
+    wrapEl.style.display = 'flex';
+    wrapEl.dataset.jumlahDiskaun = jumlahDiskaun;
+  } else {
+    infoEl.style.display = 'none';
+    wrapEl.style.display = 'none';
+  }
+}
+
+function toggleBayarSettlementPenuh() {
+  const cb = document.getElementById('bayar-settlement-penuh');
+  const wrapEl = document.getElementById('bayar-settlement-wrap');
+  const jumInput = document.getElementById('bayar-jum');
+  if (cb.checked) {
+    jumInput.value = (+wrapEl.dataset.jumlahDiskaun).toFixed(2);
+    jumInput.readOnly = true;
+  } else {
+    jumInput.value = '';
+    jumInput.readOnly = false;
+  }
+}
+
 async function rekodBayaran() {
   const id=document.getElementById('bayar-kedai-sel').value;
   const jum=+document.getElementById('bayar-jum').value;
   const kaedah=document.getElementById('bayar-kaedah').value;
   const nota=document.getElementById('bayar-nota').value.trim();
   const resitFile=document.getElementById('bayar-resit-file').files[0];
+  const settlementPenuh=document.getElementById('bayar-settlement-penuh')?.checked||false;
   if(!id||jum<=0) return toast('Pilih kedai dan masukkan jumlah','err');
   if(kaedah==='transfer' && !resitFile) return toast('Sila lampir gambar resit/bukti transfer','err');
   if (useCloud) {
@@ -3299,11 +3360,15 @@ async function rekodBayaran() {
     }
     const { error } = await sb.rpc('mohon_bayaran_hutang', {
       p_id: permohonanId, p_kedai_id: id, p_jumlah: jum, p_kaedah_bayaran: kaedah,
-      p_resit_bukti_url: resitPath, p_nota: nota||null,
+      p_resit_bukti_url: resitPath, p_nota: nota||null, p_settlement_penuh: settlementPenuh,
     });
     if (error) return toast('Gagal: '+error.message,'err');
     await loadData();
     if (currentRole==='pemilik') { renderKedai(); renderMenungguBayaranHutang(); }
+  } else if (settlementPenuh) {
+    DATA.kedai=DATA.kedai.map(k=>k.id===id?{...k,hutang:0}:k);
+    DATA.transaksi=DATA.transaksi.map(t=>t.kedai_id===id&&t.status==='hutang'?{...t,status:'selesai'}:t);
+    saveData();
   } else {
     DATA.kedai=DATA.kedai.map(k=>k.id===id?{...k,hutang:Math.max(0,k.hutang-jum)}:k);
     let baki=jum;
@@ -3317,7 +3382,7 @@ async function rekodBayaran() {
   document.getElementById('bayar-nota').value='';
   document.getElementById('bayar-resit-file').value='';
   renderKedai();
-  toast(currentRole==='pemilik' ? `Bayaran ${fmt(jum)} diterima` : `📤 Permohonan bayaran ${fmt(jum)} dihantar — menunggu sahkan pemilik`);
+  toast(currentRole==='pemilik' ? `Bayaran ${fmt(jum)} diterima${settlementPenuh?' — hutang clear penuh':''}` : `📤 Permohonan bayaran ${fmt(jum)} dihantar — menunggu sahkan pemilik`);
 }
 
 // Pemilik: senarai permohonan bayaran hutang menunggu sahkan (dihantar pekerja).
@@ -3336,7 +3401,7 @@ async function renderMenungguBayaranHutang() {
     const k = DATA.kedai.find(k=>k.id===r.kedai_id);
     return `<div class="list-item" style="display:block;border-left:3px solid var(--gold);padding-left:8px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div><div class="list-item-title">${esc(k?.nama||r.kedai_id)}</div><div class="list-item-sub">${esc(namaPekerja(r.pekerja_id))} · ${LABEL_KAEDAH[r.kaedah_bayaran]} · ${fmtDT(r.created_at)}${r.nota?' · '+esc(r.nota):''}</div></div>
+        <div><div class="list-item-title">${esc(k?.nama||r.kedai_id)}${r.settlement_penuh?' <span class="badge badge-gold" style="font-size:9px">💯 PENUH (diskaun)</span>':''}</div><div class="list-item-sub">${esc(namaPekerja(r.pekerja_id))} · ${LABEL_KAEDAH[r.kaedah_bayaran]} · ${fmtDT(r.created_at)}${r.nota?' · '+esc(r.nota):''}</div></div>
         <div class="list-item-val">${fmt(r.jumlah)}</div>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
