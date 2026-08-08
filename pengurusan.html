@@ -5331,7 +5331,23 @@ function cetakResit() {
 // luaran biasa (buka Safari dgn PDF terus), walaupun dicetuskan dari app standalone.
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-function simpanPdfSerasiIOS(pdf, namaFail) {
+// PENTING: buka PDF sbg data: URI dlm Safari (fallback lama) TIDAK selalu bagi pilihan
+// "Simpan"/"Hantar ke app lain" penuh pada ikon Share — sebab data: URI bukan fail
+// sebenar (tiada nama fail/Content-Disposition), jadi iOS sekat sebahagian tindakan
+// share utknya. Pekerja laporkan gagal hantar PDF disebabkan isu ni. Fix: guna Web
+// Share API (navigator.share dgn File sebenar) dahulu — ini buka native share sheet
+// iOS yang penuh berfungsi (WhatsApp, Simpan ke Fail, dll). Fallback data-URI lama
+// kekal utk pelayar yang tak sokong file-sharing (cth desktop/Android lama).
+async function simpanPdfSerasiIOS(pdf, namaFail) {
+  try {
+    const file = new File([pdf.output('blob')], `${namaFail}.pdf`, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+      return;
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return; // pengguna batal share sheet — bukan ralat
+  }
   if (isIOS()) {
     const a = document.createElement('a');
     a.href = pdf.output('datauristring');
