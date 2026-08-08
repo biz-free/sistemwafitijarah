@@ -1060,6 +1060,14 @@
       <div id="bonus-kedai-semua-list"></div>
     </div>
 
+    <!-- Status Sistem (pemilik sahaja) — semakan pantas DB, storan, domain & automasi -->
+    <div class="card" id="status-sistem-card">
+      <div class="card-title">🩺 Status Sistem</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Semakan pantas sambungan pangkalan data, storan fail, domain & automasi terjadual — supaya nampak cepat kalau ada bahagian sistem yang senyap bermasalah.</div>
+      <div id="status-sistem-list" style="display:flex;flex-direction:column;gap:8px">Menyemak...</div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="semakStatusSistem()">🔄 Semak Semula</button>
+    </div>
+
     <!-- Tetapan Kos Operasi (pemilik sahaja) -->
     <div class="card" id="tetapan-kos-card">
       <div class="card-title">⚙️ Tetapan Kos Operasi</div>
@@ -2019,7 +2027,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','bonus-kedai-semua-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
+  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','bonus-kedai-semua-card','status-sistem-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -2105,6 +2113,7 @@ async function setPage(p) {
       renderSenaraiCutiSemua();
       renderStatusLive();
       semakStatusEasyParcel();
+      semakStatusSistem();
       renderSenaraiPemohon();
       renderPermohonanPadam();
       renderSerahanCashSemua();
@@ -2137,6 +2146,7 @@ const LEBIH_SHORTCUTS = [
   { id: 'rujukan-card', icon: '🎁', label: 'Referral' },
   { id: 'wa-hebahan-card', icon: '📣', label: 'Hebahan WA' },
   { id: 'easyparcel-card', icon: '🚚', label: 'EasyParcel' },
+  { id: 'status-sistem-card', icon: '🩺', label: 'Status Sistem' },
   { id: 'urus-pekerja-card', icon: '👥', label: 'Urus Pekerja' },
   { id: 'status-live-card', icon: '📡', label: 'Status Live' },
   { id: 'kehadiran-report-card', icon: '📍', label: 'Kehadiran' },
@@ -6354,6 +6364,74 @@ function semakBalikanEasyParcel() {
   history.replaceState({}, '', location.pathname);
   setPage('lebih');
   setTimeout(()=>document.getElementById('easyparcel-card')?.scrollIntoView({behavior:'smooth'}), 300);
+}
+
+// Kad "Status Sistem" (Tetapan) — semakan hidup DB/storan/domain/automasi, minta pemilik
+// supaya boleh nampak cepat kalau ada bahagian sistem yang senyap berhenti/rosak.
+function statusSistemBaris(ikon, label, ket) {
+  return `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px;background:var(--bg);border-radius:8px">
+    <span style="font-size:16px;line-height:1">${ikon}</span>
+    <div><div style="font-weight:700;font-size:12px">${esc(label)}</div><div style="font-size:11px;color:var(--muted)">${esc(ket)}</div></div>
+  </div>`;
+}
+
+const CRON_LABEL_SISTEM = {
+  'rujukan-ganjaran-setiap-15-minit': 'Automasi: Ganjaran Rujukan (tiap 15 minit)',
+  'susulan-bayaran-harian': 'Automasi: Susulan Bayaran (harian 2 pagi)',
+  'kempen-winback-mingguan': 'Automasi: Kempen Win-Back (mingguan Isnin)'
+};
+
+async function semakStatusSistem() {
+  const el = document.getElementById('status-sistem-list');
+  if (!el || currentRole !== 'pemilik') return;
+  el.innerHTML = 'Menyemak...';
+  const baris = [];
+
+  const t0 = performance.now();
+  const { data: kesihatan, error: errDb } = await sb.rpc('semak_kesihatan_sistem');
+  const ms = Math.round(performance.now() - t0);
+  if (errDb || !kesihatan) {
+    baris.push(statusSistemBaris('❌', 'Pangkalan Data (Supabase)', `Gagal sambung — ${errDb?.message || 'ralat tidak diketahui'}`));
+  } else {
+    baris.push(statusSistemBaris('✅', 'Pangkalan Data (Supabase)', `Sambung baik (${ms}ms) · ${kesihatan.jumlah_pekerja_aktif} pekerja aktif · ${kesihatan.jumlah_kedai} kedai · ${kesihatan.jumlah_produk_aktif} produk aktif`));
+    (kesihatan.cron || []).forEach(c => {
+      const label = CRON_LABEL_SISTEM[c.jobname] || c.jobname;
+      if (!c.last_run) baris.push(statusSistemBaris('⚠️', label, 'Tiada rekod dijalankan lagi'));
+      else if (c.terlajak) baris.push(statusSistemBaris('⚠️', label, `Lewat drpd jadual — kali terakhir ${new Date(c.last_run).toLocaleString('ms-MY')}`));
+      else baris.push(statusSistemBaris('✅', label, `Berjalan seperti jadual — kali terakhir ${new Date(c.last_run).toLocaleString('ms-MY')}`));
+    });
+  }
+
+  try {
+    const { error: errStorage } = await sb.storage.from('produk-gambar').list('', { limit: 1 });
+    baris.push(errStorage
+      ? statusSistemBaris('❌', 'Storan Fail (Supabase Storage)', errStorage.message)
+      : statusSistemBaris('✅', 'Storan Fail (Supabase Storage)', 'Boleh diakses'));
+  } catch (e) {
+    baris.push(statusSistemBaris('❌', 'Storan Fail (Supabase Storage)', e.message));
+  }
+
+  try {
+    const res = await fetch(location.origin + '/', { cache: 'no-store' });
+    baris.push(res.ok
+      ? statusSistemBaris('✅', 'Domain & SSL', `${location.hostname} disambung selamat (HTTPS)`)
+      : statusSistemBaris('⚠️', 'Domain & SSL', `Respons tidak dijangka (status ${res.status})`));
+  } catch (e) {
+    baris.push(statusSistemBaris('❌', 'Domain & SSL', 'Gagal hubungi domain — semak sambungan internet peranti ini'));
+  }
+
+  try {
+    const { data: ep, error: errEp } = await sb.rpc('easyparcel_status');
+    if (errEp) throw errEp;
+    const connected = ep?.[0]?.connected;
+    baris.push(connected
+      ? statusSistemBaris('✅', 'EasyParcel (Penghantaran)', 'Disambung')
+      : statusSistemBaris('⚠️', 'EasyParcel (Penghantaran)', 'Belum disambung — lihat kad EasyParcel di bawah utk sambung'));
+  } catch (e) {
+    baris.push(statusSistemBaris('❌', 'EasyParcel (Penghantaran)', e.message));
+  }
+
+  el.innerHTML = baris.join('');
 }
 
 async function semakStatusEasyParcel() {
