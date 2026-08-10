@@ -5506,7 +5506,11 @@ let LAPORAN_PEKERJA_TERKINI = [];
 async function renderLaporan() {
   if (currentRole!=='pemilik') return;
   const bulan=document.getElementById('lap-bulan').value;
-  const fil=DATA.transaksi.filter(t=>t.tarikh_masa&&t.tarikh_masa.startsWith(bulan));
+  // Guna bulanTempatan() (zon waktu Malaysia) — BUKAN t.tarikh_masa.startsWith(bulan)
+  // (teks UTC mentah) — sepadan dgn renderLaporanHarian() yg dah guna tarikhTempatan()
+  // betul. Transaksi lewat malam (cth 12.30am waktu Malaysia = 4.30pm UTC hari sebelum)
+  // sebelum ini berisiko terkeluar drpd bulan yg betul dlm Laporan Bulanan.
+  const fil=DATA.transaksi.filter(t=>t.tarikh_masa&&bulanTempatan(t.tarikh_masa)===bulan);
   const hasil=fil.filter(t=>t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
   const hutang=fil.filter(t=>t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
   // Diskaun automatik Pre-Order (COD/Transfer ≥ minima, lihat kiraDiskaunHantarPeratus())
