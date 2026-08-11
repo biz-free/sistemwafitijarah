@@ -4773,7 +4773,9 @@ async function renderPreorderList() {
 
   el.innerHTML = sorted.map((po,i)=>{
     const itemsStr = (po.items||[]).map(it=>`${it.nama} ×${it.qty}`).join(' · ');
-    const hariBerlalu = daysSince(po.created_at.slice(0,10));
+    // Guna timestamp PENUH (bukan .slice(0,10)) — potong ke tarikh sahaja buat new Date()
+    // anggap UTC tengah malam, bukan waktu Malaysia, jadi kiraan hari boleh tersasar ~8 jam.
+    const hariBerlalu = daysSince(po.created_at);
     const lewat = po.status!=='selesai' && hariBerlalu>=1;
     const pilihTugasSelect = currentRole==='pemilik' ? `
       <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px;margin-top:6px" onchange="tugaskanPreorder('${po.id}',this.value)">
@@ -4838,7 +4840,7 @@ async function renderTempahanList() {
   const statusTxt = { baru:'🆕 Baru', diproses:'⏳ Diproses', selesai:'✓ Selesai', dibatalkan:'✕ Dibatalkan' };
   // Pekerja hanya nampak tempahan yang ditugaskan kepada diri sendiri — pemilik nampak semua.
   let list = currentRole==='pemilik' ? (data||[]) : (data||[]).filter(po=>po.assigned_pekerja_id===DATA.currentUser?.id);
-  list = bulan ? list.filter(po=>(po.created_at||'').slice(0,7)===bulan) : list;
+  list = bulan ? list.filter(po=>po.created_at && bulanTempatan(po.created_at)===bulan) : list;
   if (statusPilih) list = list.filter(po=>po.status===statusPilih);
   document.getElementById('tp-jumlah').textContent = `${list.length} tempahan${bulan?' pada '+bulan:' (semua)'}${statusPilih?' · '+statusTxt[statusPilih]:''}`;
 
@@ -4903,7 +4905,7 @@ async function renderTransaksiKedaiList() {
   // ikut jualan_disahkan supaya pekerja boleh follow-up kedai consignment SAHAJA.
   const list = [...DATA.transaksi]
     .filter(t=>currentRole==='pemilik' || t.created_by===DATA.currentUser?.id)
-    .filter(t=>!bulan || (t.tarikh_masa||'').slice(0,7)===bulan)
+    .filter(t=>!bulan || (t.tarikh_masa && bulanTempatan(t.tarikh_masa)===bulan))
     .filter(t=>!statusPilih || (statusPilih==='consignment_belum' ? (t.kaedah_bayaran==='consignment' && !t.jualan_disahkan) : t.status===statusPilih))
     .sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
   document.getElementById('tp-jumlah').textContent = `${list.length} transaksi${bulan?' pada '+bulan:' (semua)'}${statusPilih?' · '+statusTxtTrx[statusPilih]:''}`;
@@ -4991,7 +4993,7 @@ async function renderEdagangList() {
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   // Pekerja hanya nampak pesanan e-dagang yang ditugaskan kepada diri sendiri — pemilik nampak semua.
   const dataSaya = currentRole==='pemilik' ? (data||[]) : (data||[]).filter(o=>o.assigned_pekerja_id===DATA.currentUser?.id);
-  const listBulan = bulan ? dataSaya.filter(o=>(o.created_at||'').slice(0,7)===bulan) : dataSaya;
+  const listBulan = bulan ? dataSaya.filter(o=>o.created_at && bulanTempatan(o.created_at)===bulan) : dataSaya;
   const list = statusPilih ? listBulan.filter(o=>o.status_pesanan===statusPilih) : listBulan;
   document.getElementById('tp-jumlah').textContent = `${list.length} pesanan e-dagang${bulan?' pada '+bulan:' (semua)'}${statusPilih?' · '+EDAGANG_STATUS_TXT[statusPilih]:''}`;
   document.getElementById('badge-edagang-tab').style.display = listBulan.some(o=>o.status_pesanan==='baru') ? '' : 'none';
@@ -5534,7 +5536,7 @@ async function renderLaporan() {
   const kedaiBonusList = DATA.kedai
     .filter(k => k.didaftarkan_oleh)
     .flatMap(k => bonusKedaiEvents(k.id).map(ev => ({ kedai: k, ...ev })))
-    .filter(x => (x.tarikh_masa||'').slice(0,7) === bulan);
+    .filter(x => x.tarikh_masa && bulanTempatan(x.tarikh_masa) === bulan);
   const kosKedaiBaru = kedaiBonusList.reduce((a,x)=>a+x.jumlah,0);
   const kedaiBonusKedaiUnik = new Set(kedaiBonusList.map(x=>x.kedai.id)).size;
 
@@ -5543,7 +5545,7 @@ async function renderLaporan() {
   let edagangLayakUpah = [];
   if (useCloud) {
     const { data } = await sb.from('pesanan_edagang').select('*');
-    edagangLayakUpah = (data||[]).filter(o=>(o.created_at||'').slice(0,7)===bulan && o.assigned_pekerja_id && ['dihantar','selesai'].includes(o.status_pesanan));
+    edagangLayakUpah = (data||[]).filter(o=>o.created_at && bulanTempatan(o.created_at)===bulan && o.assigned_pekerja_id && ['dihantar','selesai'].includes(o.status_pesanan));
   }
   const kosUpahEdagang = edagangLayakUpah.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
   const kosOperasi = kosUpah+kosMinyak+kosMakan+kosKedaiBaru+kosUpahEdagang;
@@ -5639,7 +5641,7 @@ async function renderLaporanHarian() {
   let kedaiBonusList = DATA.kedai
     .filter(k => k.didaftarkan_oleh)
     .flatMap(k => bonusKedaiEvents(k.id).map(ev => ({ kedai: k, ...ev })))
-    .filter(x => (x.tarikh_masa||'').slice(0,10) === tarikh);
+    .filter(x => x.tarikh_masa && tarikhTempatan(x.tarikh_masa) === tarikh);
   if (pekerjaPilih) kedaiBonusList = kedaiBonusList.filter(x=>x.kedai.didaftarkan_oleh===pekerjaPilih);
   const kosKedaiBaru = kedaiBonusList.reduce((a,x)=>a+x.jumlah,0);
   const kedaiBonusKedaiUnik = new Set(kedaiBonusList.map(x=>x.kedai.id)).size;
@@ -5647,7 +5649,10 @@ async function renderLaporanHarian() {
   let edagangLayakUpah = [];
   if (useCloud) {
     const { data } = await sb.from('pesanan_edagang').select('*');
-    edagangLayakUpah = (data||[]).filter(o=>(o.updated_at||o.created_at||'').slice(0,10)===tarikh && o.assigned_pekerja_id && ['dihantar','selesai'].includes(o.status_pesanan));
+    edagangLayakUpah = (data||[]).filter(o=>{
+      const tkh = o.updated_at||o.created_at;
+      return tkh && tarikhTempatan(tkh)===tarikh && o.assigned_pekerja_id && ['dihantar','selesai'].includes(o.status_pesanan);
+    });
   }
   if (pekerjaPilih) edagangLayakUpah = edagangLayakUpah.filter(o=>o.assigned_pekerja_id===pekerjaPilih);
   const kosUpahEdagang = edagangLayakUpah.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
@@ -5748,7 +5753,7 @@ async function janaBaucarBulanIni() {
 // Kadar (SETTINGS.minyak/makan/bonus) hanya wujud di localStorage pemilik, jadi dikira
 // di sini (client, pemilik yang disahkan) — bukan di RPC — sama corak dgn baucar bulanan.
 async function kiraUpahPenuhHari(pekerjaId, tarikh) {
-  const filHari = DATA.transaksi.filter(t => t.created_by===pekerjaId && (t.tarikh_masa||'').slice(0,10)===tarikh);
+  const filHari = DATA.transaksi.filter(t => t.created_by===pekerjaId && t.tarikh_masa && tarikhTempatan(t.tarikh_masa)===tarikh);
   const upahHari = filHari.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
 
   const { kmIkutHari } = await kiraJarakKehadiranJulat(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaId);
@@ -5762,7 +5767,7 @@ async function kiraUpahPenuhHari(pekerjaId, tarikh) {
   const kedaiListHari = DATA.kedai
     .filter(k => k.didaftarkan_oleh===pekerjaId)
     .flatMap(k => bonusKedaiEvents(k.id).map(ev => ({ kedai:k, ...ev })))
-    .filter(x => (x.tarikh_masa||'').slice(0,10)===tarikh);
+    .filter(x => x.tarikh_masa && tarikhTempatan(x.tarikh_masa)===tarikh);
   const bonusHari = kedaiListHari.reduce((a,x)=>a+x.jumlah,0);
 
   let bonusTerkumpulMatang = 0, bonusTerkumpulBelumMatang = 0;
@@ -5773,7 +5778,10 @@ async function kiraUpahPenuhHari(pekerjaId, tarikh) {
   }
 
   const { data: edagangData } = await sb.from('pesanan_edagang').select('*').eq('assigned_pekerja_id', pekerjaId);
-  const edagangHari = (edagangData||[]).filter(o=>['dihantar','selesai'].includes(o.status_pesanan) && (o.updated_at||o.created_at||'').slice(0,10)===tarikh);
+  const edagangHari = (edagangData||[]).filter(o=>{
+    const tkh = o.updated_at||o.created_at;
+    return ['dihantar','selesai'].includes(o.status_pesanan) && tkh && tarikhTempatan(tkh)===tarikh;
+  });
   const upahEdagangHari = edagangHari.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
 
   // Duit makan — layak hanya jika thumb-in→thumb-out cukup 5 jam DAN ada transaksi
@@ -7456,7 +7464,7 @@ async function tukarPasswordSaya() {
 async function renderUpahSaya() {
   if (!useCloud) { document.getElementById('upah-saya-output').innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
   const bulan = document.getElementById('upah-saya-bulan').value;
-  const fil = DATA.transaksi.filter(t => t.tarikh_masa?.startsWith(bulan) && (t.created_by===DATA.currentUser?.id || t.created_by===DATA.currentUser?.email));
+  const fil = DATA.transaksi.filter(t => t.tarikh_masa && bulanTempatan(t.tarikh_masa)===bulan && (t.created_by===DATA.currentUser?.id || t.created_by===DATA.currentUser?.email));
   const jumlahStok = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
   const { totalKm: jumlahKm, kmIkutHari } = await kiraJarakKehadiranJulat(bulan+'-01T00:00:00', akhirBulanISO(bulan), DATA.currentUser.id);
   // Bonus kedai baru kini terikat kepada TRANSAKSI SEBENAR kedai (bukan tarikh
@@ -7464,14 +7472,14 @@ async function renderUpahSaya() {
   const kedaiSayaBonus = DATA.kedai
     .filter(k => k.didaftarkan_oleh===DATA.currentUser?.id)
     .flatMap(k => bonusKedaiEvents(k.id).map(ev => ({ kedai:k, ...ev })))
-    .filter(x => (x.tarikh_masa||'').slice(0,7) === bulan);
+    .filter(x => x.tarikh_masa && bulanTempatan(x.tarikh_masa) === bulan);
   const kedaiSayaBonusUnik = new Set(kedaiSayaBonus.map(x=>x.kedai.id)).size;
   // RLS hadkan query ni kepada pesanan yang ditugaskan kepada saya sahaja.
   const { data: edagangData } = await sb.from('pesanan_edagang').select('*');
-  const edagangSaya = (edagangData||[]).filter(o=>(o.created_at||'').slice(0,7)===bulan && ['dihantar','selesai'].includes(o.status_pesanan));
+  const edagangSaya = (edagangData||[]).filter(o=>o.created_at && bulanTempatan(o.created_at)===bulan && ['dihantar','selesai'].includes(o.status_pesanan));
   // Sertakan hari kedai baru bertransaksi & hari pesanan e-dagang diselesaikan juga —
   // walaupun tiada penghantaran hari tu, supaya bonus/upah dia tak hilang dari pecahan harian.
-  const hariList = [...new Set([...fil.map(t=>(t.tarikh_masa||'').slice(0,10)), ...kedaiSayaBonus.map(x=>(x.tarikh_masa||'').slice(0,10)), ...edagangSaya.map(o=>(o.updated_at||o.created_at||'').slice(0,10))])].sort();
+  const hariList = [...new Set([...fil.map(t=>tarikhTempatan(t.tarikh_masa)), ...kedaiSayaBonus.map(x=>tarikhTempatan(x.tarikh_masa)), ...edagangSaya.map(o=>tarikhTempatan(o.updated_at||o.created_at))])].sort();
   const hariLayakMakan = await kiraHariLayakMakan(bulan+'-01T00:00:00', akhirBulanISO(bulan), DATA.currentUser.id);
   const hariKerja = hariLayakMakan.size;
 
@@ -7488,10 +7496,10 @@ async function renderUpahSaya() {
 
   // Pecahan dibayar mengikut hari — setiap hari kerja dikira berasingan (upah + minyak + makan + bonus kedai + upah e-dagang hari itu)
   const pecahanHarian = hariList.map(tarikh => {
-    const filHari = fil.filter(t=>(t.tarikh_masa||'').slice(0,10)===tarikh);
-    const kedaiListHari = kedaiSayaBonus.filter(x=>(x.tarikh_masa||'').slice(0,10)===tarikh);
+    const filHari = fil.filter(t=>tarikhTempatan(t.tarikh_masa)===tarikh);
+    const kedaiListHari = kedaiSayaBonus.filter(x=>tarikhTempatan(x.tarikh_masa)===tarikh);
     const kedaiHari = new Set(kedaiListHari.map(x=>x.kedai.id)).size;
-    const edagangHari = edagangSaya.filter(o=>(o.updated_at||o.created_at||'').slice(0,10)===tarikh);
+    const edagangHari = edagangSaya.filter(o=>tarikhTempatan(o.updated_at||o.created_at)===tarikh);
     const voucher = baucarIkutTarikh[tarikh];
     let upahHari, minyakHari, makanHari, bonusKedaiHari, upahEdagangHari;
     if (voucher) {
@@ -8386,7 +8394,7 @@ async function renderLaporanKehadiran() {
 
   const results = Object.entries(kumpulan).map(([pekerjaId, sesiPekerja]) => {
     const p = profil?.find(x=>x.id===pekerjaId);
-    const penghantaranHari = DATA.transaksi.filter(t=>t.created_by===pekerjaId && (t.tarikh_masa||'').slice(0,10)===tarikh);
+    const penghantaranHari = DATA.transaksi.filter(t=>t.created_by===pekerjaId && t.tarikh_masa && tarikhTempatan(t.tarikh_masa)===tarikh);
     let jarak = 0;
     sesiPekerja.forEach(s => {
       const penghantaranSesi = penghantaranHari.filter(t=>t.tarikh_masa>=s.thumb_in_masa && (!s.thumb_out_masa || t.tarikh_masa<=s.thumb_out_masa));
