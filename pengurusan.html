@@ -843,7 +843,7 @@
       <div class="stat-box"><div class="stat-icon">💰</div><div class="stat-label">Jumlah Jualan</div><div class="stat-val" id="an-jualan" style="color:var(--green)">—</div></div>
       <div class="stat-box"><div class="stat-icon">📦</div><div class="stat-label">Jumlah Modal</div><div class="stat-val" id="an-modal" style="color:var(--gold)">—</div></div>
       <div class="stat-box"><div class="stat-icon">📈</div><div class="stat-label">Untung Kasar</div><div class="stat-val" id="an-untung" style="color:var(--teal)">—</div></div>
-      <div class="stat-box"><div class="stat-icon">⚠️</div><div class="stat-label">Jumlah Hutang</div><div class="stat-val" id="an-hutang" style="color:var(--red)">—</div></div>
+      <div class="stat-box"><div class="stat-icon">⚠️</div><div class="stat-label">Hutang Semasa (Semua Masa)</div><div class="stat-val" id="an-hutang" style="color:var(--red)">—</div></div>
     </div>
 
     <div class="card">
@@ -6115,8 +6115,11 @@ async function hantarBaucarWhatsapp(id) {
 function analisisJulatBulan() {
   const dari = document.getElementById('an-dari').value;
   const hingga = document.getElementById('an-hingga').value;
+  // Guna bulanTempatan() (zon waktu Malaysia) — BUKAN t.tarikh_masa.slice(0,7)
+  // (teks UTC mentah) — sepadan dgn renderLaporan()/renderLaporanHarian().
   return DATA.transaksi.filter(t=>{
-    const bln = (t.tarikh_masa||'').slice(0,7);
+    if (!t.tarikh_masa) return false;
+    const bln = bulanTempatan(t.tarikh_masa);
     return bln >= dari && bln <= hingga;
   });
 }
@@ -6155,7 +6158,10 @@ function renderAnalisis() {
   const fil = analisisJulatBulan();
   const jualan = fil.filter(t=>t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
   const modal = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(x=>x.id===it.stokId); return s+(stokItem?stokItem.harga_beli*it.qty:0); },0),0);
-  const untung = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(x=>x.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0),0);
+  // Diskaun automatik Pre-Order (COD/Transfer ≥ minima) MESTI ditolak dari untung
+  // (100% ambil dari margin, sama pattern spt renderLaporan()) — sblm ni tertinggal.
+  const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
+  const untung = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(x=>x.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0),0) - diskaunKedai;
   const hutangSemasa = DATA.kedai.reduce((a,k)=>a+k.hutang,0);
 
   document.getElementById('an-jualan').textContent = fmt(jualan);
@@ -6178,12 +6184,14 @@ function renderAnalisis() {
     `<div class="list-item"><div class="list-item-title">${esc(k.nama)}</div><div class="list-item-val" style="color:var(--red)">${fmt(k.hutang)}</div></div>`
   ).join('') || '<div class="empty"><div class="empty-text">Tiada kedai berhutang</div></div>';
 
-  // Pecahan ikut bulan (dalam julat)
+  // Pecahan ikut bulan (dalam julat) — bulanTempatan() (MYT) + tolak diskaun kedai
+  // per-transaksi supaya jumlah setiap bulan padan dgn keseluruhan di atas.
   const ikutBulan = {};
   fil.forEach(t=>{
-    const bln = (t.tarikh_masa||'').slice(0,7);
+    const bln = bulanTempatan(t.tarikh_masa);
     ikutBulan[bln] ||= { jualan:0, modal:0, untung:0 };
     if (t.status==='selesai') ikutBulan[bln].jualan += t.jumlah;
+    ikutBulan[bln].untung -= (t.jumlah_asal??t.jumlah)-t.jumlah;
     t.items.forEach(it=>{ const s=DATA.stok.find(x=>x.id===it.stokId); if (s) { ikutBulan[bln].modal += s.harga_beli*it.qty; ikutBulan[bln].untung += (s.harga_jual-s.harga_beli)*it.qty; } });
   });
   document.getElementById('an-bulanan-list').innerHTML = Object.entries(ikutBulan).sort((a,b)=>a[0].localeCompare(b[0])).map(([bln,d])=>
@@ -6208,12 +6216,15 @@ async function renderRumusanStokKeluar() {
   const pekerjaPilih = pekerjaSel.value;
 
   const trxDalamJulat = DATA.transaksi.filter(t=>{
-    const bln = (t.tarikh_masa||'').slice(0,7);
+    if (!t.tarikh_masa) return false;
+    const bln = bulanTempatan(t.tarikh_masa);
     return bln >= dari && bln <= hingga;
   });
   const { data: edagangSemua } = await sb.from('pesanan_edagang').select('*').eq('status_pesanan','selesai');
   const edagangDalamJulat = (edagangSemua||[]).filter(o=>{
-    const bln = (o.updated_at||o.created_at||'').slice(0,7);
+    const tkh = o.updated_at||o.created_at;
+    if (!tkh) return false;
+    const bln = bulanTempatan(tkh);
     return bln >= dari && bln <= hingga;
   });
 
