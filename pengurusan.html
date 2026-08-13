@@ -8475,14 +8475,44 @@ function haversineKm(a, b) {
 // Jarak 1 sesi kehadiran: titik GPS Thumb In -> GPS kedai-kedai yang dihantar (ikut
 // urutan masa) semasa sesi itu -> titik GPS Thumb Out. Guna titik kedai berdaftar
 // (tetap/stabil) bukan trail GPS mentah, supaya tak terjejas gangguan/derau sinyal.
+// Nearest-neighbour dari SATU titik mula (bukan sebahagian senarai) — beza drpd
+// susunRouteIkutJarak() yg ambil elemen pertama SENARAI sbg mula. Diguna oleh
+// jarakSesiKehadiran() supaya susunan kedai dikira ikut jarak paling munasabah,
+// bukan tarikh_masa (masa key-in dlm app) — lihat nota di bawah.
+function susunTitikTerdekatDariMula(mula, titikList) {
+  const baki = [...titikList];
+  const hasil = [];
+  let semasa = mula;
+  while (baki.length) {
+    let idx = 0, jarakMin = Infinity;
+    baki.forEach((t,i)=>{ const j = haversineKm(semasa, t); if (j<jarakMin) { jarakMin=j; idx=i; } });
+    semasa = baki.splice(idx,1)[0];
+    hasil.push(semasa);
+  }
+  return hasil;
+}
+
+// Jarak 1 sesi — kedai disusun ikut NEAREST-NEIGHBOUR drpd titik Thumb In (jarak
+// paling munasabah), BUKAN ikut tarikh_masa (masa transaksi di-key-in dlm app).
+// Sebab: pekerja kerap kumpul beberapa jualan dulu (offline/lupa buka app) & rekod
+// SEMUA sekaligus lepas balik ke kawasan biasa — kalau ikut tarikh_masa, susunan
+// jadi "zig-zag" ikut bila di-key-in (bukan laluan sebenar pekerja bergerak), lalu
+// jarak/minyak dikira jauh lebih tinggi drpd yg sepatutnya. Nearest-neighbour ambil
+// laluan paling pendek yg munasabah merentasi kedai yg sama, tanpa kira urutan
+// key-in — jauh lebih dekat dgn laluan sebenar walaupun rekod tak ikut turutan.
 function jarakSesiKehadiran(sesi, penghantaranSesi) {
-  const titik = [];
-  if (sesi.thumb_in_lat != null) titik.push({ lat:sesi.thumb_in_lat, lng:sesi.thumb_in_lng });
-  [...penghantaranSesi].sort((a,b)=>new Date(a.tarikh_masa)-new Date(b.tarikh_masa)).forEach(t=>{
+  const mula = sesi.thumb_in_lat != null ? { lat:sesi.thumb_in_lat, lng:sesi.thumb_in_lng } : null;
+  const kedaiTitik = [];
+  penghantaranSesi.forEach(t=>{
     const k = DATA.kedai.find(k=>k.id===t.kedai_id);
-    if (k?.lat != null && k?.lng != null) titik.push({ lat:k.lat, lng:k.lng });
+    if (k?.lat != null && k?.lng != null) kedaiTitik.push({ lat:k.lat, lng:k.lng });
   });
+
+  const titik = [];
+  if (mula) titik.push(mula);
+  titik.push(...(mula ? susunTitikTerdekatDariMula(mula, kedaiTitik) : kedaiTitik));
   if (sesi.thumb_out_lat != null) titik.push({ lat:sesi.thumb_out_lat, lng:sesi.thumb_out_lng });
+
   let jarak = 0;
   for (let i=1;i<titik.length;i++) jarak += haversineKm(titik[i-1], titik[i]);
   return jarak;
