@@ -4329,7 +4329,21 @@ function previewResitBukti() {
   prev.style.display = 'block';
 }
 
+// Debounce butang "Sahkan" — elak double-tap hantar 2 rekod pendua (transaksi/
+// pelupusan/tukar expired semua kongsi butang h-submit-btn ni). Logik sebenar
+// dipindah ke submitHantarSebenar(); wrapper ni cuma kunci butang semasa proses.
 async function submitHantar() {
+  const btn = document.getElementById('h-submit-btn');
+  if (btn && btn.disabled) return;
+  if (btn) btn.disabled = true;
+  try {
+    await submitHantarSebenar();
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function submitHantarSebenar() {
   if (hJenis==='rosak') return submitPelupusan();
   const peribadi = hJenis==='peribadi';
   // Resit wajib untuk transfer — KECUALI pre-order yang kedai sudah bayar online
