@@ -707,6 +707,12 @@
           </div>
         </div>
 
+        <div class="form-group" id="h-tarikh-akhir-bayaran-wrap" style="display:none">
+          <label class="form-label">📅 Tarikh Akhir Bayaran (Pilihan)</label>
+          <input type="date" class="form-input" id="h-tarikh-akhir-bayaran" />
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">Kalau diisi, kedai & pekerja akan dipaparkan di Dashboard sebagai amaran bila tarikh ni sampai/lepas & hutang belum dijelaskan.</div>
+        </div>
+
         <div id="h-qr-wrap" style="display:none;background:var(--bg);border-radius:10px;padding:14px;text-align:center;margin-bottom:14px">
           <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">🏦 Tunjuk QR Ini Kepada Kedai Untuk Bayar</div>
           <img id="h-qr-img" style="display:none;width:100%;max-width:220px;border-radius:9px;margin:0 auto 8px" />
@@ -779,6 +785,12 @@
           <option value="selesai">✓ Selesai</option>
           <option value="hutang">⏳ Hutang</option>
           <option value="consignment_belum">🤝 Consignment Belum Sahkan</option>
+        </select>
+      </div>
+      <div class="form-group" id="tp-filter-pekerja-wrap" style="margin-top:10px;display:none">
+        <label class="form-label">Tapis Ikut Pekerja</label>
+        <select class="form-input" id="tp-filter-pekerja" onchange="renderTempahanAktif()">
+          <option value="">Semua Pekerja</option>
         </select>
       </div>
       <div class="form-group" id="tp-filter-edagang-wrap" style="margin-top:10px;display:none">
@@ -2243,6 +2255,18 @@ function renderDashboard() {
     aHTML+=`<div class="list-item"><div><div class="list-item-title">⏳ ${esc(s.nama)}</div><div class="list-item-sub">${d<0?'Sudah luput':'Luput dalam '+d+' hari'} · ${fmtD(s.tarikh_luput)}</div></div><span class="badge ${d<0?'badge-red':'badge-gold'}">${d<0?'LUPUT':d+'h'}</span></div>`;
   });
   hutangKedai.forEach(k=>{ aHTML+=`<div class="list-item"><div><div class="list-item-title">💳 ${esc(k.nama)}</div><div class="list-item-sub">Hutang belum bayar</div></div><span class="badge badge-gold">${fmt(k.hutang)}</span></div>`; });
+  // Tarikh akhir bayaran hutang sudah tiba/lepas (SQL_TAMBAHAN_98) — pekerja nampak
+  // transaksi SENDIRI sahaja (kedai dia berurusan), pemilik nampak SEMUA + nama pekerja
+  // bertanggungjawab, supaya boleh follow-up terus.
+  const hariIni = tarikhTempatan();
+  DATA.transaksi
+    .filter(t=>t.status==='hutang' && t.tarikh_akhir_bayaran && t.tarikh_akhir_bayaran<=hariIni && (isPemilik || t.created_by===DATA.currentUser?.id))
+    .sort((a,b)=>a.tarikh_akhir_bayaran.localeCompare(b.tarikh_akhir_bayaran))
+    .forEach(t=>{
+      const lewatHari = daysSince(t.tarikh_akhir_bayaran+'T00:00:00');
+      const namaPekerja = isPemilik ? (PROFIL_NAMA_CACHE[t.created_by]||t.created_by) : null;
+      aHTML+=`<div class="list-item"><div><div class="list-item-title">🔴 ${esc(namaDestinasiTrx(t))}</div><div class="list-item-sub">Tarikh akhir bayaran ${fmtD(t.tarikh_akhir_bayaran)} ${lewatHari>0?`(${lewatHari} hari lepas)`:'(hari ini)'}${namaPekerja?' · Pekerja: '+esc(namaPekerja):''}</div></div><span class="badge badge-red">${fmt(t.jumlah)}</span></div>`;
+    });
   // Consignment belum disahkan jualan — follow-up proaktif supaya pekerja tahu kedai
   // mana perlu ditanya sama ada barang dah habis/laku atau belum (upah pun belum dikira
   // sehingga disahkan). Diasingkan drpd "Hutang" sebab bukan isu bayaran tertunggak.
@@ -4134,6 +4158,11 @@ function setBayar(v) {
   document.getElementById('opt-transfer').className='bayar-opt'+(v==='transfer'?' active-transfer':'');
   document.getElementById('opt-hutang').className='bayar-opt'+(v==='hutang'?' active-hutang':'');
   document.getElementById('opt-consignment').className='bayar-opt'+(v==='consignment'?' active-consignment':'');
+  const tarikhAkhirWrap = document.getElementById('h-tarikh-akhir-bayaran-wrap');
+  if (tarikhAkhirWrap) {
+    tarikhAkhirWrap.style.display = v === 'hutang' ? '' : 'none';
+    if (v !== 'hutang') document.getElementById('h-tarikh-akhir-bayaran').value = '';
+  }
   const qrWrap = document.getElementById('h-qr-wrap');
   if (v === 'transfer' && (TETAPAN_DISKAUN.qr_bank_url || TETAPAN_DISKAUN.butiran_bank)) {
     qrWrap.style.display = '';
@@ -4173,6 +4202,7 @@ function setHJenis(v) {
     toggleTukarExpired(false);
   }
   document.getElementById('h-bayar-wrap').style.display = v==='rosak'?'none':'';
+  if (v==='rosak') document.getElementById('h-tarikh-akhir-bayaran-wrap').style.display = 'none';
   document.getElementById('h-resit-bukti-wrap').style.display = v==='kedai'?'':'none';
   if (v!=='kedai') { document.getElementById('h-qr-wrap').style.display = 'none'; }
   document.getElementById('h-items-label').textContent = v==='rosak'?'Barang Dilupuskan':'Barang Dihantar';
@@ -4263,13 +4293,14 @@ async function submitHantar() {
   // Kosong/tarikh hari ini = guna masa sebenar (server tetapkan now() dlm RPC).
   const tarikhPilih = document.getElementById('h-tarikh')?.value;
   const tarikhMasaOverride = (tarikhPilih && tarikhPilih !== tarikhTempatan()) ? `${tarikhPilih}T12:00:00+08:00` : null;
+  const tarikhAkhirBayaran = (hBayar==='hutang' && document.getElementById('h-tarikh-akhir-bayaran')?.value) || null;
   const trx={
     id:genId('T'), tarikh_masa: tarikhMasaOverride || new Date().toISOString(), kedai_id:kedaiId, nama_pembeli:namaPembeli||null,
     items:hItems.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return{stokId:it.stokId,qty:+it.qty,harga:s.harga_jual}; }),
     jumlah, jumlah_asal: jumlahAsal, diskaun_peratus: peratusDiskaun,
     kaedah_bayaran: hBayar==='terus'?'tunai':hBayar, status:statusBayar,
     nota:document.getElementById('h-nota').value, resit:genResit(),
-    jarak_km: jarakKm,
+    jarak_km: jarakKm, tarikh_akhir_bayaran: tarikhAkhirBayaran,
     created_by: DATA.currentUser?.email || DATA.currentUser?.nama || null,
   };
   let resitBuktiPath = null;
@@ -4288,7 +4319,7 @@ async function submitHantar() {
       p_nama_pembeli:trx.nama_pembeli, p_kaedah_bayaran:trx.kaedah_bayaran,
       p_jumlah_asal:trx.jumlah_asal, p_diskaun_peratus:trx.diskaun_peratus,
       p_resit_bukti_url: resitBuktiPath, p_pekerja_id_override: PEKERJA_TARGET_ID,
-      p_tarikh_masa: tarikhMasaOverride,
+      p_tarikh_masa: tarikhMasaOverride, p_tarikh_akhir_bayaran: tarikhAkhirBayaran,
     });
     if (error) return toast('Gagal rekod penghantaran: '+error.message,'err');
     if (preorderIdSelesai) {
@@ -4885,6 +4916,8 @@ function setTempahanTab(t) {
   document.getElementById('tp-filter-tempahan-wrap').style.display = t==='tempahan'?'':'none';
   document.getElementById('tp-filter-transaksi-wrap').style.display = t==='transaksi'?'':'none';
   document.getElementById('tp-filter-edagang-wrap').style.display = t==='edagang'?'':'none';
+  // Tapis ikut pekerja hanya berguna utk pemilik (pekerja sendiri dah auto-tapis dlm renderTransaksiKedaiList()).
+  document.getElementById('tp-filter-pekerja-wrap').style.display = (t==='transaksi' && currentRole==='pemilik')?'':'none';
   renderTempahanAktif();
 }
 
@@ -4899,6 +4932,16 @@ async function renderTransaksiKedaiList() {
   const bulan = document.getElementById('tp-bulan').value;
   const statusPilih = document.getElementById('tp-filter-transaksi')?.value || '';
   const statusTxtTrx = { selesai:'✓ Selesai', hutang:'⏳ Hutang', consignment_belum:'🤝 Consignment Belum Sahkan' };
+
+  // Tapis ikut pekerja (pemilik sahaja) — isi senarai sekali sahaja (lazy-load).
+  const pekerjaSel = document.getElementById('tp-filter-pekerja');
+  if (currentRole==='pemilik' && useCloud && pekerjaSel && !pekerjaSel.dataset.loaded) {
+    pekerjaSel.dataset.loaded = '1';
+    const { data: pekerjaList } = await sb.from('profiles').select('id,nama').eq('role','pekerja').order('nama');
+    pekerjaSel.innerHTML = '<option value="">Semua Pekerja</option>' + (pekerjaList||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('');
+  }
+  const pekerjaPilih = (currentRole==='pemilik' && pekerjaSel) ? pekerjaSel.value : '';
+
   // Pekerja hanya nampak transaksi yang dia sendiri hantar — pemilik nampak semua.
   // "consignment_belum" ialah tapisan KHAS (bukan lajur status sebenar) — consignment
   // guna status='hutang' yg sama dgn hutang biasa di belakang tabir, jadi kena tapis
@@ -4907,6 +4950,7 @@ async function renderTransaksiKedaiList() {
     .filter(t=>currentRole==='pemilik' || t.created_by===DATA.currentUser?.id)
     .filter(t=>!bulan || (t.tarikh_masa && bulanTempatan(t.tarikh_masa)===bulan))
     .filter(t=>!statusPilih || (statusPilih==='consignment_belum' ? (t.kaedah_bayaran==='consignment' && !t.jualan_disahkan) : t.status===statusPilih))
+    .filter(t=>!pekerjaPilih || t.created_by===pekerjaPilih)
     .sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
   document.getElementById('tp-jumlah').textContent = `${list.length} transaksi${bulan?' pada '+bulan:' (semua)'}${statusPilih?' · '+statusTxtTrx[statusPilih]:''}`;
 
