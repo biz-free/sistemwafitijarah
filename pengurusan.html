@@ -412,6 +412,13 @@
       <div id="tugasan-baru-list"></div>
     </div>
 
+    <!-- Tugasan Route Hari Ini (SQL_TAMBAHAN_99) — arahan proaktif "kedai 1 -> 2 -> 3"
+    dari penugasan_route_harian. Pekerja nampak tugasan sendiri; pemilik nampak semua. -->
+    <div class="card" id="tugasan-route-card" style="border-left:4px solid var(--navy);display:none">
+      <div class="card-title" id="tugasan-route-title">📍 Tugasan Route Hari Ini</div>
+      <div id="tugasan-route-list"></div>
+    </div>
+
     <!-- Pre-Order Saya Perlu Dihantar (pekerja sahaja) -->
     <div class="card" id="preorder-saya-card" style="border-left:4px solid var(--teal);display:none">
       <div class="card-title" style="color:var(--teal)">📦 Pre-Order Perlu Dihantar</div>
@@ -1561,6 +1568,20 @@
       </div>
     </div>
     <div id="route-senarai"></div>
+
+    <!-- Penugasan Route Harian (pemilik sahaja) — tugaskan route + pekerja + tarikh,
+    pekerja terus nampak arahan "kedai 1 -> 2 -> 3" di Dashboard tanpa perlu cari sendiri. -->
+    <div id="penugasan-harian-wrap" style="display:none;margin-top:20px;padding-top:16px;border-top:2px solid var(--border)">
+      <div style="font-weight:800;font-size:14px;color:var(--navy);margin-bottom:10px">📋 Penugasan Route Harian</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Route</label><select class="form-input" id="ph-route"></select></div>
+        <div class="form-group"><label class="form-label">Pekerja</label><select class="form-input" id="ph-pekerja"></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Tarikh</label><input type="date" class="form-input" id="ph-tarikh" /></div>
+      <div class="form-group"><label class="form-label">Nota (Pilihan)</label><input type="text" class="form-input" id="ph-nota" placeholder="cth: utamakan kedai hutang dulu" /></div>
+      <button class="btn btn-primary" style="width:100%;margin-bottom:14px" onclick="ciptaPenugasanHarian()">📤 Tugaskan Route</button>
+      <div id="penugasan-harian-list"></div>
+    </div>
   </div>
 </div>
 
@@ -2219,6 +2240,7 @@ function initAll() {
 function renderDashboard() {
   renderKehadiranStatus();
   renderTugasanBaru();
+  renderTugasanRouteHariIni();
   renderPreorderSaya();
   renderJualanPekerjaHariIni();
   renderBonusKedaiSaya();
@@ -2792,6 +2814,57 @@ function bukaModalRoute() {
   document.getElementById('route-filter-pendaftar-wrap').style.display = isPemilik ? '' : 'none';
   document.getElementById('route-hint-pekerja').textContent = isPemilik ? '' : '📌 Anda hanya boleh urus route untuk kedai yang anda daftarkan sendiri.';
   renderSenaraiRoute();
+  document.getElementById('penugasan-harian-wrap').style.display = isPemilik ? '' : 'none';
+  if (isPemilik) renderPenugasanHarian();
+}
+
+// ── Penugasan Route Harian (pemilik sahaja) — tugaskan route+pekerja+tarikh,
+// pekerja terus nampak arahan proaktif "kedai 1 -> 2 -> 3" di Dashboard. ──
+async function renderPenugasanHarian() {
+  const routeSel = document.getElementById('ph-route');
+  const pekerjaSel = document.getElementById('ph-pekerja');
+  const tarikhEl = document.getElementById('ph-tarikh');
+  if (!tarikhEl.value) tarikhEl.value = tarikhTempatan();
+
+  const [{ data: routes }, { data: pekerjaList }, { data: penugasan }] = await Promise.all([
+    sb.from('route_kedai').select('id,nama').order('nama'),
+    sb.from('profiles').select('id,nama').eq('role','pekerja').order('nama'),
+    sb.from('penugasan_route_harian').select('*').eq('status','aktif').order('tarikh',{ascending:false}).limit(30),
+  ]);
+  routeSel.innerHTML = (routes||[]).map(r=>`<option value="${r.id}">${esc(r.nama)}</option>`).join('') || '<option value="">Tiada route</option>';
+  pekerjaSel.innerHTML = (pekerjaList||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('') || '<option value="">Tiada pekerja</option>';
+
+  const routeNama = id => routes?.find(r=>r.id===id)?.nama || id;
+  const pekerjaNama = id => pekerjaList?.find(p=>p.id===id)?.nama || id;
+  const listEl = document.getElementById('penugasan-harian-list');
+  listEl.innerHTML = (penugasan||[]).map(p=>`
+    <div class="list-item">
+      <div><div class="list-item-title">🗺️ ${esc(routeNama(p.route_id))}</div><div class="list-item-sub">${esc(pekerjaNama(p.pekerja_id))} · ${fmtD(p.tarikh)}${p.nota?' · '+esc(p.nota):''}</div></div>
+      <button class="btn-delete-icon" style="position:static" onclick="padamPenugasanHarian('${p.id}')" title="Batalkan penugasan">✕</button>
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada penugasan aktif</div></div>';
+}
+
+async function ciptaPenugasanHarian() {
+  const routeId = document.getElementById('ph-route').value;
+  const pekerjaId = document.getElementById('ph-pekerja').value;
+  const tarikh = document.getElementById('ph-tarikh').value;
+  const nota = document.getElementById('ph-nota').value.trim();
+  if (!routeId) return toast('Sila cipta/pilih route dahulu','err');
+  if (!pekerjaId) return toast('Sila pilih pekerja','err');
+  if (!tarikh) return toast('Sila pilih tarikh','err');
+  const { error } = await sb.rpc('cipta_penugasan_harian', { p_id: genId('PH'), p_route_id: routeId, p_pekerja_id: pekerjaId, p_tarikh: tarikh, p_nota: nota||null });
+  if (error) return toast('Gagal tugaskan route: '+error.message,'err');
+  document.getElementById('ph-nota').value = '';
+  toast('✅ Route ditugaskan');
+  renderPenugasanHarian();
+}
+
+async function padamPenugasanHarian(id) {
+  if (!confirm('Batalkan penugasan route ini?')) return;
+  const { error } = await sb.rpc('padam_penugasan_harian', { p_id: id });
+  if (error) return toast('Gagal batalkan: '+error.message,'err');
+  toast('Penugasan dibatalkan');
+  renderPenugasanHarian();
 }
 
 // Pekerja hanya boleh urus route utk kedai SENDIRI (yang mereka daftarkan) — skop
@@ -2839,7 +2912,10 @@ async function renderSenaraiRoute() {
   });
 
   el.innerHTML = (routes||[]).map(r => {
-    const kedaiDalamRoute = DATA.kedai.filter(k=>k.route_id===r.id);
+    // Kedai SUDAH dlm route ni — susun ikut route_urutan (susunan manual "kedai 1 -> 2 -> 3"),
+    // ada butang naik/turun (pemilik sahaja) supaya boleh susun semula tanpa drag-drop.
+    const kedaiDalamRoute = [...DATA.kedai].filter(k=>k.route_id===r.id).sort((a,b)=>(a.route_urutan??999999)-(b.route_urutan??999999));
+    const kedaiLain = kedaiTapis.filter(k=>k.route_id!==r.id);
     return `<div class="list-item" style="display:block">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div class="list-item-title">${esc(r.nama)}</div>
@@ -2849,14 +2925,26 @@ async function renderSenaraiRoute() {
         </div>
       </div>
       <div id="route-kedai-${r.id}" style="display:none;margin-top:8px">
+        ${kedaiDalamRoute.length?`<div style="font-size:11px;font-weight:700;color:var(--teal);margin-bottom:4px">📍 Susunan Laluan (kedai 1 → ${kedaiDalamRoute.length})</div>
+        <div style="margin-bottom:10px">
+          ${kedaiDalamRoute.map((k,i)=>`
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px dashed var(--border)">
+              <span style="font-weight:800;color:var(--navy);width:20px;flex-shrink:0">${i+1}.</span>
+              <span style="flex:1">${esc(k.nama)}</span>
+              ${isPemilik?`<button class="btn btn-secondary btn-sm" style="padding:2px 8px;width:auto" ${i===0?'disabled':''} onclick="tukarUrutanKedaiRoute('${k.id}','naik','${r.id}')">▲</button>
+              <button class="btn btn-secondary btn-sm" style="padding:2px 8px;width:auto" ${i===kedaiDalamRoute.length-1?'disabled':''} onclick="tukarUrutanKedaiRoute('${k.id}','turun','${r.id}')">▼</button>`:''}
+              <input type="checkbox" style="width:auto" checked onchange="tetapkanRouteKedai('${k.id}', null)" title="Buang drpd route" />
+            </div>`).join('')}
+        </div>`:''}
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">+ Tambah Kedai Lain</div>
         <input type="text" class="form-input" placeholder="🔍 Cari kedai..." style="font-size:12px;padding:6px 10px;margin-bottom:6px" oninput="tapisRouteKedaiList('${r.id}', this.value)" />
         <div style="max-height:200px;overflow-y:auto;border-top:1px dashed var(--border);padding-top:6px">
-          ${kedaiTapis.map(k=>{
+          ${kedaiLain.map(k=>{
             const tarikh = tarikhServis(k);
             const servisTxt = tarikh ? `⏳ ${daysSince(tarikh)} hari lalu` : '🆕 Belum pernah';
             return `<label class="route-kedai-item" data-nama="${esc(k.nama.toLowerCase())}" style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;cursor:pointer">
-              <input type="checkbox" style="width:auto" ${k.route_id===r.id?'checked':''} onchange="tetapkanRouteKedai('${k.id}', this.checked?'${r.id}':null)" />
-              <span style="flex:1">${esc(k.nama)}${k.route_id && k.route_id!==r.id?' <span style="color:var(--muted)">(route lain)</span>':''}</span>
+              <input type="checkbox" style="width:auto" onchange="tetapkanRouteKedai('${k.id}', this.checked?'${r.id}':null)" />
+              <span style="flex:1">${esc(k.nama)}${k.route_id?' <span style="color:var(--muted)">(route lain)</span>':''}</span>
               <span style="color:var(--muted);font-size:10px;flex-shrink:0">${servisTxt}</span>
             </label>`;
           }).join('') || '<div class="empty"><div class="empty-text">Tiada kedai sepadan tapisan</div></div>'}
@@ -2898,6 +2986,16 @@ async function tetapkanRouteKedai(kedaiId, routeId) {
   await loadData();
   renderSenaraiRoute();
   renderServisKedai();
+}
+
+// Susun semula urutan manual "kedai 1 -> 2 -> 3" dlm route (pemilik sahaja) — swap
+// dgn jiran atas/bawah, buka semula seksyen route tu lepas render supaya tak tertutup.
+async function tukarUrutanKedaiRoute(kedaiId, arah, routeId) {
+  const { error } = await sb.rpc('tukar_urutan_kedai_route', { p_kedai_id: kedaiId, p_arah: arah });
+  if (error) return toast('Gagal susun urutan: '+error.message,'err');
+  await loadData();
+  renderSenaraiRoute();
+  document.getElementById('route-kedai-'+routeId).style.display = '';
 }
 
 async function padamRoute(id) {
@@ -4601,6 +4699,53 @@ async function renderTugasanBaru() {
       ${currentRole==='pekerja'?`<button class="btn btn-primary btn-sm" style="margin-top:0" onclick="claimPreorder('${po.id}')">🙋 Ambil</button>`:`<span class="badge badge-gold">Baru</span>`}
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-text">Tiada tugasan baru buat masa ini</div></div>';
+}
+
+// Tugasan Route Hari Ini (SQL_TAMBAHAN_99) — arahan proaktif "kedai 1 -> 2 -> 3" dari
+// penugasan_route_harian. Pekerja nampak tugasan SENDIRI sahaja; pemilik nampak SEMUA
+// (utk pantau kemajuan setiap pekerja). Kedai yg dah dihantar hari ni ditanda ✅.
+async function renderTugasanRouteHariIni() {
+  const card = document.getElementById('tugasan-route-card');
+  const listEl = document.getElementById('tugasan-route-list');
+  if (!card || !listEl || !useCloud) { if (card) card.style.display='none'; return; }
+  const hariIni = tarikhTempatan();
+  const isPemilik = currentRole==='pemilik';
+
+  let q = sb.from('penugasan_route_harian').select('*').eq('tarikh', hariIni).eq('status','aktif');
+  if (!isPemilik) q = q.eq('pekerja_id', DATA.currentUser.id);
+  const { data: penugasan, error } = await q;
+  if (error || !penugasan || !penugasan.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const { data: routes } = await sb.from('route_kedai').select('id,nama');
+  if (isPemilik && !Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
+  document.getElementById('tugasan-route-title').textContent = isPemilik ? `📍 Tugasan Route Hari Ini (${penugasan.length})` : '📍 Tugasan Route Hari Ini';
+
+  listEl.innerHTML = penugasan.map(p => {
+    const routeNama = routes?.find(r=>r.id===p.route_id)?.nama || p.route_id;
+    const kedaiList = [...DATA.kedai].filter(k=>k.route_id===p.route_id).sort((a,b)=>(a.route_urutan??999999)-(b.route_urutan??999999));
+    const sudahHantar = k => DATA.transaksi.some(t=>t.kedai_id===k.id && t.created_by===p.pekerja_id && t.tarikh_masa && tarikhTempatan(t.tarikh_masa)===hariIni);
+    const selesaiCount = kedaiList.filter(sudahHantar).length;
+    const namaPekerja = isPemilik ? (PROFIL_NAMA_CACHE[p.pekerja_id]||p.pekerja_id) : null;
+    return `<div style="margin-bottom:14px;padding-bottom:10px;border-bottom:1px dashed var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:800;font-size:13px;color:var(--navy)">🗺️ ${esc(routeNama)}${namaPekerja?' · '+esc(namaPekerja):''}</div>
+        <span class="badge ${kedaiList.length && selesaiCount===kedaiList.length?'badge-green':'badge-gold'}">${selesaiCount}/${kedaiList.length} selesai</span>
+      </div>
+      ${p.nota?`<div style="font-size:11px;color:var(--gold);margin-bottom:8px">📝 ${esc(p.nota)}</div>`:''}
+      ${kedaiList.map((k,i)=>{
+        const sudah = sudahHantar(k);
+        return `<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 0;${sudah?'opacity:0.55':''}">
+          <span style="font-weight:800;color:${sudah?'var(--green)':'var(--navy)'};width:22px;flex-shrink:0">${sudah?'✅':(i+1)+'.'}</span>
+          <div style="flex:1">
+            <div style="font-weight:700;${sudah?'text-decoration:line-through':''}">${esc(k.nama)}</div>
+            <div style="color:var(--muted);font-size:10px">${esc(k.alamat||'')}${k.telefon?' · 📞 '+esc(k.telefon):''}</div>
+          </div>
+          ${k.lat&&k.lng?`<a href="https://www.google.com/maps/search/?api=1&query=${k.lat},${k.lng}" target="_blank" rel="noopener" style="flex-shrink:0;font-size:16px;text-decoration:none">🗺️</a>`:''}
+        </div>`;
+      }).join('') || '<div class="empty"><div class="empty-text">Route ni tiada kedai lagi</div></div>'}
+    </div>`;
+  }).join('');
 }
 
 // Pre-order yang SUDAH ditugaskan/diambil oleh pekerja ini & belum selesai —
