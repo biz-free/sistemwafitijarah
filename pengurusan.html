@@ -2912,26 +2912,31 @@ async function renderSenaraiRoute() {
   });
 
   el.innerHTML = (routes||[]).map(r => {
-    // Kedai SUDAH dlm route ni — susun ikut route_urutan (susunan manual "kedai 1 -> 2 -> 3"),
-    // ada butang naik/turun (pemilik sahaja) supaya boleh susun semula tanpa drag-drop.
-    const kedaiDalamRoute = [...DATA.kedai].filter(k=>k.route_id===r.id).sort((a,b)=>(a.route_urutan??999999)-(b.route_urutan??999999));
+    const modAuto = r.mod_susunan === 'auto';
+    // Kedai SUDAH dlm route ni — mod "manual" susun ikut route_urutan (▲▼ pemilik
+    // susun sendiri); mod "auto" kira semula setiap kali ikut nearest-neighbour
+    // jarak GPS (susunRouteIkutJarak(), sama pattern spt Tab Kedai > Servis) — senang
+    // bila route ada BANYAK kedai & susun manual satu-satu jadi leceh.
+    let kedaiDalamRoute = [...DATA.kedai].filter(k=>k.route_id===r.id);
+    kedaiDalamRoute = modAuto ? susunRouteIkutJarak(kedaiDalamRoute) : kedaiDalamRoute.sort((a,b)=>(a.route_urutan??999999)-(b.route_urutan??999999));
     const kedaiLain = kedaiTapis.filter(k=>k.route_id!==r.id);
     return `<div class="list-item" style="display:block">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div class="list-item-title">${esc(r.nama)}</div>
         <div style="display:flex;gap:6px">
+          ${isPemilik?`<button class="btn btn-secondary btn-sm" style="background:${modAuto?'var(--teal)':'transparent'};color:${modAuto?'#fff':'var(--navy)'}" onclick="tukarModSusunanRoute('${r.id}','${modAuto?'manual':'auto'}')" title="Klik utk tukar mod susunan">${modAuto?'🔀 Auto':'✋ Manual'}</button>`:''}
           <button class="btn btn-secondary btn-sm" onclick="toggleRouteKedaiList('${r.id}')">🏪 ${kedaiDalamRoute.length} kedai</button>
           ${isPemilik?`<button class="btn-delete-icon" style="position:static" onclick="padamRoute('${r.id}')" title="Padam route">✕</button>`:''}
         </div>
       </div>
       <div id="route-kedai-${r.id}" style="display:none;margin-top:8px">
-        ${kedaiDalamRoute.length?`<div style="font-size:11px;font-weight:700;color:var(--teal);margin-bottom:4px">📍 Susunan Laluan (kedai 1 → ${kedaiDalamRoute.length})</div>
+        ${kedaiDalamRoute.length?`<div style="font-size:11px;font-weight:700;color:var(--teal);margin-bottom:4px">📍 Susunan Laluan (kedai 1 → ${kedaiDalamRoute.length})${modAuto?' · 🔀 Auto ikut jarak terdekat':''}</div>
         <div style="margin-bottom:10px">
           ${kedaiDalamRoute.map((k,i)=>`
             <div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px dashed var(--border)">
               <span style="font-weight:800;color:var(--navy);width:20px;flex-shrink:0">${i+1}.</span>
               <span style="flex:1">${esc(k.nama)}</span>
-              ${isPemilik?`<button class="btn btn-secondary btn-sm" style="padding:2px 8px;width:auto" ${i===0?'disabled':''} onclick="tukarUrutanKedaiRoute('${k.id}','naik','${r.id}')">▲</button>
+              ${isPemilik && !modAuto?`<button class="btn btn-secondary btn-sm" style="padding:2px 8px;width:auto" ${i===0?'disabled':''} onclick="tukarUrutanKedaiRoute('${k.id}','naik','${r.id}')">▲</button>
               <button class="btn btn-secondary btn-sm" style="padding:2px 8px;width:auto" ${i===kedaiDalamRoute.length-1?'disabled':''} onclick="tukarUrutanKedaiRoute('${k.id}','turun','${r.id}')">▼</button>`:''}
               <input type="checkbox" style="width:auto" checked onchange="tetapkanRouteKedai('${k.id}', null)" title="Buang drpd route" />
             </div>`).join('')}
@@ -2996,6 +3001,17 @@ async function tukarUrutanKedaiRoute(kedaiId, arah, routeId) {
   await loadData();
   renderSenaraiRoute();
   document.getElementById('route-kedai-'+routeId).style.display = '';
+}
+
+// Toggle mod susunan route: Manual (▲▼ pemilik susun sendiri, route_urutan) <-> Auto
+// (kira semula ikut jarak GPS terdekat, senang bila route ada BANYAK kedai).
+async function tukarModSusunanRoute(routeId, modBaharu) {
+  const { error } = await sb.rpc('tukar_mod_susunan_route', { p_route_id: routeId, p_mod: modBaharu });
+  if (error) return toast('Gagal tukar mod susunan: '+error.message,'err');
+  toast(modBaharu==='auto' ? '🔀 Route ni kini auto-susun ikut jarak terdekat' : '✋ Route ni kini susun manual (▲▼)');
+  await renderSenaraiRoute();
+  const kedaiWrap = document.getElementById('route-kedai-'+routeId);
+  if (kedaiWrap) kedaiWrap.style.display = '';
 }
 
 async function padamRoute(id) {
@@ -4731,19 +4747,21 @@ async function renderTugasanRouteHariIni() {
   if (error || !penugasan || !penugasan.length) { card.style.display = 'none'; return; }
   card.style.display = '';
 
-  const { data: routes } = await sb.from('route_kedai').select('id,nama');
+  const { data: routes } = await sb.from('route_kedai').select('id,nama,mod_susunan');
   if (isPemilik && !Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
   document.getElementById('tugasan-route-title').textContent = isPemilik ? `📍 Tugasan Route Hari Ini (${penugasan.length})` : '📍 Tugasan Route Hari Ini';
 
   listEl.innerHTML = penugasan.map(p => {
-    const routeNama = routes?.find(r=>r.id===p.route_id)?.nama || p.route_id;
-    const kedaiList = [...DATA.kedai].filter(k=>k.route_id===p.route_id).sort((a,b)=>(a.route_urutan??999999)-(b.route_urutan??999999));
+    const routeRekod = routes?.find(r=>r.id===p.route_id);
+    const routeNama = routeRekod?.nama || p.route_id;
+    let kedaiList = [...DATA.kedai].filter(k=>k.route_id===p.route_id);
+    kedaiList = routeRekod?.mod_susunan==='auto' ? susunRouteIkutJarak(kedaiList) : kedaiList.sort((a,b)=>(a.route_urutan??999999)-(b.route_urutan??999999));
     const sudahHantar = k => DATA.transaksi.some(t=>t.kedai_id===k.id && t.created_by===p.pekerja_id && t.tarikh_masa && tarikhTempatan(t.tarikh_masa)===hariIni);
     const selesaiCount = kedaiList.filter(sudahHantar).length;
     const namaPekerja = isPemilik ? (PROFIL_NAMA_CACHE[p.pekerja_id]||p.pekerja_id) : null;
     return `<div style="margin-bottom:14px;padding-bottom:10px;border-bottom:1px dashed var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="font-weight:800;font-size:13px;color:var(--navy)">🗺️ ${esc(routeNama)}${namaPekerja?' · '+esc(namaPekerja):''}</div>
+        <div style="font-weight:800;font-size:13px;color:var(--navy)">🗺️ ${esc(routeNama)}${routeRekod?.mod_susunan==='auto'?' <span style="font-weight:400;font-size:10px;color:var(--teal)">🔀 Auto</span>':''}${namaPekerja?' · '+esc(namaPekerja):''}</div>
         <span class="badge ${kedaiList.length && selesaiCount===kedaiList.length?'badge-green':'badge-gold'}">${selesaiCount}/${kedaiList.length} selesai</span>
       </div>
       ${p.nota?`<div style="font-size:11px;color:var(--gold);margin-bottom:8px">📝 ${esc(p.nota)}</div>`:''}
