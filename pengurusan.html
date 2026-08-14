@@ -715,9 +715,9 @@
         </div>
 
         <div class="form-group" id="h-tarikh-akhir-bayaran-wrap" style="display:none">
-          <label class="form-label">📅 Tarikh Akhir Bayaran (Pilihan)</label>
+          <label class="form-label">📅 Tarikh Akhir Bayaran (Wajib)</label>
           <input type="date" class="form-input" id="h-tarikh-akhir-bayaran" />
-          <div style="font-size:10px;color:var(--muted);margin-top:4px">Kalau diisi, kedai & pekerja akan dipaparkan di Dashboard sebagai amaran bila tarikh ni sampai/lepas & hutang belum dijelaskan.</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">Kedai & pekerja akan dipaparkan di Dashboard sebagai amaran bila tarikh ni sampai/lepas & hutang belum dijelaskan.</div>
         </div>
 
         <div id="h-qr-wrap" style="display:none;background:var(--bg);border-radius:10px;padding:14px;text-align:center;margin-bottom:14px">
@@ -4366,6 +4366,9 @@ async function submitHantarSebenar() {
   // (bukti bayaran sudah terlekat pada rekod pre-order, tak perlu snap lagi).
   const poSudahBayar = aktifPreorderInfo && (aktifPreorderInfo.status_bayaran==='disahkan' || aktifPreorderInfo.status_bayaran==='dibayar');
   if (!peribadi && hBayar==='transfer' && !resitBuktiFilePilihan && !poSudahBayar) return toast('Sila snap & lampir gambar resit/bukti transaksi dahulu','err');
+  // Tarikh akhir bayaran WAJIB utk kaedah Hutang — pemilik perlu tarikh jelas utk
+  // ikut jejak & amaran Dashboard bila hutang tertunggak (SQL_TAMBAHAN_98/99).
+  if (hBayar==='hutang' && !document.getElementById('h-tarikh-akhir-bayaran')?.value) return toast('Sila isi Tarikh Akhir Bayaran (wajib untuk kaedah Hutang)','err');
   let kedaiId = peribadi ? null : document.getElementById('h-kedai').value;
   const namaPembeli = peribadi ? document.getElementById('h-nama-pembeli').value.trim() : null;
   if(!peribadi && !kedaiId) return toast('Sila pilih kedai','err');
