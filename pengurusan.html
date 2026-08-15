@@ -699,6 +699,18 @@
           <span class="total-val" id="h-total">RM 0.00</span>
         </div>
         <div id="h-diskaun-info" style="display:none;font-size:11px;color:var(--green);text-align:right;margin-top:-8px;margin-bottom:8px;font-weight:700"></div>
+
+        <!-- Pilihan diskaun WAJIB (jumlah ≥ minima_transfer sahaja) — pekerja mesti
+        tick salah satu (0%/kadar tunai/kadar transfer), tiada auto-pilih. -->
+        <div class="form-group" id="h-diskaun-pilihan-wrap" style="display:none">
+          <label class="form-label">💸 Diskaun (Wajib Pilih — jumlah ≥ <span id="h-diskaun-minima-label"></span>)</label>
+          <div class="bayar-toggle" id="h-diskaun-toggle">
+            <div class="bayar-opt" id="opt-diskaun-0" onclick="setDiskaunPilihan(0)">0%</div>
+            <div class="bayar-opt" id="opt-diskaun-cod" onclick="setDiskaunPilihan('cod')"></div>
+            <div class="bayar-opt" id="opt-diskaun-transfer" onclick="setDiskaunPilihan('transfer')"></div>
+          </div>
+        </div>
+
         <div class="total-box" id="h-tukar-total-box" style="display:none;margin-top:8px;background:var(--bg)">
           <span class="total-label">JUMLAH HARGA BARANG BARU</span>
           <span class="total-val" id="h-tukar-total" style="font-size:14px">—</span>
@@ -3571,6 +3583,9 @@ async function putuskanBayaranHutang(id, status) {
 // ════════════════════════════════════════════════════
 let hItems=[{stokId:'',qty:1}];
 let hBayar='terus';
+// Pilihan diskaun pekerja (Tab Hantar, jumlah >= minima_transfer) — WAJIB dipilih
+// eksplisit, tak auto ikut kaedah bayaran lagi. null = belum pilih (sekat submit).
+let hDiskaunPilihan = null; // null | 0 | 'cod' | 'transfer'
 
 // Kadar diskaun ikut kaedah bayaran — guna semula tetapan yang sama dengan
 // diskaun pre-order (Lebih > Tetapan Pre-Order & Diskaun), supaya satu sahaja
@@ -3581,11 +3596,25 @@ async function muatTetapanDiskaunUntukHantar() {
   const { data } = await sb.from('tetapan').select('minima_transfer, diskaun_peratus, diskaun_cod_peratus, qr_bank_url, butiran_bank').eq('id', 1).single();
   if (data) TETAPAN_DISKAUN = { ...TETAPAN_DISKAUN, ...data };
 }
+// Jumlah >= minima_transfer: pekerja WAJIB pilih diskaun eksplisit (0%/kadar tunai/
+// kadar transfer) via setDiskaunPilihan() — TAK auto ikut kaedah bayaran lagi (pekerja
+// boleh pilih kadar transfer walaupun kaedah bayaran sebenar Hutang/Consignment, atas
+// permintaan pemilik). Bawah minima, tiada pilihan diperlukan — terus 0%.
 function kiraDiskaunHantarPeratus(subjumlah) {
   if (subjumlah < (TETAPAN_DISKAUN.minima_transfer||0)) return 0;
-  if (hBayar==='terus') return TETAPAN_DISKAUN.diskaun_cod_peratus||0;
-  if (hBayar==='transfer') return TETAPAN_DISKAUN.diskaun_peratus||0;
-  return 0;
+  if (hDiskaunPilihan === 'cod') return TETAPAN_DISKAUN.diskaun_cod_peratus||0;
+  if (hDiskaunPilihan === 'transfer') return TETAPAN_DISKAUN.diskaun_peratus||0;
+  return 0; // termasuk hDiskaunPilihan===0 (pekerja pilih 0% eksplisit)
+}
+
+function setDiskaunPilihan(v) {
+  hDiskaunPilihan = v;
+  const opt0 = document.getElementById('opt-diskaun-0');
+  opt0.className = 'bayar-opt';
+  opt0.style.cssText = v===0 ? 'border-color:var(--muted);color:var(--navy);background:#00000008' : '';
+  document.getElementById('opt-diskaun-cod').className = 'bayar-opt'+(v==='cod'?' active-terus':'');
+  document.getElementById('opt-diskaun-transfer').className = 'bayar-opt'+(v==='transfer'?' active-transfer':'');
+  calcTotal();
 }
 let poDestinasiCache = {}; // { '_PO_<id>': po } — pre-order kedai belum berdaftar, untuk pilihan destinasi Hantar
 let hantarKedaiOpsiPO = ''; // cache opsyen pre-order (HTML) — dikekalkan bila carian ditapis semula
@@ -4239,6 +4268,7 @@ function remHItem(i) { hItems.splice(i,1); renderHItems(); }
 function calcTotal() {
   if (hJenis==='rosak') {
     document.getElementById('h-diskaun-info').style.display='none';
+    document.getElementById('h-diskaun-pilihan-wrap').style.display='none';
     // Mod TUKAR — pertukaran barang-dengan-barang. Pengiraan ikut harga JUALAN
     // sahaja (bukan modal) — dua jumlah berasingan: barang expired ditarik &
     // barang baru diberi ganti, supaya nilai pertukaran jelas kelihatan.
@@ -4255,6 +4285,29 @@ function calcTotal() {
     return;
   }
   const sub=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty||0):0); },0);
+
+  // Pilihan diskaun WAJIB muncul bila subjumlah cukup minima — kadar dipaparkan
+  // hidup drpd Tetapan (bukan hardcode), reset pilihan bila jatuh bawah minima
+  // semula (elak pilihan lama "melekat" kalau pekerja buang item).
+  const diskaunWrap = document.getElementById('h-diskaun-pilihan-wrap');
+  const minima = TETAPAN_DISKAUN.minima_transfer||0;
+  if (sub >= minima && minima > 0) {
+    diskaunWrap.style.display = '';
+    document.getElementById('h-diskaun-minima-label').textContent = fmt(minima);
+    document.getElementById('opt-diskaun-cod').textContent = `💵 ${TETAPAN_DISKAUN.diskaun_cod_peratus||0}% (Tunai)`;
+    document.getElementById('opt-diskaun-transfer').textContent = `🏦 ${TETAPAN_DISKAUN.diskaun_peratus||0}% (Transfer)`;
+  } else {
+    diskaunWrap.style.display = 'none';
+    // Reset terus (bukan panggil setDiskaunPilihan(), elak calcTotal() rekursif).
+    if (hDiskaunPilihan !== null) {
+      hDiskaunPilihan = null;
+      document.getElementById('opt-diskaun-0').className = 'bayar-opt';
+      document.getElementById('opt-diskaun-0').style.cssText = '';
+      document.getElementById('opt-diskaun-cod').className = 'bayar-opt';
+      document.getElementById('opt-diskaun-transfer').className = 'bayar-opt';
+    }
+  }
+
   const peratus = kiraDiskaunHantarPeratus(sub);
   const jumlahAkhir = sub - (sub*peratus/100);
   document.getElementById('h-total').textContent=fmt(jumlahAkhir);
@@ -4404,6 +4457,10 @@ async function submitHantarSebenar() {
     if(!s||bakiUntukHantar(s)<+it.qty) return toast(`Stok ${s?.nama||'?'} tidak mencukupi (baki bawaan: ${s?bakiUntukHantar(s):0})`,'err');
   }
   const jumlahAsal=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty):0); },0);
+  // Diskaun WAJIB dipilih eksplisit bila jumlah cukup minima — sekat submit kalau belum.
+  if (jumlahAsal >= (TETAPAN_DISKAUN.minima_transfer||0) && (TETAPAN_DISKAUN.minima_transfer||0) > 0 && hDiskaunPilihan === null) {
+    return toast('Sila pilih diskaun (0% / kadar tunai / kadar transfer) — wajib untuk jumlah ini','err');
+  }
   const peratusDiskaun = kiraDiskaunHantarPeratus(jumlahAsal);
   const jumlah = jumlahAsal - (jumlahAsal*peratusDiskaun/100);
 
