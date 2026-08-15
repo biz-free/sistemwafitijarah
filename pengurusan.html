@@ -4508,6 +4508,7 @@ async function submitHantarSebenar() {
       p_jumlah_asal:trx.jumlah_asal, p_diskaun_peratus:trx.diskaun_peratus,
       p_resit_bukti_url: resitBuktiPath, p_pekerja_id_override: PEKERJA_TARGET_ID,
       p_tarikh_masa: tarikhMasaOverride, p_tarikh_akhir_bayaran: tarikhAkhirBayaran,
+      p_diskaun_pilihan: hDiskaunPilihan===null ? null : String(hDiskaunPilihan),
     });
     if (error) return toast('Gagal rekod penghantaran: '+error.message,'err');
     if (preorderIdSelesai) {
