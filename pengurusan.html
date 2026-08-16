@@ -4644,11 +4644,36 @@ function namaDestinasiTrx(t) {
 function labelStatusTrx(t) {
   if (t.status==='selesai') return { kelas:'badge-green', teks:'✓ Selesai' };
   if (t.kaedah_bayaran==='consignment') {
-    return t.jualan_disahkan
-      ? { kelas:'badge-gold', teks:'💰 Consignment — Belum Bayar' }
-      : { kelas:'badge-purple', teks:'🤝 Consignment' };
+    if (t.jualan_disahkan) return { kelas:'badge-gold', teks:'💰 Consignment — Belum Bayar' };
+    if (t.items_terjual?.length || t.items_pulang?.length) return { kelas:'badge-purple', teks:'🤝 Consignment — Separa Disahkan' };
+    return { kelas:'badge-purple', teks:'🤝 Consignment' };
   }
   return { kelas:'badge-red', teks:'⏳ Hutang' };
+}
+
+// Borang kemaskini jualan consignment (dipakai bersama renderSejarah &
+// renderTransaksiKedaiList) — INKREMENTAL & 3-keadaan setiap produk: Terjual /
+// Pulang (tak laku, disahkan) / Baki (kekal belum pasti). Input KOSONG secara
+// lalai (BUKAN kuantiti penuh) — produk yang pekerja TAK sentuh kekal sebagai
+// baki, tak disalah-anggap terjual sepenuhnya (punca bug T9830103).
+function formKonsainanHTML(t) {
+  const baris = t.items.map((it,i)=>{
+    const terjualSblm = (t.items_terjual||[]).find(x=>x.stokId===it.stokId)?.qty || 0;
+    const pulangSblm = (t.items_pulang||[]).find(x=>x.stokId===it.stokId)?.qty || 0;
+    const baki = it.qty - terjualSblm - pulangSblm;
+    const s = DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'};
+    if (baki<=0) return `<div style="font-size:11px;color:var(--green);margin-bottom:4px">✓ ${esc(s.nama)}: selesai (${terjualSblm} terjual${pulangSblm?`, ${pulangSblm} dipulangkan`:''})</div>`;
+    return `<div style="margin-bottom:8px;font-size:11px">
+      <div style="margin-bottom:3px">${esc(s.nama)} — baki <strong>${baki}</strong>${(terjualSblm||pulangSblm)?` (drpd ${it.qty} dihantar; ${terjualSblm} terjual + ${pulangSblm} pulang setakat ini)`:` (dihantar ${it.qty})`}</div>
+      <div style="display:flex;gap:6px">
+        <label style="display:flex;align-items:center;gap:4px;flex:1">Terjual <input type="number" min="0" max="${baki}" placeholder="0" id="jual-t-${t.id}-${i}" class="form-input" style="width:56px;padding:4px 6px;font-size:11px" /></label>
+        <label style="display:flex;align-items:center;gap:4px;flex:1">Pulang <input type="number" min="0" max="${baki}" placeholder="0" id="jual-p-${t.id}-${i}" class="form-input" style="width:56px;padding:4px 6px;font-size:11px" /></label>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div id="jual-items-${t.id}">${baris}</div>
+    <div style="font-size:10px;color:var(--muted);margin:2px 0 6px">Baki yang dibiarkan kosong KEKAL belum pasti (bukan terjual, bukan pulang) — boleh kemaskini lagi bila-bila masa.</div>
+    <button class="btn btn-secondary btn-sm" onclick="kemaskiniJualanKonsainan('${t.id}')">✅ Kemaskini Jualan</button>`;
 }
 
 const LABEL_SEBAB_LUPUS = { rosak:'💔 Rosak', expired:'⏰ Expired', hilang:'❓ Hilang', lain:'📝 Lain-lain', gantian_tukar:'🔄 Gantian (Tukar Expired)' };
@@ -4699,33 +4724,32 @@ async function renderSejarah(kedaiId='') {
       ${t.resit_bukti_url?`<button class="btn-link" style="font-size:11px;margin-top:4px" onclick="lihatBuktiBayaran('${esc(t.resit_bukti_url)}')">📸 Lihat Resit/Bukti</button>`:''}
       ${belumSahkan?`
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
-        <div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:6px">🤝 Consignment — belum disahkan jualan (upah belum dikira)</div>
-        ${bolehSahkan?`
-          <div id="jual-items-${t.id}">
-            ${t.items.map((it,i)=>{ const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:4px;font-size:11px">
-              <span>${esc(s.nama)} (dihantar ${it.qty})</span>
-              <input type="number" min="0" max="${it.qty}" value="${it.qty}" id="jual-${t.id}-${i}" class="form-input" style="width:64px;padding:4px 6px;font-size:11px" />
-            </div>`; }).join('')}
-          </div>
-          <button class="btn btn-secondary btn-sm" style="margin-top:4px" onclick="sahkanJualanKonsainan('${t.id}')">✅ Sahkan Jualan</button>
-        `:`<div style="font-size:11px;color:var(--muted)">⏳ Menunggu pengesahan jualan</div>`}
+        <div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:6px">🤝 Consignment — ${(t.items_terjual?.length||t.items_pulang?.length)?'separa disahkan (ada baki, upah dikira ikut yg disahkan setakat ini)':'belum disahkan jualan (upah belum dikira)'}</div>
+        ${bolehSahkan?formKonsainanHTML(t):`<div style="font-size:11px;color:var(--muted)">⏳ Menunggu pengesahan jualan</div>`}
       </div>`:''}
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-icon">🚚</div><div class="empty-text">Tiada rekod penghantaran</div></div>';
 }
 
-async function sahkanJualanKonsainan(trxId) {
+async function kemaskiniJualanKonsainan(trxId) {
   const t = DATA.transaksi.find(x=>x.id===trxId);
   if (!t) return;
-  const itemsTerjual = t.items.map((it,i)=>{
-    const v = document.getElementById(`jual-${trxId}-${i}`);
-    const qty = Math.max(0, Math.min(+v.value||0, +it.qty));
-    return { stokId: it.stokId, qty };
+  const itemsInput = [];
+  t.items.forEach((it,i)=>{
+    const terjualSblm = (t.items_terjual||[]).find(x=>x.stokId===it.stokId)?.qty || 0;
+    const pulangSblm = (t.items_pulang||[]).find(x=>x.stokId===it.stokId)?.qty || 0;
+    const baki = it.qty - terjualSblm - pulangSblm;
+    if (baki<=0) return;
+    const vT = document.getElementById(`jual-t-${trxId}-${i}`);
+    const vP = document.getElementById(`jual-p-${trxId}-${i}`);
+    const qtyTerjual = Math.max(0, Math.min(+vT?.value||0, baki));
+    const qtyPulang = Math.max(0, Math.min(+vP?.value||0, baki-qtyTerjual));
+    if (qtyTerjual>0 || qtyPulang>0) itemsInput.push({ stokId: it.stokId, qtyTerjual, qtyPulang });
   });
-  const { error } = await sb.rpc('sahkan_jualan_konsainan', { p_transaksi_id: trxId, p_items_terjual: itemsTerjual });
-  if (error) return toast('Gagal sahkan jualan: '+error.message,'err');
-  toast('Jualan disahkan — upah pekerja akan dikira dalam Laporan/Kiraan Upah bulan ini');
+  if (!itemsInput.length) return toast('Sila isi kuantiti Terjual/Pulang sekurang-kurangnya 1 produk — baki yang dibiarkan kosong kekal belum pasti','err');
+  const { error } = await sb.rpc('sahkan_jualan_konsainan', { p_transaksi_id: trxId, p_items: itemsInput });
+  if (error) return toast('Gagal kemaskini jualan: '+error.message,'err');
+  toast('Jualan dikemaskini — baki yang belum pasti kekal, boleh kemaskini lagi bila-bila masa');
   await loadData();
   renderSejarah();
   if (document.getElementById('transaksi-kedai-list')) renderTransaksiKedaiList();
@@ -5221,14 +5245,7 @@ async function renderTransaksiKedaiList() {
       ${t.kaedah_bayaran==='consignment' && !t.jualan_disahkan ? `
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
         <div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:6px">🤝 Follow-up: barang sudah habis dijual atau belum?</div>
-        <div id="jual-items-${t.id}">
-          ${t.items.map((it,i)=>{ const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:4px;font-size:11px">
-            <span>${esc(s.nama)} (dihantar ${it.qty})</span>
-            <input type="number" min="0" max="${it.qty}" value="${it.qty}" id="jual-${t.id}-${i}" class="form-input" style="width:64px;padding:4px 6px;font-size:11px" />
-          </div>`; }).join('')}
-        </div>
-        <button class="btn btn-secondary btn-sm" style="margin-top:4px" onclick="sahkanJualanKonsainan('${t.id}')">✅ Sahkan Jualan</button>
+        ${formKonsainanHTML(t)}
       </div>`:''}
       ${k?.lat&&k?.lng?`<a class="btn btn-secondary btn-sm" style="text-decoration:none;margin-top:8px;display:inline-block" href="https://www.google.com/maps/search/?api=1&query=${k.lat},${k.lng}" target="_blank" rel="noopener">🗺️ Lihat di Google Maps</a>`:''}
     </div>`;
@@ -5562,11 +5579,12 @@ async function renderResit(id) {
   const t=DATA.transaksi.find(t=>t.id===id); if(!t){el.innerHTML='';return;}
   const peribadi = !t.kedai_id;
   const k=DATA.kedai.find(k=>k.id===t.kedai_id)||{nama:t.nama_pembeli||'Belian Peribadi',alamat:'—'};
-  // Consignment yang dah disahkan jualan — resit papar produk BETUL-BETUL terjual
-  // sahaja (t.jumlah/t.items_terjual dah dikemaskini server-side oleh
-  // sahkan_jualan_konsainan, SQL_TAMBAHAN_104), bukan jumlah penuh dihantar.
-  const konsainanDisahkan = t.kaedah_bayaran==='consignment' && t.jualan_disahkan && !!t.items_terjual;
-  const itemsResit = konsainanDisahkan ? t.items_terjual : t.items;
+  // Consignment — QTY/JUMLAH tiap produk papar baki yg MASIH DIKIRA BERHUTANG
+  // (dihantar − pulang disahkan sahaja; produk terjual & baki belum pasti
+  // kedua-duanya kekal dikira, cuma pulang yg gugurkan — padan t.jumlah/
+  // kedai.hutang yg dikemaskini server-side oleh sahkan_jualan_konsainan,
+  // SQL_TAMBAHAN_105). Sub-nota tunjuk pecahan terjual/pulang/baki sebenar.
+  const adaProgresKonsainan = t.kaedah_bayaran==='consignment' && (t.items_terjual?.length || t.items_pulang?.length);
 
   // Cari maklumat pekerja yang buat penghantaran ini — supaya kedai boleh repeat order terus dengannya
   let pekerja = null;
@@ -5587,13 +5605,27 @@ async function renderResit(id) {
     <div class="resit-row"><span>TARIKH</span><span>${fmtDT(t.tarikh_masa)}</span></div>
     <div class="resit-row"><span>${peribadi?'PEMBELI':'KEDAI'}</span><span style="text-align:right;max-width:60%">${esc(k.nama)}</span></div>
     ${peribadi?'':`<div class="resit-row"><span>ALAMAT</span><span style="text-align:right;max-width:60%">${esc(k.alamat)}</span></div>`}
-    ${konsainanDisahkan?`<div class="resit-row" style="color:var(--purple);font-weight:700"><span>🤝 CONSIGNMENT</span><span>Jualan Disahkan — ikut produk terjual</span></div>`:''}
+    ${t.kaedah_bayaran==='consignment' && t.jualan_disahkan?`<div class="resit-row" style="color:var(--purple);font-weight:700"><span>🤝 CONSIGNMENT</span><span>Jualan Disahkan Penuh</span></div>`:''}
+    ${t.kaedah_bayaran==='consignment' && !t.jualan_disahkan && adaProgresKonsainan?`<div class="resit-row" style="color:var(--purple);font-weight:700"><span>🤝 CONSIGNMENT</span><span>Separa Disahkan — ada baki belum pasti</span></div>`:''}
     <div class="resit-items">
       <div class="resit-item-row" style="font-weight:700;color:var(--muted);font-size:10px;padding-bottom:6px">
         <span>PRODUK</span><span style="text-align:center">QTY</span><span style="text-align:right">HARGA</span><span style="text-align:right">JUMLAH</span>
       </div>
-      ${itemsResit.map(it=>{ const asal=t.items.find(x=>x.stokId===it.stokId); const harga=it.harga??asal?.harga??0; const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `<div class="resit-item-row"><span>${esc(s.nama)}</span><span style="text-align:center">${it.qty}</span><span style="text-align:right">RM${harga.toFixed(2)}</span><span style="text-align:right;font-weight:700">RM${(harga*it.qty).toFixed(2)}</span></div>`; }).join('')}
-      ${konsainanDisahkan?t.items.filter(asal=>{ const j=t.items_terjual.find(x=>x.stokId===asal.stokId); return j && j.qty<asal.qty; }).map(asal=>{ const j=t.items_terjual.find(x=>x.stokId===asal.stokId); const s=DATA.stok.find(s=>s.id===asal.stokId)||{nama:'?'}; return `<div style="font-size:9px;color:var(--muted);padding:2px 0">↩ ${esc(s.nama)}: ${asal.qty-j.qty} unit dipulangkan (tak terjual)</div>`; }).join(''):''}
+      ${t.items.map(it=>{
+        const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'};
+        const terjualQ=(t.items_terjual||[]).find(x=>x.stokId===it.stokId)?.qty||0;
+        const pulangQ=(t.items_pulang||[]).find(x=>x.stokId===it.stokId)?.qty||0;
+        const bakiQ=it.qty-terjualQ-pulangQ;
+        const owedQty=it.qty-pulangQ;
+        const bahagian=[];
+        if(t.kaedah_bayaran==='consignment'&&(terjualQ||pulangQ||t.jualan_disahkan)){
+          if(terjualQ) bahagian.push(`✓ ${terjualQ} terjual`);
+          if(pulangQ) bahagian.push(`↩ ${pulangQ} dipulangkan`);
+          if(bakiQ>0) bahagian.push(`⏳ ${bakiQ} baki (belum pasti)`);
+        }
+        const sub=bahagian.length?`<div style="font-size:9px;color:var(--muted)">${bahagian.join(' · ')}</div>`:'';
+        return `<div class="resit-item-row"><span>${esc(s.nama)}${sub}</span><span style="text-align:center">${owedQty}</span><span style="text-align:right">RM${it.harga.toFixed(2)}</span><span style="text-align:right;font-weight:700">RM${(it.harga*owedQty).toFixed(2)}</span></div>`;
+      }).join('')}
     </div>
     ${t.diskaun_peratus>0?`<div class="resit-row"><span>SUBJUMLAH</span><span>RM ${(t.jumlah_asal??t.jumlah).toFixed(2)}</span></div>
     <div class="resit-row" style="color:var(--green)"><span>DISKAUN (${t.diskaun_peratus}%)</span><span>−RM ${((t.jumlah_asal??t.jumlah)-t.jumlah).toFixed(2)}</span></div>`:''}
@@ -6683,7 +6715,10 @@ async function saveSettings() {
 // Upah pekerja kini ditetapkan per-produk (medan "upah_pekerja" pada setiap stok),
 // bukan kadar sejagat — jumlah upah 1 penghantaran = SUM(qty x upah_pekerja produk).
 function jumlahUpahTransaksi(t) {
-  if (t.kaedah_bayaran==='consignment' && !t.jualan_disahkan) return 0; // belum disahkan jual, tiada upah lagi
+  // Consignment: upah dikira INKREMENTAL ikut items_terjual setakat ini (walaupun
+  // belum disahkan PENUH — ada baki produk lain) — pekerja tak perlu tunggu SEMUA
+  // produk selesai baru dapat upah produk yang dah pun disahkan terjual.
+  if (t.kaedah_bayaran==='consignment' && !t.items_terjual?.length) return 0; // belum ada apa2 disahkan jual lagi
   const items = (t.kaedah_bayaran==='consignment' && t.items_terjual) ? t.items_terjual : t.items;
   return items.reduce((s,it)=>{ const stokItem=DATA.stok.find(x=>x.id===it.stokId); return s+(+stokItem?.upah_pekerja||0)*it.qty; },0);
 }
