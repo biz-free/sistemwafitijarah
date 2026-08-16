@@ -5585,6 +5585,23 @@ async function renderResit(id) {
   // kedai.hutang yg dikemaskini server-side oleh sahkan_jualan_konsainan,
   // SQL_TAMBAHAN_105). Sub-nota tunjuk pecahan terjual/pulang/baki sebenar.
   const adaProgresKonsainan = t.kaedah_bayaran==='consignment' && (t.items_terjual?.length || t.items_pulang?.length);
+  // Pecahan "perlu dibayar SEKARANG" (ikut produk yg disahkan terjual sahaja) lawan
+  // "baki belum pasti" (blm disahkan terjual/pulang, msh dikira dlm JUMLAH/hutang
+  // kedai spt biasa) — bagi kedai/pekerja tahu berapa perlu settle skrg drpd jumlah
+  // penuh tertangguh. Kedua-dua kekal genap dgn JUMLAH (t.jumlah) di bawah.
+  let konsainanNilaiTerjual = 0, konsainanNilaiBaki = 0;
+  if (t.kaedah_bayaran==='consignment') {
+    t.items.forEach(it=>{
+      const terjualQ=(t.items_terjual||[]).find(x=>x.stokId===it.stokId)?.qty||0;
+      const pulangQ=(t.items_pulang||[]).find(x=>x.stokId===it.stokId)?.qty||0;
+      const bakiQ=Math.max(0, it.qty-terjualQ-pulangQ);
+      konsainanNilaiTerjual += terjualQ*it.harga;
+      konsainanNilaiBaki += bakiQ*it.harga;
+    });
+    const faktorDiskaun = 1-(t.diskaun_peratus||0)/100;
+    konsainanNilaiTerjual *= faktorDiskaun;
+    konsainanNilaiBaki *= faktorDiskaun;
+  }
 
   // Cari maklumat pekerja yang buat penghantaran ini — supaya kedai boleh repeat order terus dengannya
   let pekerja = null;
@@ -5630,6 +5647,10 @@ async function renderResit(id) {
     ${t.diskaun_peratus>0?`<div class="resit-row"><span>SUBJUMLAH</span><span>RM ${(t.jumlah_asal??t.jumlah).toFixed(2)}</span></div>
     <div class="resit-row" style="color:var(--green)"><span>DISKAUN (${t.diskaun_peratus}%)</span><span>−RM ${((t.jumlah_asal??t.jumlah)-t.jumlah).toFixed(2)}</span></div>`:''}
     <div class="resit-total" style="display:flex;justify-content:space-between"><span>JUMLAH:</span><span>RM ${t.jumlah.toFixed(2)}</span></div>
+    ${t.kaedah_bayaran==='consignment' && konsainanNilaiBaki>0.005?`<div style="margin-top:8px;padding:8px;background:#6B4EAF0D;border:1px dashed var(--purple);border-radius:6px">
+      <div class="resit-row" style="color:var(--purple);font-weight:700"><span>💵 PERLU DIBAYAR SEKARANG</span><span>RM ${konsainanNilaiTerjual.toFixed(2)}</span></div>
+      <div class="resit-row" style="color:var(--muted);font-size:10px"><span>⏳ Baki belum pasti (blm disahkan)</span><span>RM ${konsainanNilaiBaki.toFixed(2)}</span></div>
+    </div>`:''}
     <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">KAEDAH BAYARAN</span><span>${({tunai:'💵 Tunai',transfer:'🏦 Online Transfer',hutang:'📋 Hutang',consignment:'🤝 Consignment'})[t.kaedah_bayaran] || (t.status==='selesai'?'💵 Tunai':'📋 Hutang')}</span></div>
     <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">STATUS</span><span style="font-weight:700;color:${t.status==='selesai'?'var(--green)':'var(--red)'}">⬤ ${t.status==='selesai'?'TELAH DIBAYAR':'BELUM DIBAYAR / HUTANG'}</span></div>
     ${t.nota?`<div style="margin-top:8px;font-size:10px;color:var(--muted)">Nota: ${esc(t.nota)}</div>`:''}
