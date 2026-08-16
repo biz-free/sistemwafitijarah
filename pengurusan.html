@@ -4656,6 +4656,27 @@ function labelStatusTrx(t) {
 // Pulang (tak laku, disahkan) / Baki (kekal belum pasti). Input KOSONG secara
 // lalai (BUKAN kuantiti penuh) — produk yang pekerja TAK sentuh kekal sebagai
 // baki, tak disalah-anggap terjual sepenuhnya (punca bug T9830103).
+// Pecahan "perlu dibayar SEKARANG" (ikut produk yg disahkan terjual sahaja) lawan
+// "baki belum pasti" (blm disahkan terjual/pulang, msh dikira dlm JUMLAH/hutang kedai
+// spt biasa) — dipakai bersama renderResit() & mesej WhatsApp. Kedua-dua nilai kekal
+// genap dgn t.jumlah (terjual+baki = jumlah, sebab pulang dah ditolak drpd t.jumlah).
+function kiraKonsainanPecahan(t) {
+  let terjual = 0, baki = 0;
+  if (t.kaedah_bayaran==='consignment') {
+    t.items.forEach(it=>{
+      const terjualQ=(t.items_terjual||[]).find(x=>x.stokId===it.stokId)?.qty||0;
+      const pulangQ=(t.items_pulang||[]).find(x=>x.stokId===it.stokId)?.qty||0;
+      const bakiQ=Math.max(0, it.qty-terjualQ-pulangQ);
+      terjual += terjualQ*it.harga;
+      baki += bakiQ*it.harga;
+    });
+    const faktorDiskaun = 1-(t.diskaun_peratus||0)/100;
+    terjual *= faktorDiskaun;
+    baki *= faktorDiskaun;
+  }
+  return { terjual, baki };
+}
+
 function formKonsainanHTML(t) {
   const baris = t.items.map((it,i)=>{
     const terjualSblm = (t.items_terjual||[]).find(x=>x.stokId===it.stokId)?.qty || 0;
@@ -4673,7 +4694,15 @@ function formKonsainanHTML(t) {
   }).join('');
   return `<div id="jual-items-${t.id}">${baris}</div>
     <div style="font-size:10px;color:var(--muted);margin:2px 0 6px">Baki yang dibiarkan kosong KEKAL belum pasti (bukan terjual, bukan pulang) — boleh kemaskini lagi bila-bila masa.</div>
-    <button class="btn btn-secondary btn-sm" onclick="kemaskiniJualanKonsainan('${t.id}')">✅ Kemaskini Jualan</button>`;
+    <button class="btn btn-secondary btn-sm" onclick="kemaskiniJualanKonsainan('${t.id}')">✅ Kemaskini Jualan</button>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">🧾 Resit (kongsi kpd kedai — auto kemaskini ikut jualan disahkan setakat ini):</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" style="flex:1;min-width:80px" onclick="resitCepatKonsainan('${t.id}','cetak')">🖨️ Cetak</button>
+        <button class="btn btn-gold btn-sm" style="flex:1;min-width:80px" onclick="resitCepatKonsainan('${t.id}','pdf')">📄 PDF</button>
+        <button class="btn btn-whatsapp btn-sm" style="flex:1;min-width:80px" onclick="resitCepatKonsainan('${t.id}','wa')">📱 WhatsApp</button>
+      </div>
+    </div>`;
 }
 
 const LABEL_SEBAB_LUPUS = { rosak:'💔 Rosak', expired:'⏰ Expired', hilang:'❓ Hilang', lain:'📝 Lain-lain', gantian_tukar:'🔄 Gantian (Tukar Expired)' };
@@ -5585,23 +5614,7 @@ async function renderResit(id) {
   // kedai.hutang yg dikemaskini server-side oleh sahkan_jualan_konsainan,
   // SQL_TAMBAHAN_105). Sub-nota tunjuk pecahan terjual/pulang/baki sebenar.
   const adaProgresKonsainan = t.kaedah_bayaran==='consignment' && (t.items_terjual?.length || t.items_pulang?.length);
-  // Pecahan "perlu dibayar SEKARANG" (ikut produk yg disahkan terjual sahaja) lawan
-  // "baki belum pasti" (blm disahkan terjual/pulang, msh dikira dlm JUMLAH/hutang
-  // kedai spt biasa) — bagi kedai/pekerja tahu berapa perlu settle skrg drpd jumlah
-  // penuh tertangguh. Kedua-dua kekal genap dgn JUMLAH (t.jumlah) di bawah.
-  let konsainanNilaiTerjual = 0, konsainanNilaiBaki = 0;
-  if (t.kaedah_bayaran==='consignment') {
-    t.items.forEach(it=>{
-      const terjualQ=(t.items_terjual||[]).find(x=>x.stokId===it.stokId)?.qty||0;
-      const pulangQ=(t.items_pulang||[]).find(x=>x.stokId===it.stokId)?.qty||0;
-      const bakiQ=Math.max(0, it.qty-terjualQ-pulangQ);
-      konsainanNilaiTerjual += terjualQ*it.harga;
-      konsainanNilaiBaki += bakiQ*it.harga;
-    });
-    const faktorDiskaun = 1-(t.diskaun_peratus||0)/100;
-    konsainanNilaiTerjual *= faktorDiskaun;
-    konsainanNilaiBaki *= faktorDiskaun;
-  }
+  const { terjual: konsainanNilaiTerjual, baki: konsainanNilaiBaki } = kiraKonsainanPecahan(t);
 
   // Cari maklumat pekerja yang buat penghantaran ini — supaya kedai boleh repeat order terus dengannya
   let pekerja = null;
@@ -5815,7 +5828,7 @@ function formatNoTelefonMY(tel) {
   return d;
 }
 
-async function hantarResitWhatsapp() {
+async function hantarResitWhatsapp(waTabSedia) {
   const id=document.getElementById('resit-sel').value;
   if(!id) return toast('Sila pilih transaksi dahulu','err');
   if (id.startsWith('LUPUS_')) return toast('Hantar WhatsApp belum disokong untuk resit pelupusan — guna Cetak/Muat Turun PDF','err');
@@ -5828,17 +5841,56 @@ async function hantarResitWhatsapp() {
   // lepas await (jana PDF), browser anggap ia bukan lagi tindakan pengguna terus & SEKAT
   // sebagai popup secara senyap. Tab ni diarah ke URL wa.me sebenar lepas PDF siap. (PDF
   // sendiri — lihat simpanPdfSerasiIOS — guna klik <a> data URI terus, bukan window.open,
-  // supaya berfungsi dalam mod PWA "standalone" iOS juga.)
-  const waTab = window.open('', '_blank');
+  // supaya berfungsi dalam mod PWA "standalone" iOS juga.) waTabSedia — pautan resit pantas
+  // (resitCepatKonsainan) sudah buka tab lebih awal lagi (sblm tukar page), jadi guna semula
+  // supaya popup tak disekat walaupun ada beberapa await sblm sampai sini.
+  const waTab = waTabSedia || window.open('', '_blank');
 
   await muatTurunResitPDF();
   const notaPdf = isIOS()
     ? 'Fail PDF resit dibuka dalam tab baharu di peranti ini — tekan ikon Share (⬆️) Safari, simpan PDF, kemudian lampirkan (attach) fail tersebut dalam WhatsApp ini.'
     : 'Fail PDF resit baru sahaja dimuat turun di peranti ini — sila lampirkan (attach) fail tersebut dalam WhatsApp ini.';
-  const mesej = `Salam ${k.nama},\n\nResit penghantaran *Wafi Tijarah Trading*\nNo. Resit: ${t.resit||t.id}\nJumlah: ${fmt(t.jumlah)}\nStatus: ${t.status==='selesai'?'Telah Dibayar':'Hutang'}\n\n${notaPdf} Terima kasih atas kepercayaan anda!`;
+  // Consignment yg ada baki belum pasti — sertakan pecahan "perlu bayar sekarang" vs
+  // baki, supaya kedai jelas berapa perlu settle drpd jumlah penuh tertangguh.
+  let notaKonsainan = '';
+  if (t.kaedah_bayaran==='consignment') {
+    const { terjual, baki } = kiraKonsainanPecahan(t);
+    if (baki > 0.005) {
+      notaKonsainan = `\n💵 Perlu Dibayar Sekarang (ikut terjual): ${fmt(terjual)}\n⏳ Baki Belum Pasti: ${fmt(baki)}`;
+    }
+  }
+  const mesej = `Salam ${k.nama},\n\nResit penghantaran *Wafi Tijarah Trading*\nNo. Resit: ${t.resit||t.id}\nJumlah: ${fmt(t.jumlah)}${notaKonsainan}\nStatus: ${t.status==='selesai'?'Telah Dibayar':'Hutang'}\n\n${notaPdf} Terima kasih atas kepercayaan anda!`;
   const waUrl = `https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`;
   if (waTab) waTab.location.href = waUrl; else window.open(waUrl, '_blank');
   toast(isIOS() ? 'PDF dibuka dalam tab — guna Share ikon Safari utk simpan, lalu lampirkan dalam WhatsApp' : 'PDF dimuat turun — lampirkan dalam WhatsApp yang baru dibuka');
+}
+
+// Pautan pantas resit (Tab Hantar/Tempahan > Kemaskini Jualan consignment) — bawa
+// terus ke Tab Lebih > Resit, pra-isi transaksi terpilih & terus cetak/PDF/WhatsApp
+// tanpa pekerja perlu navigate/cari manual dlm dropdown. Guna semula enjin resit
+// sedia ada (renderResit/cetakResit/muatTurunResitPDF/hantarResitWhatsapp) supaya
+// SATU sumber kebenaran utk paparan resit (elak duplicate HTML/CSS).
+async function resitCepatKonsainan(trxId, aksi) {
+  const t = DATA.transaksi.find(x=>x.id===trxId);
+  if (!t) return toast('Transaksi tidak dijumpai','err');
+
+  // WhatsApp: buka tab KOSONG SERTA-MERTA (sblm sebarang await) — sama sebab spt
+  // hantarResitWhatsapp(), supaya popup tak disekat walaupun setPage()/renderResitSel()
+  // di bawah ada beberapa await sblm sampai ke wa.me redirect.
+  const waTab = aksi==='wa' ? window.open('', '_blank') : null;
+
+  // window.print()/html2canvas perlukan #resit-print benar2 "displayed" (bukan
+  // display:none dari .page tak aktif) — tukar ke Tab Lebih dahulu.
+  await setPage('lebih');
+  const sel = document.getElementById('resit-sel');
+  if (sel && ![...sel.options].some(o=>o.value===trxId)) await renderResitSel();
+  if (sel) sel.value = trxId;
+  await renderResit(trxId);
+
+  if (aksi==='cetak') return cetakResit();
+  if (aksi==='pdf') return muatTurunResitPDF();
+  if (aksi==='wa') return hantarResitWhatsapp(waTab);
+  lebihScrollTo('resit-card');
 }
 
 // ════════════════════════════════════════════════════
