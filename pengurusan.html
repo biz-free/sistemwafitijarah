@@ -8736,6 +8736,16 @@ function akhirBulanISO(bulanYYYYMM) {
 // tarikh — pilihan sesi thumb in/out berganda pada hari sama tetap digabung sebagai
 // satu jumlah pekerja tersebut (bukan didarab 2x). Pulangkan jumlah keseluruhan dan
 // pecahan ikut pekerja (dikunci ikut created_by supaya sepadan dengan data transaksi).
+//
+// WAJIB ada sekurang-kurangnya 1 transaksi dalam sesi tsb utk km sesi tu dikira —
+// sebelum ini minyak dikira semata-mata dari jarak GPS Thumb In->Thumb Out, tanpa
+// kaitan langsung dgn sebarang jualan. Kes sebenar: Aremier 17 Ogos 2026 — sesi 9 jam,
+// 38.7km GPS, SIFAR transaksi — jika baucar dijana, ~RM23 minyak tertuntut tanpa
+// sebarang kerja dibuktikan. Gate di SINI (bukan di tiap tempat panggilan) sebab
+// fungsi ni SATU-SATUNYA sumber km utk semua pengiraan minyak dlm sistem (baucar
+// harian auto/manual, laporan harian, laporan bulanan, baucar bulanan) — pekerja
+// yang genuinely cuba jual (pergi kedai, tapi tak jadi jualan) masih boleh nampak
+// isu ni pada pemilik semasa lulus baucar (0 transaksi = 0 minyak, jelas kelihatan).
 async function kiraJarakKehadiranJulat(dariISO, hinggaISO, pekerjaId=null) {
   if (!useCloud) return { totalKm:0, kmIkutPekerja:{}, kmIkutHari:{} };
   // Julat masuk ialah tarikh TEMPATAN tanpa offset (cth '2026-07-26T00:00:00') —
@@ -8764,6 +8774,7 @@ async function kiraJarakKehadiranJulat(dariISO, hinggaISO, pekerjaId=null) {
       if (tarikhTempatan(t.tarikh_masa) !== tarikhSesi) return false;
       return t.tarikh_masa >= sesi.thumb_in_masa && (!sesi.thumb_out_masa || t.tarikh_masa <= sesi.thumb_out_masa);
     });
+    if (!penghantaranSesi.length) return; // wajib ada transaksi baru layak kira mileage — elak thumb in/out "kosong" tetap dituntut minyak
     const km = jarakSesiKehadiran(sesi, penghantaranSesi);
     totalKm += km;
     kmIkutPekerja[sesi.pekerja_id] = (kmIkutPekerja[sesi.pekerja_id]||0) + km;
