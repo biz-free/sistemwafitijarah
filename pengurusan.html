@@ -964,7 +964,7 @@
 
     <!-- Resit -->
     <div class="card" id="resit-card">
-      <div class="card-title">🧾 Jana & Cetak Resit</div>
+      <div class="card-title">🧾 Jana & Cetak Resit/Invois</div>
       <div class="form-group">
         <label class="form-label">Pilih Transaksi</label>
         <select class="form-input" id="resit-sel" onchange="renderResit(this.value)">
@@ -4696,7 +4696,7 @@ function formKonsainanHTML(t) {
     <div style="font-size:10px;color:var(--muted);margin:2px 0 6px">Baki yang dibiarkan kosong KEKAL belum pasti (bukan terjual, bukan pulang) — boleh kemaskini lagi bila-bila masa.</div>
     <button class="btn btn-secondary btn-sm" onclick="kemaskiniJualanKonsainan('${t.id}')">✅ Kemaskini Jualan</button>
     <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
-      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">🧾 Resit (kongsi kpd kedai — auto kemaskini ikut jualan disahkan setakat ini):</div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">🧾 Invois (kongsi kpd kedai — belum terima bayaran, auto kemaskini ikut jualan disahkan setakat ini):</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" style="flex:1;min-width:80px" onclick="resitCepatKonsainan('${t.id}','cetak')">🖨️ Cetak</button>
         <button class="btn btn-gold btn-sm" style="flex:1;min-width:80px" onclick="resitCepatKonsainan('${t.id}','pdf')">📄 PDF</button>
@@ -5608,6 +5608,10 @@ async function renderResit(id) {
   const t=DATA.transaksi.find(t=>t.id===id); if(!t){el.innerHTML='';return;}
   const peribadi = !t.kedai_id;
   const k=DATA.kedai.find(k=>k.id===t.kedai_id)||{nama:t.nama_pembeli||'Belian Peribadi',alamat:'—'};
+  // Hutang & consignment (status='hutang' di belakang tabir) — pembayaran BELUM
+  // diterima, jadi dokumen ni ialah INVOIS (tuntutan bayaran), bukan RESIT (bukti
+  // bayaran dah diterima). Kaedah tunai/transfer (status='selesai') kekal RESIT.
+  const labelDokumen = t.status==='hutang' ? 'INVOIS' : 'RESIT';
   // Consignment — QTY/JUMLAH tiap produk papar baki yg MASIH DIKIRA BERHUTANG
   // (dihantar − pulang disahkan sahaja; produk terjual & baki belum pasti
   // kedua-duanya kekal dikira, cuma pulang yg gugurkan — padan t.jumlah/
@@ -5630,8 +5634,9 @@ async function renderResit(id) {
       <div style="font-size:10px;color:var(--muted);margin-top:4px">Pembekal Produk Halal Berkualiti · Kedah, Perlis, P.Pinang & Perak</div>
       <div style="font-size:9px;color:var(--muted)">No. Pendaftaran: AS0462205-D</div>
       <div style="font-size:10px;color:var(--muted)">wafitijarahtrading@gmail.com · 014-6363831</div>
+      <div style="font-weight:900;font-size:14px;letter-spacing:3px;margin-top:8px;color:${labelDokumen==='INVOIS'?'var(--red)':'var(--green)'}">${labelDokumen}</div>
     </div>
-    <div class="resit-row" style="font-weight:700"><span>NO. RESIT</span><span>${esc(t.resit||t.id)}</span></div>
+    <div class="resit-row" style="font-weight:700"><span>NO. ${labelDokumen}</span><span>${esc(t.resit||t.id)}</span></div>
     <div class="resit-row"><span>TARIKH</span><span>${fmtDT(t.tarikh_masa)}</span></div>
     <div class="resit-row"><span>${peribadi?'PEMBELI':'KEDAI'}</span><span style="text-align:right;max-width:60%">${esc(k.nama)}</span></div>
     ${peribadi?'':`<div class="resit-row"><span>ALAMAT</span><span style="text-align:right;max-width:60%">${esc(k.alamat)}</span></div>`}
@@ -5863,7 +5868,9 @@ async function hantarResitWhatsapp(waTabSedia) {
   const notaDue = (t.status==='hutang' && t.tarikh_akhir_bayaran)
     ? `\n📅 Tarikh Akhir Bayaran: ${fmtD(t.tarikh_akhir_bayaran)}${t.tarikh_akhir_bayaran<tarikhTempatan()?' ⚠️ SUDAH LEWAT':''}`
     : '';
-  const mesej = `Salam ${k.nama},\n\nResit penghantaran *Wafi Tijarah Trading*\nNo. Resit: ${t.resit||t.id}\nJumlah: ${fmt(t.jumlah)}${notaKonsainan}\nStatus: ${t.status==='selesai'?'Telah Dibayar':'Hutang'}${notaDue}\n\n${notaPdf} Terima kasih atas kepercayaan anda!`;
+  // Hutang/consignment (blm terima bayaran) — panggil dokumen INVOIS, bukan RESIT.
+  const labelDokWa = t.status==='hutang' ? 'Invois' : 'Resit';
+  const mesej = `Salam ${k.nama},\n\n${labelDokWa} penghantaran *Wafi Tijarah Trading*\nNo. ${labelDokWa}: ${t.resit||t.id}\nJumlah: ${fmt(t.jumlah)}${notaKonsainan}\nStatus: ${t.status==='selesai'?'Telah Dibayar':'Hutang'}${notaDue}\n\n${notaPdf} Terima kasih atas kepercayaan anda!`;
   const waUrl = `https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`;
   if (waTab) waTab.location.href = waUrl; else window.open(waUrl, '_blank');
   toast(isIOS() ? 'PDF dibuka dalam tab — guna Share ikon Safari utk simpan, lalu lampirkan dalam WhatsApp' : 'PDF dimuat turun — lampirkan dalam WhatsApp yang baru dibuka');
