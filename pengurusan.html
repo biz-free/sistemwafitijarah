@@ -516,7 +516,7 @@
       nilai yang dipulangkan (pulang sendiri, disahkan pemilik, atau padam transaksi). -->
       <div class="card" id="kos-stok-pergerakan-card">
         <div class="card-title">📊 Kos Stok: Diambil vs Dipulangkan</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Ikut harga beli SEMASA — "Belum Dipulangkan" = Diambil − Dipulangkan − Dijual − Tukar/Lupus (semua yang sah tinggalkan bag pekerja sudah ditolak).</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Ikut harga beli SEMASA — "Belum Dipulangkan" = Diambil − Dipulangkan − Dijual − Tukar/Lupus (semua yang sah tinggalkan bag pekerja sudah ditolak). Nota: sejarah "Diambil" cuma bermula 28 Jul 2026 (pergerakan lebih awal tak direkod) — pekerja yang aktif sebelum itu mungkin papar RM0 walaupun sebenarnya masih ada baki, bukan sebaliknya.</div>
         <div id="kos-stok-pergerakan-list"></div>
       </div>
       <div class="card" id="serahan-produk-semua-card">
@@ -4249,7 +4249,14 @@ async function renderKosStokPergerakan() {
 
   const baris = Object.entries(ringkasan).sort((a,b)=>b[1].diambil-a[1].diambil);
   el.innerHTML = baris.map(([pid, d])=>{
-    const belumPulang = d.diambil - d.dipulangkan - d.dijual - d.dilupuskan;
+    // Sejarah "ambil" cuma bermula dari 28 Julai 2026 (SQL_TAMBAHAN_63 — pergerakan
+    // sebelum itu tak direkod, tak boleh dibina semula tepat, per nota kod tsb sendiri).
+    // Dijual/Tukar-Lupus pula ada sejarah PENUH dari awal — jadi utk pekerja yg dah
+    // aktif SEBELUM 28 Jul, jumlah dijual/dilupuskan boleh jadi LEBIH BESAR drpd
+    // "diambil" yg tercatat (bukan salah kira, cuma "diambil" tercatat memang tak
+    // lengkap). Floor pada 0 (elak nombor negatif tak masuk akal) + makluman jelas.
+    const belumPulangRaw = d.diambil - d.dipulangkan - d.dijual - d.dilupuskan;
+    const belumPulang = Math.max(0, belumPulangRaw);
     return `<div class="list-item" style="display:block">
       <div class="list-item-title" style="margin-bottom:6px">${esc(namaPekerja(pid))}</div>
       <div style="display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--muted)">
@@ -4259,6 +4266,7 @@ async function renderKosStokPergerakan() {
         <span>🔄 Tukar/Lupus<br/><strong style="color:var(--text);font-size:13px">${fmt(d.dilupuskan)}</strong></span>
         <span>Belum Dipulangkan<br/><strong style="color:${belumPulang>0?'var(--gold)':'var(--green)'};font-size:13px">${fmt(belumPulang)}</strong></span>
       </div>
+      ${belumPulangRaw<0?`<div style="font-size:9px;color:var(--muted);margin-top:4px">ℹ️ Dijual/dilupuskan melebihi rekod "diambil" — sejarah ambil sebelum 28 Jul 2026 tak lengkap (dianggap 0, bukan hutang stok sebenar).</div>`:''}
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-text">Tiada pergerakan stok direkod lagi</div></div>';
 }
