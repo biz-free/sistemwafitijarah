@@ -277,11 +277,18 @@
     @media print {
       @page { size: A4; margin: 3mm; }
       /* Sorok SEMUA, papar SEMULA hanya kotak resit/baucar yang dipilih — elak seluruh
-         kad lain (Laporan, Tetapan, dll dalam halaman "Lebih" yang sama) turut tercetak. */
+         kad lain (Laporan, Tetapan, dll dalam halaman "Lebih" yang sama) turut tercetak.
+         visibility:hidden SAHAJA tak cukup — elemen tersembunyi kekal ambil ruang susunan
+         (layout), jadi enjin cetak kira jumlah muka surat ikut TINGGI PENUH keseluruhan
+         apl (yg tersembunyi) → hasilkan banyak muka surat kosong (aduan pemilik). html/body
+         dipaksa height:0+overflow:hidden supaya jumlah tinggi susunan collapse ke 0; kotak
+         resit/baucar (dipindah jadi anak terus <body> oleh cetakResit()/cetakBaucar() sblm
+         window.print()) kekal position:absolute relatif drpd initial containing block
+         (bukan body), jadi TIDAK turut terpotong oleh overflow:hidden body. */
+      html, body { height: 0 !important; overflow: hidden !important; }
       body * { visibility: hidden; }
       #resit-print, #resit-print *, #baucar-print, #baucar-print * { visibility: visible; }
       #resit-print, #baucar-print { position: absolute; left: 0; top: 0; width: 100%; }
-      .resit-box, .baucar-box { border:1px solid #000; }
     }
   </style>
 </head>
@@ -5868,7 +5875,13 @@ async function renderResitPelupusan(resitNo) {
 function cetakResit() {
   const box=document.getElementById('resit-print');
   if(!box) return toast('Sila pilih transaksi dahulu','err');
+  // Pindah kotak resit jadi anak TERUS <body> sblm cetak (asalnya tertanam dalam .card
+  // yg berposisi position:relative — elak isu absolute-position/clipping yg tak menentu),
+  // kembalikan ke tempat asal lepas dialog cetak ditutup.
+  const asalIbu = box.parentNode, asalSeterus = box.nextSibling;
+  document.body.appendChild(box);
   window.print();
+  if (asalSeterus) asalIbu.insertBefore(box, asalSeterus); else asalIbu.appendChild(box);
 }
 
 // iOS Safari (termasuk PWA "Add to Home Screen") sering GAGAL SENYAP pada pdf.save()
@@ -6594,7 +6607,15 @@ async function cetakBaucar(id) {
   if (!Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
   const nama = PROFIL_NAMA_CACHE[v.pekerja_id] || v.pekerja_id;
   document.getElementById('baucar-print-preview').innerHTML = bangunkanBaucarPrintBox(v, nama);
-  setTimeout(() => window.print(), 200);
+  setTimeout(() => {
+    // Sama corak spt cetakResit() — pindah ke anak terus <body> sblm cetak, elak
+    // banyak muka surat kosong akibat kotak tertanam dlm .card/tab lain.
+    const box = document.getElementById('baucar-print');
+    const asalIbu = box?.parentNode, asalSeterus = box?.nextSibling;
+    if (box) document.body.appendChild(box);
+    window.print();
+    if (box) { if (asalSeterus) asalIbu.insertBefore(box, asalSeterus); else asalIbu.appendChild(box); }
+  }, 200);
 }
 
 // Muat turun PDF baucar — guna html2canvas+jsPDF (SAMA corak dgn muatTurunResitPDF) supaya
