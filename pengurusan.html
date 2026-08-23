@@ -5262,7 +5262,10 @@ async function renderTransaksiKedaiList() {
       </div>
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
       ${t.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(t.nota)}</div>`:''}
-      <div style="font-size:12px;font-weight:700;margin-top:6px">${fmt(t.jumlah)}</div>
+      <div style="font-size:12px;font-weight:700;margin-top:6px;display:flex;align-items:center;gap:6px">
+        <span>${fmt(t.jumlah)}</span>
+        ${currentRole==='pemilik' && t.kaedah_bayaran!=='consignment' ? `<button class="btn-link" style="font-size:10px;font-weight:400" onclick="editJumlahTransaksi('${t.id}',${t.jumlah_asal??t.jumlah})">✏️ Edit Jumlah</button>`:''}
+      </div>
       ${currentRole==='pemilik' ? `<div style="margin-top:6px;display:flex;align-items:center;gap:6px">
         <label style="font-size:10px;color:var(--muted)">Kaedah Bayar:</label>
         <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="tukarKaedahBayaranTransaksi('${t.id}', this.value)">
@@ -5294,6 +5297,24 @@ async function tukarKaedahBayaranTransaksi(id, kaedahBaru) {
   await loadData();
   renderTransaksiKedaiList();
   toast(`✅ Kaedah bayaran ditukar kepada ${LABEL_KAEDAH[kaedahBaru]}`);
+}
+
+// Pemilik betulkan jumlah transaksi yang tersilap key-in (cth: salah kuantiti/harga)
+// tanpa perlu padam & minta pekerja hantar semula. Betulkan JUMLAH ASAL (sebelum
+// diskaun) — jumlah akhir & kedai.hutang dikira semula server-side ikut kadar
+// diskaun sedia ada, kekal konsisten dgn cara jumlah dikira di seluruh sistem.
+// Consignment TAK guna ni — ada mekanisme sendiri (Kemaskini Jualan).
+async function editJumlahTransaksi(id, jumlahAsalSemasa) {
+  const input = prompt(`Betulkan Jumlah Asal (RM, sebelum diskaun):\n\nJumlah asal semasa: ${fmt(jumlahAsalSemasa)}\n\n(Jumlah akhir & hutang kedai akan dikira semula automatik ikut kadar diskaun sedia ada.)`, jumlahAsalSemasa);
+  if (input === null) return;
+  const jumlahBaru = +input;
+  if (!Number.isFinite(jumlahBaru) || jumlahBaru < 0) return toast('Jumlah tidak sah','err');
+  const nota = prompt('Sebab pembetulan (utk rekod audit):') || '';
+  const { error } = await sb.rpc('edit_jumlah_transaksi', { p_id: id, p_jumlah_asal_baru: jumlahBaru, p_nota: nota||null });
+  if (error) return toast('Gagal betulkan jumlah: '+error.message,'err');
+  await loadData();
+  renderTransaksiKedaiList();
+  toast(`✅ Jumlah dibetulkan — jumlah asal kini ${fmt(jumlahBaru)}`);
 }
 
 async function padamTransaksiKedai(id) {
