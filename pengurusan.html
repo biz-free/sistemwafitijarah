@@ -516,7 +516,7 @@
       nilai yang dipulangkan (pulang sendiri, disahkan pemilik, atau padam transaksi). -->
       <div class="card" id="kos-stok-pergerakan-card">
         <div class="card-title">📊 Kos Stok: Diambil vs Dipulangkan</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Ikut harga beli SEMASA — jumlah "Belum Dipulangkan" anggaran sahaja (tak kira jualan/pelupusan yang turut kurangkan stok bawaan).</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Ikut harga beli SEMASA — "Belum Dipulangkan" = Diambil − Dipulangkan − Dijual − Tukar/Lupus (semua yang sah tinggalkan bag pekerja sudah ditolak).</div>
         <div id="kos-stok-pergerakan-list"></div>
       </div>
       <div class="card" id="serahan-produk-semua-card">
@@ -905,6 +905,12 @@
     <div class="card">
       <div class="card-title">💳 Kedai Hutang Tertinggi</div>
       <div id="an-hutang-list"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🤝 Kedai Consignment Tertinggi</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Jumlah consignment BELUM SELESAI (status hutang) setiap kedai — pecahan drpd Hutang Tertinggi di atas, khas utk nilai consignment sahaja.</div>
+      <div id="an-consignment-list"></div>
     </div>
 
     <div class="card">
@@ -3656,6 +3662,21 @@ function filterHantarKedai(q='') {
 // Pemilik sahaja — rekod Hantar/Rosak-Expired bagi pihak pekerja lain (cth: pekerja
 // tiada akses peranti semasa itu). Stok bawaan yang disemak/ditolak ikut PEKERJA
 // TERPILIH, bukan pemilik sendiri — lihat bakiUntukHantar() & submitHantar/Pelupusan/TukarExpired.
+//
+// Opsyen "Diri Sendiri (Pemilik)" SENGAJA dibuang (lihat renderHantarPekerjaSelector())
+// & PEKERJA_TARGET_ID lalai ke akaun pekerja "Mohamad Amirul" — SEMUA rekod yg dibuat
+// pemilik (jualan/hantar/rosak-expired) WAJIB teratribut ke akaun PEKERJA, tak boleh
+// jatuh balik ke auth.uid() pemilik sendiri. Sebabnya: kiraan upah/mileage/cash
+// dipegang/baucar harian direka khas utk akaun berperanan pekerja sahaja (cth
+// kiraJarakKehadiranJulat guna sesi kehadiran, jumlahCashBelumDiselesai guna
+// created_by) — rekod teratribut ke pemilik akan tersasar drpd kiraan tsb & buat
+// sistem "tersalah kira" (cth: jualan pemilik tak pernah masuk mana2 laporan upah).
+// PEKERJA_TARGET_ID KEKAL null secara lalai (JANGAN tukar ke Amirul di sini) — ia
+// turut dirujuk oleh bakiUntukHantar() utk sesi PEKERJA BIASA sendiri (null = guna
+// stok bawaan sendiri, DATA.stokPekerja). Lalai Amirul cuma diset DALAM
+// renderHantarPekerjaSelector() (fungsi tu sendiri dah early-return utk bukan-
+// pemilik), supaya sesi pekerja biasa tak terjejas langsung.
+const PEKERJA_DEFAULT_PEMILIK_ID = '0f0ec428-2cd9-41fc-a96f-c87c3a8e5732'; // Mohamad Amirul (akaun pekerja)
 let PEKERJA_TARGET_ID = null;
 let PEKERJA_TARGET_STOK = {};
 
@@ -3672,15 +3693,19 @@ async function renderHantarPekerjaSelector() {
     tarikhInput.max = tarikhTempatan();
     if (!tarikhInput.value) tarikhInput.value = tarikhTempatan();
   }
-  if (sel.options.length <= 1 && useCloud) {
+  if (sel.options.length === 0 && useCloud) {
+    // TIADA opsyen "Diri Sendiri (Pemilik)" — SEMUA rekod pemilik WAJIB teratribut
+    // ke akaun pekerja sebenar (lalai Mohamad Amirul), tak boleh jatuh balik ke
+    // akaun pemilik sendiri. Lihat nota PEKERJA_DEFAULT_PEMILIK_ID di atas.
     const { data } = await sb.from('profiles').select('id,nama').eq('role','pekerja');
-    sel.innerHTML = '<option value="">👤 Diri Sendiri (Pemilik)</option>' + (data||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('');
+    sel.innerHTML = (data||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('');
   }
-  sel.value = PEKERJA_TARGET_ID || '';
+  if (!PEKERJA_TARGET_ID) PEKERJA_TARGET_ID = PEKERJA_DEFAULT_PEMILIK_ID;
+  sel.value = PEKERJA_TARGET_ID;
 }
 
 async function onPilihPekerjaHantar(pekerjaId) {
-  PEKERJA_TARGET_ID = pekerjaId || null;
+  PEKERJA_TARGET_ID = pekerjaId || PEKERJA_DEFAULT_PEMILIK_ID;
   PEKERJA_TARGET_STOK = {};
   if (PEKERJA_TARGET_ID && useCloud) {
     const { data } = await sb.from('stok_pekerja').select('stok_id,kuantiti').eq('pekerja_id', PEKERJA_TARGET_ID);
@@ -4180,9 +4205,13 @@ async function renderSerahanProdukSemua() {
 
 // Jejak kos (RM, ikut harga beli SEMASA) stok yang diambil pekerja drpd gudang
 // ('ambil') berbanding dipulangkan ('baik' = pulang sendiri/disahkan pemilik,
-// 'padam_pulang' = transaksi kedai dipadam pemilik). "Belum Dipulangkan" ANGGARAN
-// sahaja — tak kira jualan/pelupusan sebenar yang turut kurangkan stok bawaan
-// (itu bukan "pulangan", tapi guna sah stok tu memang utk dijual/dilupuskan).
+// 'padam_pulang' = transaksi kedai dipadam pemilik) — TOLAK JUGA barang yang
+// dijual (transaksi.items, ikut created_by) & barang gantian diberi dlm tukar
+// reject/expired (pelupusan_stok jenis='tukar_beri') — kedua-dua ni SAH-SAH
+// tinggalkan bag pekerja (bukan hilang), cuma bukan "pulangan terus ke gudang".
+// pelupusan BIASA (jenis NULL, lupus_stok_pekerja) turut ditolak sebab RPC tu
+// pun potong stok_pekerja terus. 'tukar_ambil' DIKECUALIKAN — itu barang expired
+// DIAMBIL BALIK DARI KEDAI (bukan drpd bag pekerja), tak relevan di sini.
 async function renderKosStokPergerakan() {
   const el = document.getElementById('kos-stok-pergerakan-list');
   if (!el) return;
@@ -4190,24 +4219,44 @@ async function renderKosStokPergerakan() {
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   const { data: profil } = await sb.from('profiles').select('id,nama');
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
+  const { data: pelupusanData } = await sb.from('pelupusan_stok').select('pekerja_id,stok_id,kuantiti,jenis');
 
+  const kosong = () => ({ diambil:0, dipulangkan:0, dijual:0, dilupuskan:0 });
   const ringkasan = {};
   (data||[]).forEach(r => {
     const s = DATA.stok.find(s=>s.id===r.stok_id);
     const kos = (s?.harga_beli||0) * r.kuantiti;
-    ringkasan[r.pekerja_id] ||= { diambil:0, dipulangkan:0 };
+    ringkasan[r.pekerja_id] ||= kosong();
     if (r.jenis === 'ambil') ringkasan[r.pekerja_id].diambil += kos;
     else ringkasan[r.pekerja_id].dipulangkan += kos;
   });
 
+  DATA.transaksi.forEach(t => {
+    if (!t.created_by) return;
+    ringkasan[t.created_by] ||= kosong();
+    (t.items||[]).forEach(it=>{
+      const s = DATA.stok.find(s=>s.id===it.stokId);
+      ringkasan[t.created_by].dijual += (s?.harga_beli||0) * (+it.qty||0);
+    });
+  });
+
+  (pelupusanData||[]).forEach(r => {
+    if (r.jenis === 'tukar_ambil') return; // barang expired dari KEDAI, bukan drpd bag pekerja
+    const s = DATA.stok.find(s=>s.id===r.stok_id);
+    ringkasan[r.pekerja_id] ||= kosong();
+    ringkasan[r.pekerja_id].dilupuskan += (s?.harga_beli||0) * r.kuantiti;
+  });
+
   const baris = Object.entries(ringkasan).sort((a,b)=>b[1].diambil-a[1].diambil);
   el.innerHTML = baris.map(([pid, d])=>{
-    const belumPulang = d.diambil - d.dipulangkan;
+    const belumPulang = d.diambil - d.dipulangkan - d.dijual - d.dilupuskan;
     return `<div class="list-item" style="display:block">
       <div class="list-item-title" style="margin-bottom:6px">${esc(namaPekerja(pid))}</div>
       <div style="display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--muted)">
         <span>📤 Diambil<br/><strong style="color:var(--text);font-size:13px">${fmt(d.diambil)}</strong></span>
         <span>📥 Dipulangkan<br/><strong style="color:var(--text);font-size:13px">${fmt(d.dipulangkan)}</strong></span>
+        <span>🏪 Dijual<br/><strong style="color:var(--text);font-size:13px">${fmt(d.dijual)}</strong></span>
+        <span>🔄 Tukar/Lupus<br/><strong style="color:var(--text);font-size:13px">${fmt(d.dilupuskan)}</strong></span>
         <span>Belum Dipulangkan<br/><strong style="color:${belumPulang>0?'var(--gold)':'var(--green)'};font-size:13px">${fmt(belumPulang)}</strong></span>
       </div>
     </div>`;
@@ -6641,6 +6690,20 @@ function renderAnalisis() {
   document.getElementById('an-hutang-list').innerHTML = hutangTertinggi.map(k=>
     `<div class="list-item"><div class="list-item-title">${esc(k.nama)}</div><div class="list-item-val" style="color:var(--red)">${fmt(k.hutang)}</div></div>`
   ).join('') || '<div class="empty"><div class="empty-text">Tiada kedai berhutang</div></div>';
+
+  // Kedai consignment tertinggi — pecahan KHAS drpd hutang keseluruhan di atas,
+  // jumlah SEMUA transaksi consignment status='hutang' (t.jumlah dah cerminkan
+  // produk terjual/pulang setakat ini, lihat kiraKonsainanPecahan) ikut kedai.
+  const consignIkutKedai = {};
+  DATA.transaksi.filter(t=>t.kaedah_bayaran==='consignment' && t.status==='hutang' && t.kedai_id).forEach(t=>{
+    consignIkutKedai[t.kedai_id] = (consignIkutKedai[t.kedai_id]||0) + t.jumlah;
+  });
+  const consignTertinggi = Object.entries(consignIkutKedai)
+    .map(([kedaiId, jumlah])=>({ nama: DATA.kedai.find(k=>k.id===kedaiId)?.nama || kedaiId, jumlah }))
+    .filter(x=>x.jumlah>0).sort((a,b)=>b.jumlah-a.jumlah).slice(0,10);
+  document.getElementById('an-consignment-list').innerHTML = consignTertinggi.map(x=>
+    `<div class="list-item"><div class="list-item-title">${esc(x.nama)}</div><div class="list-item-val" style="color:var(--purple)">${fmt(x.jumlah)}</div></div>`
+  ).join('') || '<div class="empty"><div class="empty-text">Tiada consignment belum selesai</div></div>';
 
   // Pecahan ikut bulan (dalam julat) — bulanTempatan() (MYT) + tolak diskaun kedai
   // per-transaksi supaya jumlah setiap bulan padan dgn keseluruhan di atas.
