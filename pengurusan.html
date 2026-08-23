@@ -915,12 +915,13 @@
 
     <div class="card">
       <div class="card-title">💳 Kedai Hutang Tertinggi</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Jumlah transaksi kaedah bayaran HUTANG belum selesai sahaja setiap kedai — TIDAK termasuk consignment (lihat kad berasingan di bawah).</div>
       <div id="an-hutang-list"></div>
     </div>
 
     <div class="card">
       <div class="card-title">🤝 Kedai Consignment Tertinggi</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Jumlah consignment BELUM SELESAI (status hutang) setiap kedai — pecahan drpd Hutang Tertinggi di atas, khas utk nilai consignment sahaja.</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Jumlah transaksi kaedah bayaran CONSIGNMENT belum selesai sahaja setiap kedai — asingan penuh drpd Hutang Tertinggi di atas, tiada kaedah bayaran bercampur.</div>
       <div id="an-consignment-list"></div>
     </div>
 
@@ -1912,6 +1913,11 @@ const tarikhTempatan = (d = new Date()) => new Intl.DateTimeFormat('en-CA', {
 const bulanTempatan = (d = new Date()) => tarikhTempatan(d).slice(0, 7);
 const genId = p => p + Date.now().toString().slice(-7);
 const genResit = () => { const d=new Date(); return `R-${d.getFullYear().toString().slice(2)}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${Math.floor(Math.random()*900+100)}`; };
+// No. rujukan paparan (bukan medan DB) — t.resit SENTIASA disimpan bermula 'R-' sejak
+// dijana (genResit). Prefix DIPAPARKAN sahaja ditukar 'I' bila masih hutang (Invois) &
+// kekal/kembali 'R' bila status='selesai' (Resit) — nombor di belakang (tarikh+rawak)
+// KEKAL SAMA. Berubah automatik ikut t.status semasa, sama pattern spt labelDokumen.
+const noRujukanTrx = t => t?.resit ? (t.status==='hutang'?'I':'R') + t.resit.slice(1) : (t?.resit||t?.id||'');
 const fmtD = iso => new Date(iso).toLocaleDateString('ms-MY',{day:'2-digit',month:'short',year:'numeric'});
 const fmtDT = iso => new Date(iso).toLocaleString('ms-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
 const daysSince = iso => iso ? Math.floor((Date.now()-new Date(iso))/86400000) : 999;
@@ -2339,7 +2345,7 @@ function renderDashboard() {
     const k = DATA.kedai.find(k=>k.id===t.kedai_id)||{nama:'?'};
     const statusBadge = labelStatusTrx(t);
     return `<div class="list-item">
-      <div><div class="list-item-title">${esc(k.nama)}</div><div class="list-item-sub">${fmtDT(t.tarikh_masa)} · ${esc(t.resit||'')}</div></div>
+      <div><div class="list-item-title">${esc(k.nama)}</div><div class="list-item-sub">${fmtDT(t.tarikh_masa)} · ${esc(noRujukanTrx(t))}</div></div>
       <div class="list-item-right"><div class="list-item-val">${fmt(t.jumlah)}</div><span class="badge ${statusBadge.kelas}">${statusBadge.teks}</span></div>
     </div>`;
   }).join('');
@@ -4822,7 +4828,7 @@ async function renderSejarah(kedaiId='') {
     const statusBadge = labelStatusTrx(t);
     return `<div class="trx-card ${t.status==='hutang'?'hutang':''}" ${belumSahkan?'style="border-left-color:var(--purple);background:#6B4EAF0D"':''}>
       <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-        <div><div style="font-weight:800;font-size:13px">${esc(namaDestinasi)}</div><div style="font-size:10px;color:var(--muted)">${fmtDT(t.tarikh_masa)} · ${esc(t.resit||'')}</div></div>
+        <div><div style="font-weight:800;font-size:13px">${esc(namaDestinasi)}</div><div style="font-size:10px;color:var(--muted)">${fmtDT(t.tarikh_masa)} · ${esc(noRujukanTrx(t))}</div></div>
         <div style="text-align:right"><div style="font-weight:800;font-size:14px">${fmt(t.jumlah)}</div><span class="badge ${statusBadge.kelas}">${statusBadge.teks}</span></div>
       </div>
       <div style="font-size:11px;color:var(--muted)">${esc(itemsStr)}</div>
@@ -5331,7 +5337,7 @@ async function renderTransaksiKedaiList() {
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
         <div>
           <div style="font-weight:800;font-size:13px">${esc(namaDestinasiTrx(t))}</div>
-          <div style="font-size:10px;color:var(--muted)">${k?.telefon?'📞 '+esc(k.telefon)+' · ':''}${fmtDT(t.tarikh_masa)} · ${esc(t.resit||'')}</div>
+          <div style="font-size:10px;color:var(--muted)">${k?.telefon?'📞 '+esc(k.telefon)+' · ':''}${fmtDT(t.tarikh_masa)} · ${esc(noRujukanTrx(t))}</div>
           ${k?.alamat?`<div style="font-size:10px;color:var(--muted)">📍 ${esc(k.alamat)}</div>`:''}
         </div>
         <span class="badge ${statusBadge.kelas}" style="flex-shrink:0">${statusBadge.teks}</span>
@@ -5699,7 +5705,7 @@ async function renderResitSel() {
 
   const opsiTrx = sumber.map(t=>({
     value: t.id,
-    label: `${t.resit||t.id} · ${namaDestinasiTrx(t)} · ${fmt(t.jumlah)}`,
+    label: `${noRujukanTrx(t)} · ${namaDestinasiTrx(t)} · ${fmt(t.jumlah)}`,
     tarikh: t.tarikh_masa,
   }));
 
@@ -5758,7 +5764,7 @@ async function renderResit(id) {
       <div style="font-size:15px;color:var(--muted)">wafitijarahtrading@gmail.com · 014-6363831</div>
       <div style="font-weight:900;font-size:21px;letter-spacing:1.5px;margin-top:6px;color:${labelDokumen==='INVOIS'?'var(--red)':'var(--green)'}">${labelDokumen}</div>
     </div>
-    <div class="resit-row" style="font-weight:700"><span>NO. ${labelDokumen}</span><span>${esc(t.resit||t.id)}</span></div>
+    <div class="resit-row" style="font-weight:700"><span>NO. ${labelDokumen}</span><span>${esc(noRujukanTrx(t))}</span></div>
     <div class="resit-row"><span>TARIKH</span><span>${fmtDT(t.tarikh_masa)}</span></div>
     <div class="resit-row"><span>${peribadi?'PEMBELI':'KEDAI'}</span><span style="text-align:right;max-width:60%">${esc(k.nama)}</span></div>
     ${peribadi?'':`<div class="resit-row"><span>ALAMAT</span><span style="text-align:right;max-width:60%">${esc(k.alamat)}</span></div>`}
@@ -5958,7 +5964,7 @@ async function muatTurunResitPDF() {
   }
   const namaFail = isLupus
     ? `${id.slice(6)}-Pelupusan`.replace(/[\/\\?%*:|"<>]/g,'-')
-    : `${t?.resit||id}-${t?namaDestinasiTrx(t):'Kedai'}-RM${(t?.jumlah||0).toFixed(2)}`.replace(/[\/\\?%*:|"<>]/g,'-');
+    : `${t?noRujukanTrx(t):id}-${t?namaDestinasiTrx(t):'Kedai'}-RM${(t?.jumlah||0).toFixed(2)}`.replace(/[\/\\?%*:|"<>]/g,'-');
   simpanPdfSerasiIOS(pdf, namaFail);
   return t;
 }
@@ -6007,7 +6013,7 @@ async function hantarResitWhatsapp(waTabSedia) {
     : '';
   // Hutang/consignment (blm terima bayaran) — panggil dokumen INVOIS, bukan RESIT.
   const labelDokWa = t.status==='hutang' ? 'Invois' : 'Resit';
-  const mesej = `Salam ${k.nama},\n\n${labelDokWa} penghantaran *Wafi Tijarah Trading*\nNo. ${labelDokWa}: ${t.resit||t.id}\nJumlah: ${fmt(t.jumlah)}${notaKonsainan}\nStatus: ${t.status==='selesai'?'Telah Dibayar':'Hutang'}${notaDue}\n\n${notaPdf} Terima kasih atas kepercayaan anda!`;
+  const mesej = `Salam ${k.nama},\n\n${labelDokWa} penghantaran *Wafi Tijarah Trading*\nNo. ${labelDokWa}: ${noRujukanTrx(t)}\nJumlah: ${fmt(t.jumlah)}${notaKonsainan}\nStatus: ${t.status==='selesai'?'Telah Dibayar':'Hutang'}${notaDue}\n\n${notaPdf} Terima kasih atas kepercayaan anda!`;
   const waUrl = `https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`;
   if (waTab) waTab.location.href = waUrl; else window.open(waUrl, '_blank');
   toast(isIOS() ? 'PDF dibuka dalam tab — guna Share ikon Safari utk simpan, lalu lampirkan dalam WhatsApp' : 'PDF dimuat turun — lampirkan dalam WhatsApp yang baru dibuka');
@@ -6741,14 +6747,23 @@ function renderAnalisis() {
     return `<div class="list-item"><div class="list-item-title">${esc(s?.nama||id)}</div><div class="list-item-val">${qty} ${esc(s?.unit||'')}</div></div>`;
   }).join('') || '<div class="empty"><div class="empty-text">Tiada jualan dalam julat ini</div></div>';
 
-  // Kedai hutang tertinggi
-  const hutangTertinggi = [...DATA.kedai].filter(k=>k.hutang>0).sort((a,b)=>b.hutang-a.hutang).slice(0,10);
-  document.getElementById('an-hutang-list').innerHTML = hutangTertinggi.map(k=>
-    `<div class="list-item"><div class="list-item-title">${esc(k.nama)}</div><div class="list-item-val" style="color:var(--red)">${fmt(k.hutang)}</div></div>`
+  // Kedai hutang tertinggi — HANYA kaedah bayaran='hutang' (guna k.hutang SEBELUM ini
+  // yg mencampurkan hutang biasa & consignment sekali, sebab kedai.hutang ialah medan
+  // agregat gabungan kedua-dua kaedah — kini dikira terus drpd transaksi supaya kad ni
+  // benar2 asingan drpd kad Consignment Tertinggi di bawah, tiada kaedah bercampur).
+  const hutangIkutKedai = {};
+  DATA.transaksi.filter(t=>t.kaedah_bayaran==='hutang' && t.status==='hutang' && t.kedai_id).forEach(t=>{
+    hutangIkutKedai[t.kedai_id] = (hutangIkutKedai[t.kedai_id]||0) + t.jumlah;
+  });
+  const hutangTertinggi = Object.entries(hutangIkutKedai)
+    .map(([kedaiId, jumlah])=>({ nama: DATA.kedai.find(k=>k.id===kedaiId)?.nama || kedaiId, jumlah }))
+    .filter(x=>x.jumlah>0).sort((a,b)=>b.jumlah-a.jumlah).slice(0,10);
+  document.getElementById('an-hutang-list').innerHTML = hutangTertinggi.map(x=>
+    `<div class="list-item"><div class="list-item-title">${esc(x.nama)}</div><div class="list-item-val" style="color:var(--red)">${fmt(x.jumlah)}</div></div>`
   ).join('') || '<div class="empty"><div class="empty-text">Tiada kedai berhutang</div></div>';
 
-  // Kedai consignment tertinggi — pecahan KHAS drpd hutang keseluruhan di atas,
-  // jumlah SEMUA transaksi consignment status='hutang' (t.jumlah dah cerminkan
+  // Kedai consignment tertinggi — asingan penuh drpd hutang biasa di atas (bukan lagi
+  // pecahan), jumlah SEMUA transaksi consignment status='hutang' (t.jumlah dah cerminkan
   // produk terjual/pulang setakat ini, lihat kiraKonsainanPecahan) ikut kedai.
   const consignIkutKedai = {};
   DATA.transaksi.filter(t=>t.kaedah_bayaran==='consignment' && t.status==='hutang' && t.kedai_id).forEach(t=>{
@@ -6842,7 +6857,7 @@ function muatTurunCSV() {
   fil.forEach(t=>{
     const k = DATA.kedai.find(k=>k.id===t.kedai_id);
     const itemsStr = t.items.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return `${s?.nama||it.stokId} x${it.qty}`; }).join('; ');
-    baris.push([t.resit||t.id, t.tarikh_masa, k?.nama||'', itemsStr, t.jumlah.toFixed(2), t.status, t.jarak_km||0, t.created_by||'']);
+    baris.push([noRujukanTrx(t), t.tarikh_masa, k?.nama||'', itemsStr, t.jumlah.toFixed(2), t.status, t.jarak_km||0, t.created_by||'']);
   });
   const csv = baris.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['﻿'+csv], { type:'text/csv;charset=utf-8;' });
