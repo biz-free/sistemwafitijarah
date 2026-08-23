@@ -1,18 +1,24 @@
 // Edge Function: notifikasi-invois-lewat-cron
 // Dipanggil SEKALI SEHARI oleh pg_cron (bukan dari pengurusan.html) — semak semua
 // invois (transaksi status='hutang') yang sudah MELEPASI tarikh_akhir_bayaran &
-// belum pernah dimaklumkan, hantar EMEL (Resend) kepada PEKERJA yang buat
-// penghantaran itu DAN PEMILIK — satu emel ringkasan setiap penerima (bukan satu
-// emel per invois, elak spam bila ada byk invois lewat serentak).
+// belum pernah dimaklumkan, hantar EMEL (Resend) DAN NOTIFIKASI TOLAK (Web Push)
+// kepada PEKERJA yang buat penghantaran itu DAN PEMILIK — satu emel/push ringkasan
+// setiap penerima (bukan satu per invois, elak spam bila ada byk invois lewat serentak).
 //
 // Dihantar SEKALI sahaja per invois (medan notifikasi_lewat_dihantar jadi
-// penanda) — bukan diulang setiap hari selagi belum bayar, elak keletihan emel.
+// penanda) — bukan diulang setiap hari selagi belum bayar, elak keletihan emel/push.
 //
 // Setup wajib: secret RESEND_API_KEY & CRON_SECRET (sama seperti susulan-auto-cron).
+// Push (SQL_TAMBAHAN_110): secret VAPID_PRIVATE_KEY — jika tiada, push dilangkau
+// senyap (emel tetap berjalan spt biasa, push cuma ciri tambahan).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import webpush from "npm:web-push@3.6.7";
 
 const FROM_EMAIL = "Wafi Tijarah Trading <no-reply@wafitijarahtrading.com>";
+// Kunci AWAM sahaja (padan dgn VAPID_PUBLIC_KEY di pengurusan.html) — selamat
+// didedahkan dlm kod, bukan rahsia. Kunci PERIBADI dibaca drpd secret di bawah.
+const VAPID_PUBLIC_KEY = "BHn9H44ym7-erXGNS-netsYpsVNke8--awcoLbfcughKJHwb54aOEciUEbYDBidGYdGWDkJtBneOVkz3TDXPqDA";
 
 function esc(s: unknown): string {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
@@ -64,6 +70,35 @@ async function hantarEmel(resendKey: string, to: string, tajukPenerima: string, 
   return resendRes.ok;
 }
 
+// deno-lint-ignore no-explicit-any
+async function hantarPushKePengguna(admin: any, userId: string, invois: InvoisLewat[]): Promise<number> {
+  const { data: subs } = await admin.from("push_subscriptions").select("*").eq("user_id", userId);
+  if (!subs || !subs.length) return 0;
+
+  const payload = JSON.stringify({
+    title: `⚠️ ${invois.length} Invois Lewat Bayar`,
+    body: invois.length === 1
+      ? `${invois[0].kedai_nama} — No. ${invois[0].resit || invois[0].id} — ${fmt(invois[0].jumlah)}`
+      : `${invois.map((t) => t.kedai_nama).slice(0, 3).join(", ")}${invois.length > 3 ? " & lain-lain" : ""} — jumlah ${fmt(invois.reduce((a, t) => a + t.jumlah, 0))}`,
+    url: "./pengurusan.html",
+  });
+
+  let berjaya = 0;
+  // deno-lint-ignore no-explicit-any
+  for (const s of subs as any[]) {
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } }, payload);
+      berjaya++;
+    } catch (err) {
+      const kod = (err as { statusCode?: number })?.statusCode;
+      console.warn(`[notifikasi-invois-lewat] push gagal endpoint=${s.endpoint} kod=${kod} err=${err}`);
+      // 404/410 = langganan dah tak sah (peranti nyahpasang/tukar) — buang drpd DB.
+      if (kod === 404 || kod === 410) await admin.from("push_subscriptions").delete().eq("id", s.id);
+    }
+  }
+  return berjaya;
+}
+
 Deno.serve(async (req) => {
   try {
     const cronSecret = Deno.env.get("CRON_SECRET");
@@ -74,6 +109,14 @@ Deno.serve(async (req) => {
     const resendKey = Deno.env.get("RESEND_API_KEY");
     if (!resendKey) {
       return new Response(JSON.stringify({ error: "RESEND_API_KEY belum ditetapkan sebagai secret" }), { status: 500 });
+    }
+
+    // Push ialah ciri TAMBAHAN kpd emel — jika VAPID_PRIVATE_KEY belum ditetapkan,
+    // langkau push senyap (emel tetap berjalan spt biasa, tak gagalkan seluruh fungsi).
+    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
+    const pushAktif = !!vapidPrivateKey;
+    if (pushAktif) {
+      webpush.setVapidDetails("mailto:wafitijarahtrading@gmail.com", VAPID_PUBLIC_KEY, vapidPrivateKey!);
     }
 
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -120,7 +163,7 @@ Deno.serve(async (req) => {
       : { data: [] as { id: string; nama: string; email: string | null }[] };
     const { data: profilPemilik } = await admin.from("profiles").select("id, nama, email").eq("role", "pemilik");
 
-    let dihantarPekerja = 0, dihantarPemilik = 0;
+    let dihantarPekerja = 0, dihantarPemilik = 0, pushDihantar = 0;
 
     for (const [pid, senarai] of ikutPekerja) {
       const p = (profilPekerja || []).find((x) => x.id === pid);
@@ -128,12 +171,15 @@ Deno.serve(async (req) => {
         const ok = await hantarEmel(resendKey, p.email, p.nama || "Pekerja", senarai);
         if (ok) dihantarPekerja++;
       }
+      if (pushAktif) pushDihantar += await hantarPushKePengguna(admin, pid, senarai);
     }
 
     for (const p of profilPemilik || []) {
-      if (!p.email) continue;
-      const ok = await hantarEmel(resendKey, p.email, p.nama || "Pemilik", invoisLewat);
-      if (ok) dihantarPemilik++;
+      if (p.email) {
+        const ok = await hantarEmel(resendKey, p.email, p.nama || "Pemilik", invoisLewat);
+        if (ok) dihantarPemilik++;
+      }
+      if (pushAktif) pushDihantar += await hantarPushKePengguna(admin, p.id, invoisLewat);
     }
 
     // Tanda SEMUA invois yg diproses pusingan ni sbg sudah dimaklumkan — sekali
@@ -144,6 +190,8 @@ Deno.serve(async (req) => {
       jumlahInvois: invoisLewat.length,
       pekerjaDimaklumkan: dihantarPekerja,
       pemilikDimaklumkan: dihantarPemilik,
+      pushDihantar,
+      pushAktif,
     }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (e) {
     console.error("notifikasi-invois-lewat-cron error:", e);

@@ -946,6 +946,13 @@
       <div class="divider"></div>
       <div class="form-group"><label class="form-label">Kata Laluan Baharu (kosongkan jika tak mahu tukar)</label><input type="password" class="form-input" id="profil-pass-baru" placeholder="••••••••" /></div>
       <button class="btn btn-secondary" style="width:100%" onclick="tukarPasswordSaya()">🔑 Tukar Kata Laluan</button>
+      <div class="divider"></div>
+      <div class="form-group">
+        <label class="form-label">🔔 Notifikasi Tolak (Push)</label>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Terima makluman terus di peranti ini bila ada invois lewat bayar — tambahan kepada emel. Perlu diaktifkan berasingan pada setiap telefon/browser.</div>
+        <button class="btn btn-secondary" id="btn-push-toggle" style="width:100%" onclick="togglPushNotifikasi()">🔔 Aktifkan Notifikasi Tolak</button>
+        <div id="push-status" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
+      </div>
     </div>
 
     <!-- Kiraan Upah Saya (pekerja) -->
@@ -2176,6 +2183,7 @@ async function setPage(p) {
     if (currentRole==='pemilik') { renderBaucarList(); renderLaporanHarian(); renderBonusKedaiSemua(); }
     document.getElementById('profil-nama').value = DATA.currentUser?.nama || '';
     document.getElementById('profil-telefon').value = DATA.currentUser?.telefon || '';
+    renderPushStatus();
     if (!document.getElementById('upah-saya-bulan').value) document.getElementById('upah-saya-bulan').value = bulanTempatan();
     renderUpahSaya();
     if (!document.getElementById('baucar-saya-bulan').value) document.getElementById('baucar-saya-bulan').value = bulanTempatan();
@@ -8045,6 +8053,79 @@ async function tukarPasswordSaya() {
   if (error) return toast('Gagal tukar kata laluan: '+error.message,'err');
   document.getElementById('profil-pass-baru').value = '';
   toast('Kata laluan berjaya ditukar');
+}
+
+// ── Notifikasi Tolak (Web Push) — kunci awam sahaja, SELAMAT didedahkan di client
+// (kunci peribadi hanya disimpan sbg secret VAPID_PRIVATE_KEY di Edge Function). ──
+const VAPID_PUBLIC_KEY = 'BHn9H44ym7-erXGNS-netsYpsVNke8--awcoLbfcughKJHwb54aOEciUEbYDBidGYdGWDkJtBneOVkz3TDXPqDA';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+async function renderPushStatus() {
+  const btn = document.getElementById('btn-push-toggle');
+  const status = document.getElementById('push-status');
+  if (!btn || !status) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    btn.disabled = true; btn.textContent = '🔔 Tidak Disokong';
+    status.textContent = 'Peranti/browser ini tidak menyokong notifikasi tolak.';
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      btn.textContent = '🔕 Matikan Notifikasi Tolak';
+      status.textContent = '✅ Aktif pada peranti/browser ini.';
+    } else {
+      btn.textContent = '🔔 Aktifkan Notifikasi Tolak';
+      status.textContent = Notification.permission==='denied'
+        ? '⚠️ Kebenaran notifikasi disekat — kemaskini di tetapan browser/telefon dahulu.'
+        : '';
+    }
+  } catch (err) {
+    console.warn('renderPushStatus gagal:', err);
+  }
+}
+
+async function togglPushNotifikasi() {
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return toast('Peranti/browser ini tidak menyokong notifikasi tolak','err');
+  }
+  const btn = document.getElementById('btn-push-toggle');
+  btn.disabled = true;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      await sb.from('push_subscriptions').delete().eq('endpoint', existing.endpoint);
+      await existing.unsubscribe();
+      toast('🔕 Notifikasi tolak dimatikan pada peranti ini');
+    } else {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { toast('Kebenaran notifikasi tidak diberikan','err'); return; }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+      const j = sub.toJSON();
+      const { error } = await sb.from('push_subscriptions').upsert({
+        endpoint: j.endpoint, p256dh: j.keys.p256dh, auth_key: j.keys.auth, user_agent: navigator.userAgent,
+      }, { onConflict: 'endpoint' });
+      if (error) { await sub.unsubscribe(); return toast('Gagal simpan langganan: '+error.message,'err'); }
+      toast('🔔 Notifikasi tolak diaktifkan pada peranti ini');
+    }
+  } catch (err) {
+    toast('Gagal: '+(err?.message||err),'err');
+  } finally {
+    btn.disabled = false;
+    renderPushStatus();
+  }
 }
 
 // ── Kiraan upah peribadi (khusus akaun yang log masuk sekarang) ──

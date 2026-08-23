@@ -3,7 +3,7 @@
 //  Membolehkan apps berfungsi offline
 // ═══════════════════════════════════════════════
 
-const CACHE_NAME = 'wafi-tijarah-v31';
+const CACHE_NAME = 'wafi-tijarah-v32';
 const ASSETS = [
   './pengurusan.html',
   './manifest.json',
@@ -78,4 +78,32 @@ self.addEventListener('sync', e => {
     console.log('[SW] Syncing offline transactions...');
     // Implement sync dengan Supabase di sini
   }
+});
+
+// Notifikasi Tolak (Web Push) — terima mesej drpd server (edge function
+// notifikasi-invois-lewat-cron), papar sbg notifikasi peranti.
+self.addEventListener('push', e => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch { data = { title: 'Wafi Tijarah Trading', body: e.data ? e.data.text() : '' }; }
+  const title = data.title || 'Wafi Tijarah Trading';
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || '',
+      icon: './icon-192.png',
+      badge: './icon-192.png',
+      data: { url: data.url || './pengurusan.html' },
+    })
+  );
+});
+
+// Tekan notifikasi — fokus tab sedia ada jika ada, kalau tiada buka tab baharu.
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = e.notification.data?.url || './pengurusan.html';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const c of list) { if ('focus' in c) return c.focus(); }
+      return self.clients.openWindow(url);
+    })
+  );
 });

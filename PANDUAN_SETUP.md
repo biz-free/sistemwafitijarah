@@ -70,6 +70,8 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 60. `SQL_TAMBAHAN_106.sql` — RPC `edit_jumlah_transaksi` + butang **"✏️ Edit Jumlah"** (Tab Tempahan > Transaksi, pemilik sahaja, tak termasuk consignment) — betulkan jumlah asal transaksi yang tersilap key-in (cth silap kuantiti/harga) tanpa perlu padam & minta pekerja hantar semula. Jumlah akhir & `kedai.hutang` dikira semula automatik ikut kadar diskaun sedia ada. Rekod audit (`jumlah_diedit_oleh`/`jumlah_diedit_pada`/`jumlah_asal_original`) disimpan.
 > 61. `SQL_TAMBAHAN_107.sql` — **Diskaun invois auto dilucuthak bila lewat due**: cron harian `lucuthak-diskaun-harian` (00:30 waktu Malaysia, `pg_cron`) cari invois berdiskaun (`diskaun_peratus > 0`) yang melepasi `tarikh_akhir_bayaran`, naikkan jumlah ke harga penuh & tambah `kedai.hutang` sekali (bukan sekadar amaran paparan). Idempoten (`diskaun_dilucuthak`) — tak caj berganda walau cron jalan berulang. Consignment dikecualikan.
 > 62. `SQL_TAMBAHAN_108.sql` + Edge Function baharu `notifikasi-invois-lewat-cron` — emel automatik (guna semula `RESEND_API_KEY`/`CRON_SECRET` sedia ada) kepada **pekerja yang buat penghantaran** DAN **pemilik** untuk semua invois yang melepasi tarikh akhir bayaran — satu emel ringkasan setiap penerima, dihantar **sekali sahaja** per invois (`notifikasi_lewat_dihantar`), bukan diulang setiap hari. Dijadualkan **1 pagi waktu Malaysia** (lepas cron lucuthak diskaun, supaya emel cerminkan jumlah terkini) — sudah dijadualkan & aktif di projek Supabase semasa (jangan jalankan blok `cron.schedule(...)` dalam fail ni lagi, kekal untuk rujukan/pemasangan baharu sahaja — placeholder `<CRON_SECRET>` sengaja tak diisi nilai sebenar dalam fail yg di-commit ke git).
+> 63. `SQL_TAMBAHAN_109.sql` — **"Pulang Stok" (pekerja pulangkan stok bawaan dlm keadaan baik) kini wajib pengesahan pemilik dahulu** sebelum kredit balik ke stok gudang boleh jual — sama corak dua-fasa spt "Serah Reject" sedia ada (dulu terus dikredit & auto-disahkan tanpa semakan pemilik). Kad "📦 Serahan Produk" (Tab Stok, pemilik) kini turut senaraikan permohonan pulang stok yang menunggu, bersama reject.
+> 64. `SQL_TAMBAHAN_110.sql` + kemaskini Edge Function `notifikasi-invois-lewat-cron` — **Notifikasi Tolak (Web Push)**: jadual `push_subscriptions` (langganan setiap peranti), butang **"🔔 Aktifkan Notifikasi Tolak"** di kad "👤 Profil Saya" (Lebih), dan `sw.js` dikemaskini utk terima & papar notifikasi. Bila invois melepasi tarikh bayaran, pekerja & pemilik kini terima makluman TERUS di telefon (tambahan kepada emel sedia ada, bukan ganti). **Setup wajib** (jika belum, push dilangkau senyap & emel tetap berjalan spt biasa) — lihat bahagian "🔔 Notifikasi Tolak (Web Push)" di bawah.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -955,6 +957,26 @@ const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
 ### Mod Cloud (selepas sambung Supabase)
 
 Log masuk guna e-mel & kata laluan yang anda cipta sendiri di **Authentication → Users** (Langkah 4 di atas). Tiada kata laluan lalai — setiap akaun ditetapkan oleh pemilik sistem.
+
+---
+
+### 🔔 Notifikasi Tolak (Web Push)
+
+Tambahan kepada emel invois lewat bayar (`notifikasi-invois-lewat-cron`) — pekerja/pemilik boleh terima makluman TERUS di telefon/browser mereka. Ciri ini **pilihan** (opt-in setiap peranti) — kalau setup di bawah belum dibuat, sistem tetap berjalan seperti biasa (emel sahaja, push dilangkau senyap).
+
+**Setup (sekali sahaja, di projek Supabase anda):**
+1. Set secret `VAPID_PRIVATE_KEY` (kunci peribadi VAPID — JANGAN kongsi/commit nilai ini ke git):
+```
+npx supabase secrets set VAPID_PRIVATE_KEY=<kunci-peribadi-vapid-anda>
+```
+2. Deploy semula fungsi (guna semula secret `RESEND_API_KEY` & `CRON_SECRET` sedia ada — tiada jadual `pg_cron` baharu diperlukan, cron `notifikasi-invois-lewat-harian` sedia ada terus hantar push sekali secret di atas ditetapkan):
+```
+npx supabase functions deploy notifikasi-invois-lewat-cron
+```
+3. Setiap pekerja/pemilik yang mahu terima notifikasi tolak perlu **aktifkan sendiri** di peranti masing-masing: buka `pengurusan.html` → tab **Lebih** → kad "👤 Profil Saya" → tekan **"🔔 Aktifkan Notifikasi Tolak"** → benarkan kebenaran notifikasi bila diminta. Perlu diaktifkan berasingan pada setiap telefon/browser yang digunakan.
+4. **iOS (iPhone/iPad)**: notifikasi tolak Web Push hanya berfungsi jika apl ditambah ke **Skrin Utama** ("Add to Home Screen") dahulu — TIDAK berfungsi sekadar dibuka dalam tab Safari biasa. Perlu iOS 16.4 ke atas.
+
+Kunci awam VAPID (selamat didedahkan, bukan rahsia) sudah tertanam dalam `pengurusan.html` dan fungsi Edge — tak perlu ditukar melainkan anda jana pasangan kunci VAPID baharu sendiri (kalau buat, kunci awam & peribadi MESTI dikemaskini serentak di kedua-dua tempat).
 
 ---
 
