@@ -1522,6 +1522,16 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-gesa-push">
+  <div class="modal-box" style="text-align:center">
+    <div style="font-size:40px;margin-bottom:10px">🔔</div>
+    <div style="font-weight:800;font-size:16px;margin-bottom:8px">Aktifkan Notifikasi Tolak</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:18px">Dapatkan makluman terus di telefon ini bila ada invois lewat bayar — jangan sampai terlepas susulan dengan kedai.</div>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="closeModal('modal-gesa-push');togglPushNotifikasi()">🔔 Aktifkan Sekarang</button>
+    <button class="btn-link" onclick="closeModal('modal-gesa-push')">Nanti sahaja</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-pindah-stok-pekerja">
   <div class="modal-box">
     <div class="modal-title">🔀 Pindah Stok Antara Pekerja<button class="modal-close" onclick="closeModal('modal-pindah-stok-pekerja')">✕ Tutup</button></div>
@@ -2128,6 +2138,7 @@ async function showApp() {
   if (currentRole==='pemilik') await muatProfilNamaCache();
   initAll();
   setPage('dashboard');
+  semakGesaanPushNotifikasi();
 }
 
 // ════════════════════════════════════════════════════
@@ -8125,6 +8136,28 @@ async function togglPushNotifikasi() {
   } finally {
     btn.disabled = false;
     renderPushStatus();
+  }
+}
+
+// Gesaan automatik kepada PEKERJA (bukan pemilik) yang belum aktifkan notifikasi
+// tolak — muncul sekali sehari (localStorage) SEHINGGA mereka aktifkan, supaya
+// tak terlepas makluman invois lewat bayar. Tak digesa lagi kalau kebenaran
+// browser sudah 'denied' (JS tak boleh minta semula, kena betulkan di tetapan
+// peranti sendiri — butang manual di Profil Saya tetap ada penerangan utk itu).
+async function semakGesaanPushNotifikasi() {
+  if (currentRole !== 'pekerja') return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (typeof Notification !== 'undefined' && Notification.permission === 'denied') return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) return; // sudah aktif, tiada perlu gesa
+    const hariIni = tarikhTempatan();
+    if (localStorage.getItem('wafi_gesa_push_terakhir') === hariIni) return;
+    localStorage.setItem('wafi_gesa_push_terakhir', hariIni);
+    showModal('modal-gesa-push');
+  } catch (err) {
+    console.warn('semakGesaanPushNotifikasi gagal:', err);
   }
 }
 
