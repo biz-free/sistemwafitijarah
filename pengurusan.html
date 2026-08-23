@@ -4020,7 +4020,7 @@ async function pulangStok() {
   renderHItems();
   closeModal('modal-pulang-stok');
   document.getElementById('pulang-qty').value='';
-  toast('Stok berjaya dipulangkan ke gudang');
+  toast('📤 Permohonan pulang stok dihantar — menunggu pengesahan pemilik sebelum masuk semula stok gudang');
 }
 
 // ── Serah Produk Reject (rosak/luput/ditolak kedai) — tolak dari stok bawaan tapi
@@ -4123,6 +4123,9 @@ async function renderSerahanProdukSemua() {
 
   const menunggu = senarai.filter(r=>r.jenis==='reject' && r.status==='menunggu');
   const menungguAmbil = senarai.filter(r=>r.jenis==='ambil' && r.status==='menunggu');
+  // Pulang Stok (jenis='baik') kini turut perlu pengesahan pemilik dahulu sebelum
+  // kredit ke stok gudang — lihat SQL_TAMBAHAN_109 (dulu auto-disahkan serta-merta).
+  const menungguPulang = senarai.filter(r=>r.jenis==='baik' && r.status==='menunggu');
   const rejectDisahkan = senarai.filter(r=>r.jenis==='reject' && r.status==='disahkan');
   const nilaiKerugian = rejectDisahkan.reduce((a,r)=>{ const s=DATA.stok.find(s=>s.id===r.stok_id); return a+(s?s.harga_beli*r.kuantiti:0); },0);
   const jumlahUnitMenunggu = menunggu.reduce((a,r)=>a+r.kuantiti,0);
@@ -4141,6 +4144,10 @@ async function renderSerahanProdukSemua() {
       <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
         <div style="font-size:9px;color:var(--muted)">PERMOHONAN AMBIL MENUNGGU</div>
         <div style="font-weight:800;font-size:15px;color:${menungguAmbil.length?'var(--gold)':'var(--green)'}">${menungguAmbil.length}</div>
+      </div>
+      <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:9px;color:var(--muted)">PULANG STOK MENUNGGU</div>
+        <div style="font-weight:800;font-size:15px;color:${menungguPulang.length?'var(--gold)':'var(--green)'}">${menungguPulang.length}</div>
       </div>`;
   }
 
@@ -4160,13 +4167,14 @@ async function renderSerahanProdukSemua() {
     }).join('') : '<div class="empty"><div class="empty-text">Tiada produk reject dipegang pekerja buat masa ini</div></div>') +
     '<div class="divider" style="margin:12px 0"></div>';
 
-  const semuaMenunggu = [...menungguAmbil, ...menunggu].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const semuaMenunggu = [...menungguAmbil, ...menunggu, ...menungguPulang].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const blokMenunggu = semuaMenunggu.length ? `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">MENUNGGU SAHKAN</div>` +
     semuaMenunggu.map(r=>{
       const isAmbil = r.jenis === 'ambil';
+      const isPulang = r.jenis === 'baik';
       const fnSahkan = isAmbil ? `ubahStatusAmbilStok('${r.id}','disahkan')` : `ubahStatusSerahanProduk('${r.id}','disahkan')`;
       const fnTolak = isAmbil ? `ubahStatusAmbilStok('${r.id}','ditolak')` : `ubahStatusSerahanProduk('${r.id}','ditolak')`;
-      const subLabel = isAmbil ? (r.sebab ? '📥 '+r.sebab : '📥 Minta Ambil Stok') : (SERAHAN_PRODUK_SEBAB_TXT[r.sebab]||r.sebab||'');
+      const subLabel = isAmbil ? (r.sebab ? '📥 '+r.sebab : '📥 Minta Ambil Stok') : isPulang ? '📤 Pulang Stok (baik, akan masuk semula stok gudang bila disahkan)' : (SERAHAN_PRODUK_SEBAB_TXT[r.sebab]||r.sebab||'');
       // Ambil Stok sahaja boleh edit kuantiti sebelum sahkan — kadang perlu ditambah/
       // dikurangkan drpd apa pekerja mohon asal (cth: stok gudang tak cukup).
       const stokGudang = isAmbil ? DATA.stok.find(s=>s.id===r.stok_id) : null;
@@ -4180,7 +4188,7 @@ async function renderSerahanProdukSemua() {
           ${stokGudang?`<span style="font-size:10px;color:var(--muted)">(baki gudang: ${stokGudang.stok} ${esc(stokGudang.unit||'')})</span>`:''}
         </div>`:''}
         <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
-          ${!isAmbil?(r.gambar_url?`<button class="btn btn-secondary btn-sm" style="width:auto" onclick="lihatGambarSerahanProduk('${esc(r.gambar_url)}')">📎 Gambar</button>`:'<span style="font-size:11px;color:var(--red)">⚠️ Tiada gambar</span>'):''}
+          ${!isAmbil && !isPulang?(r.gambar_url?`<button class="btn btn-secondary btn-sm" style="width:auto" onclick="lihatGambarSerahanProduk('${esc(r.gambar_url)}')">📎 Gambar</button>`:'<span style="font-size:11px;color:var(--red)">⚠️ Tiada gambar</span>'):''}
           <button class="btn btn-primary btn-sm" style="width:auto" onclick="${fnSahkan}">✅ Sahkan</button>
           <button class="btn btn-secondary btn-sm" style="width:auto;color:var(--red)" onclick="${fnTolak}">✕ Tolak${isAmbil?'':' (Pulang Semula)'}</button>
         </div>
