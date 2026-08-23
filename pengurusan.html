@@ -966,7 +966,8 @@
     <div class="card" id="resit-card">
       <div class="card-title">🧾 Jana & Cetak Resit/Invois</div>
       <div class="form-group">
-        <label class="form-label">Pilih Transaksi</label>
+        <label class="form-label">Cari & Pilih Transaksi</label>
+        <input type="text" class="form-input" id="resit-cari" placeholder="🔍 Cari no. resit/invois, nama kedai..." oninput="paparResitSelOpsi(this.value)" style="margin-bottom:6px" />
         <select class="form-input" id="resit-sel" onchange="renderResit(this.value)">
           <option value="">-- Pilih transaksi --</option>
         </select>
@@ -5576,29 +5577,47 @@ async function lihatBuktiBayaran(path) {
 // Resit kini merangkumi 2 sumber: transaksi (jualan/hantar) DAN pelupusan_stok
 // (Rosak/Expired — dikumpul ikut medan "resit" kongsi, lihat submitPelupusan/
 // submitTukarExpired) — dibezakan via prefix "LUPUS_" pada value <option>.
+// Senarai gabungan (transaksi + pelupusan) utk dropdown Resit/Invois — disusun SEKALI
+// ikut tarikh transaksi TERKINI dahulu (kronologi penuh merentasi kedua-dua sumber,
+// bukan pelupusan sentiasa di atas tanpa kira tarikh spt sebelum ini), & disimpan
+// global supaya paparResitSelOpsi() boleh tapis ikut carian tanpa panggil DB semula.
+let RESIT_SEL_OPSI = [];
 async function renderResitSel() {
-  const sel=document.getElementById('resit-sel');
   const sumber = currentRole==='pemilik' ? DATA.transaksi : DATA.transaksi.filter(t=>t.created_by===DATA.currentUser?.id);
-  const sorted=[...sumber].sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
 
-  let opsiLupus = '';
+  let opsiLupus = [];
   if (useCloud) {
     let q = sb.from('pelupusan_stok').select('*').not('resit','is',null).order('created_at',{ascending:false}).limit(200);
     if (currentRole!=='pemilik') q = q.eq('pekerja_id', DATA.currentUser?.id);
     const { data } = await q;
     const kumpulan = {};
     (data||[]).forEach(r => { (kumpulan[r.resit] ||= []).push(r); });
-    opsiLupus = Object.entries(kumpulan).sort((a,b)=>new Date(b[1][0].created_at)-new Date(a[1][0].created_at)).map(([resitNo, rows])=>{
+    opsiLupus = Object.entries(kumpulan).map(([resitNo, rows])=>{
       const kosTotal = rows.reduce((a,r)=>a+(r.kos||0),0);
       const kedaiNama = rows[0].kedai_id ? (DATA.kedai.find(k=>k.id===rows[0].kedai_id)?.nama||rows[0].kedai_id) : null;
       const label = kedaiNama ? `🔄 ${resitNo} · ${kedaiNama}` : `🗑️ ${resitNo} · Pelupusan (${fmt(kosTotal)})`;
-      return `<option value="LUPUS_${resitNo}">${esc(label)}</option>`;
-    }).join('');
+      return { value:`LUPUS_${resitNo}`, label, tarikh: rows[0].created_at };
+    });
   }
 
-  sel.innerHTML='<option value="">-- Pilih transaksi --</option>'+opsiLupus+sorted.map(t=>{
-    return `<option value="${t.id}">${t.resit||t.id} · ${esc(namaDestinasiTrx(t))} · ${fmt(t.jumlah)}</option>`;
-  }).join('');
+  const opsiTrx = sumber.map(t=>({
+    value: t.id,
+    label: `${t.resit||t.id} · ${namaDestinasiTrx(t)} · ${fmt(t.jumlah)}`,
+    tarikh: t.tarikh_masa,
+  }));
+
+  RESIT_SEL_OPSI = [...opsiLupus, ...opsiTrx].sort((a,b)=>new Date(b.tarikh)-new Date(a.tarikh));
+  paparResitSelOpsi(document.getElementById('resit-cari')?.value || '');
+}
+
+// Tapis RESIT_SEL_OPSI ikut teks carian (no. resit/invois, nama kedai, jumlah) & bina
+// semula <option> — dipanggil bila taip dalam kotak carian atau lepas renderResitSel().
+function paparResitSelOpsi(carian='') {
+  const sel = document.getElementById('resit-sel');
+  if (!sel) return;
+  const q = carian.trim().toLowerCase();
+  const disenaraikan = q ? RESIT_SEL_OPSI.filter(o=>o.label.toLowerCase().includes(q)) : RESIT_SEL_OPSI;
+  sel.innerHTML = '<option value="">-- Pilih transaksi --</option>' + disenaraikan.map(o=>`<option value="${o.value}">${esc(o.label)}</option>`).join('');
 }
 
 async function renderResit(id) {
@@ -5894,6 +5913,11 @@ async function resitCepatKonsainan(trxId, aksi) {
   // display:none dari .page tak aktif) — tukar ke Tab Lebih dahulu.
   await setPage('lebih');
   const sel = document.getElementById('resit-sel');
+  const carianEl = document.getElementById('resit-cari');
+  // Kosongkan carian dahulu — kalau ditapis, opsyen transaksi ni mungkin tak wujud
+  // dlm dropdown, jadi sel.value=trxId di bawah senyap gagal (tiada ralat, tapi
+  // hantarResitWhatsapp() akan baca value kosong & silap tolak "sila pilih transaksi").
+  if (carianEl && carianEl.value) { carianEl.value = ''; paparResitSelOpsi(''); }
   if (sel && ![...sel.options].some(o=>o.value===trxId)) await renderResitSel();
   if (sel) sel.value = trxId;
   await renderResit(trxId);
