@@ -6601,12 +6601,17 @@ async function renderBonusKedaiSemua() {
 
 async function bayarBonusKedai(pekerjaId) {
   const gabung = document.getElementById(`bk-gabung-${pekerjaId}`)?.checked || false;
-  if (!confirm(`Sahkan bayar SEMUA bonus kedai baru yang matang untuk pekerja ini?${gabung?' (akan disekalikan dengan baucar upah harian hari ini)':' (baucar berasingan akan dijana)'}`)) return;
+  if (!confirm(`Sahkan bayar SEMUA bonus kedai baru yang matang untuk pekerja ini?${gabung?' (akan disekalikan dengan baucar upah harian hari ini)':' (baucar berasingan akan dijana)'}\n\nNota: cash yang masih dipegang pekerja (belum diserah) akan ditolak DAHULU drpd bonus ini sebelum baki dibayar.`)) return;
   const { data, error } = await sb.rpc('bayar_bonus_kedai_terkumpul', { p_pekerja_id: pekerjaId, p_gabung_baucar: gabung });
   if (error) return toast('Gagal proses bayaran: '+error.message,'err');
-  toast(`✅ Bonus kedai baru ${fmt(data)} berjaya diproses`);
+  const hasil = Array.isArray(data) ? data[0] : data;
+  const notaCash = hasil.cash_ditolak > 0
+    ? ` — ${fmt(hasil.cash_ditolak)} ditolak drpd cash dipegang, baki ${fmt(hasil.jumlah_dibayar)} dibayar`
+    : '';
+  toast(`✅ Bonus kedai baru ${fmt(hasil.jumlah_asal)} diproses${notaCash}`);
   await renderBonusKedaiSemua();
   await renderBaucarList();
+  if (currentRole === 'pemilik') await renderSerahanCashSemua();
 }
 
 function bangunkanBaucarPrintBox(v, nama) {
