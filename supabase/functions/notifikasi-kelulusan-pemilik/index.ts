@@ -5,8 +5,13 @@
 // pemilik sedar ada permohonan menunggu. Guna Resend, sama corak dgn
 // hantar-emel-susulan (RESEND_API_KEY secret sedia ada, domain wafitijarahtrading.com
 // sudah disahkan).
+//
+// Push (susulan SQL_TAMBAHAN_110 — Notifikasi Tolak): hantar push SELARI dgn emel
+// (bukan ganti) kpd setiap pemilik yg sudah langgan. Jika VAPID_PRIVATE_KEY belum
+// ditetapkan, push dilangkau senyap — emel tetap berjalan spt biasa.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import webpush from "npm:web-push@3.6.7";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,9 +19,32 @@ const corsHeaders = {
 };
 
 const FROM_EMAIL = "Wafi Tijarah Trading <no-reply@wafitijarahtrading.com>";
+// Kunci AWAM sahaja (padan dgn VAPID_PUBLIC_KEY di pengurusan.html) — selamat
+// didedahkan, bukan rahsia. Kunci PERIBADI dibaca drpd secret VAPID_PRIVATE_KEY.
+const VAPID_PUBLIC_KEY = "BHn9H44ym7-erXGNS-netsYpsVNke8--awcoLbfcughKJHwb54aOEciUEbYDBidGYdGWDkJtBneOVkz3TDXPqDA";
 
 function esc(s: unknown): string {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+}
+
+// deno-lint-ignore no-explicit-any
+async function hantarPushKePengguna(admin: any, userId: string, title: string, body: string): Promise<number> {
+  const { data: subs } = await admin.from("push_subscriptions").select("*").eq("user_id", userId);
+  if (!subs || !subs.length) return 0;
+  const payload = JSON.stringify({ title, body, url: "./pengurusan.html" });
+  let berjaya = 0;
+  // deno-lint-ignore no-explicit-any
+  for (const s of subs as any[]) {
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } }, payload);
+      berjaya++;
+    } catch (err) {
+      const kod = (err as { statusCode?: number })?.statusCode;
+      console.warn(`[notifikasi-kelulusan-pemilik] push gagal endpoint=${s.endpoint} kod=${kod} err=${err}`);
+      if (kod === 404 || kod === 410) await admin.from("push_subscriptions").delete().eq("id", s.id);
+    }
+  }
+  return berjaya;
 }
 
 Deno.serve(async (req) => {
@@ -31,6 +59,12 @@ Deno.serve(async (req) => {
     const resendKey = Deno.env.get("RESEND_API_KEY");
     if (!resendKey) {
       return new Response(JSON.stringify({ error: "RESEND_API_KEY belum ditetapkan sebagai secret" }), { status: 500, headers: corsHeaders });
+    }
+
+    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
+    const pushAktif = !!vapidPrivateKey;
+    if (pushAktif) {
+      webpush.setVapidDetails("mailto:wafitijarahtrading@gmail.com", VAPID_PUBLIC_KEY, vapidPrivateKey!);
     }
 
     const adminClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -79,7 +113,16 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Resend gagal: " + JSON.stringify(resendResult) }), { status: 502, headers: corsHeaders });
     }
 
-    return new Response(JSON.stringify({ ok: true, sent_to: emails.length }), {
+    let pushDihantar = 0;
+    if (pushAktif) {
+      const pushTitle = `🔔 ${jenis} — Perlu Kelulusan`;
+      const pushBody = `${pekerja_nama || "Pekerja"}: ${butiran || ""}`.trim();
+      for (const p of pemilikList) {
+        pushDihantar += await hantarPushKePengguna(adminClient, p.id, pushTitle, pushBody);
+      }
+    }
+
+    return new Response(JSON.stringify({ ok: true, sent_to: emails.length, pushDihantar, pushAktif }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
