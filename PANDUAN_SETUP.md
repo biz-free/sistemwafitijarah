@@ -74,6 +74,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 64. `SQL_TAMBAHAN_110.sql` + kemaskini Edge Function `notifikasi-invois-lewat-cron` — **Notifikasi Tolak (Web Push)**: jadual `push_subscriptions` (langganan setiap peranti), butang **"🔔 Aktifkan Notifikasi Tolak"** di kad "👤 Profil Saya" (Lebih), dan `sw.js` dikemaskini utk terima & papar notifikasi. Bila invois melepasi tarikh bayaran, pekerja & pemilik kini terima makluman TERUS di telefon (tambahan kepada emel sedia ada, bukan ganti). **Setup wajib** (jika belum, push dilangkau senyap & emel tetap berjalan spt biasa) — lihat bahagian "🔔 Notifikasi Tolak (Web Push)" di bawah.
 > 65. Popup automatik **"🔔 Aktifkan Notifikasi Tolak"** kepada pekerja (bukan pemilik) yang belum langgan push — muncul sekali sehari selepas log masuk, berhenti sendiri sebaik diaktifkan. Tiada perubahan SQL diperlukan.
 > 66. Edge Function `notifikasi-kelulusan-pemilik` (permohonan padam/cuti/serahan cash/reject perlu kelulusan) turut dikemaskini hantar **Notifikasi Tolak** kepada pemilik SELARI dengan emel sedia ada — guna semula secret `VAPID_PRIVATE_KEY` yang sama, tiada setup tambahan diperlukan jika #64 sudah dibuat.
+> 67. `SQL_TAMBAHAN_111.sql` + halaman baharu **`affiliate.html`** — **Sistem Affiliate**: akaun affiliate log masuk sendiri guna Google (bukan sekadar nombor telefon spt Kod Referral sedia ada), permohonan awam → kelulusan pemilik (kad "💰 Sistem Affiliate", Lebih) → kod affiliate diguna pelanggan di checkout `index.html` (diskaun pelanggan + komisen affiliate utk SETIAP pesanan disahkan, bukan sekadar pertama). Komisen matang 14 hari selepas disahkan sebelum boleh dituntut; bayaran transfer bank MANUAL (pemilik sahkan lepas transfer dibuat di luar sistem). Kod affiliate SATU SLOT sahaja di checkout — tak boleh gabung dgn voucher/rujukan. **Setup wajib** (jika belum, affiliate tak boleh log masuk langsung) — lihat bahagian "🤝 Sistem Affiliate" di bawah.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -979,6 +980,26 @@ npx supabase functions deploy notifikasi-invois-lewat-cron
 4. **iOS (iPhone/iPad)**: notifikasi tolak Web Push hanya berfungsi jika apl ditambah ke **Skrin Utama** ("Add to Home Screen") dahulu — TIDAK berfungsi sekadar dibuka dalam tab Safari biasa. Perlu iOS 16.4 ke atas.
 
 Kunci awam VAPID (selamat didedahkan, bukan rahsia) sudah tertanam dalam `pengurusan.html` dan fungsi Edge — tak perlu ditukar melainkan anda jana pasangan kunci VAPID baharu sendiri (kalau buat, kunci awam & peribadi MESTI dikemaskini serentak di kedua-dua tempat).
+
+---
+
+### 🤝 Sistem Affiliate
+
+Akaun affiliate log masuk sendiri guna **Google** (bukan kata laluan ditetapkan pemilik). Ini **wajib** diaktifkan dahulu di Supabase sebelum sesiapa boleh log masuk `affiliate.html` langsung.
+
+**Setup (sekali sahaja):**
+1. Pergi **console.cloud.google.com** → pilih/cipta project (boleh guna project sama spt Google Maps API jika sudah ada).
+2. **APIs & Services → OAuth consent screen** → lengkapkan (nama apl, emel sokongan) jika belum pernah buat.
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID** → jenis **Web application**.
+4. Tambah **Authorized JavaScript origins**: `https://www.wafitijarahtrading.com`
+5. Tambah **Authorized redirect URIs**: `https://smepriytkoxkmpvjvvzq.supabase.co/auth/v1/callback` (URL callback rasmi Supabase — WAJIB tepat macam ni).
+6. Salin **Client ID** dan **Client Secret** yang dijana.
+7. Di **Supabase Dashboard → Authentication → Providers → Google** → aktifkan (ON), tampal Client ID & Client Secret dari langkah 6 → Save.
+8. Di **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs** → tambah `https://www.wafitijarahtrading.com/affiliate.html` (kalau tak ditambah, log masuk Google akan gagal/redirect salah tempat).
+
+Selepas setup di atas siap, sesiapa boleh buka `affiliate.html` → "Log Masuk dengan Google" → isi borang permohonan → tunggu kelulusan anda di kad "💰 Sistem Affiliate" (Lebih, pengurusan.html). Semasa meluluskan, anda tetapkan **kod affiliate** (utk pelanggan guna di checkout) dan **kadar komisen/diskaun** — boleh berbeza setiap affiliate.
+
+Cron harian `matangkan-pendapatan-affiliate-harian` (1 pagi waktu Malaysia) automatik tukar status komisen dari "tertunggak" ke "boleh_tuntut" selepas tempoh tahan 14 hari — sudah dijadualkan & aktif, tiada tindakan tambahan diperlukan.
 
 ---
 

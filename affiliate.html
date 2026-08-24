@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Portal Affiliate — Wafi Tijarah Trading</title>
+<link rel="icon" href="logo.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --navy: #0B3D2E; --teal: #167A52; --teal2: #1FA06B;
+    --gold: #C9A227; --red: #C0392B; --green: #1D7A4A;
+    --bg: #F2F7F4; --card: #FFFFFF; --border: #D6E5DC; --text: #16241D; --muted: #5C7A6C;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .wrap { max-width:520px; margin:0 auto; padding:20px 16px 60px; }
+  .head { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
+  .head img { width:40px; height:40px; border-radius:50%; }
+  .head .t1 { font-weight:900; font-size:16px; color:var(--navy); }
+  .head .t2 { font-size:11px; color:var(--muted); }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,0.04); }
+  .card-title { font-weight:800; font-size:15px; color:var(--navy); margin-bottom:12px; }
+  .btn { display:block; width:100%; padding:13px; border:none; border-radius:10px; font-weight:800; font-size:14px; cursor:pointer; text-align:center; }
+  .btn-primary { background:var(--teal); color:#fff; }
+  .btn-google { background:#fff; color:#3c4043; border:1px solid #dadce0; display:flex; align-items:center; justify-content:center; gap:10px; }
+  .btn-secondary { background:var(--bg); color:var(--navy); border:1px solid var(--border); }
+  .btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .form-group { margin-bottom:14px; }
+  .form-label { display:block; font-size:12px; font-weight:700; color:var(--muted); margin-bottom:5px; }
+  .form-input { width:100%; padding:11px; border:1px solid var(--border); border-radius:8px; font-size:14px; font-family:inherit; }
+  .stat-row { display:flex; gap:10px; margin-bottom:14px; }
+  .stat-box { flex:1; background:var(--bg); border-radius:10px; padding:12px; text-align:center; }
+  .stat-box .v { font-weight:900; font-size:17px; color:var(--navy); }
+  .stat-box .l { font-size:10px; color:var(--muted); margin-top:2px; text-transform:uppercase; letter-spacing:0.03em; }
+  .kod-box { background:linear-gradient(135deg,var(--navy),#0D4D3A); color:#fff; border-radius:12px; padding:18px; text-align:center; margin-bottom:14px; }
+  .kod-box .k { font-size:22px; font-weight:900; letter-spacing:2px; margin:6px 0; }
+  .kod-box .link { font-size:11px; color:#BEE8D3; word-break:break-all; margin-top:8px; }
+  .empty { text-align:center; padding:24px 12px; color:var(--muted); font-size:13px; }
+  .list-item { padding:10px 0; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:13px; }
+  .list-item:last-child { border-bottom:none; }
+  .badge { font-size:10px; font-weight:800; padding:3px 8px; border-radius:100px; white-space:nowrap; }
+  .badge-gold { background:#FFF3CD; color:#8A6D00; }
+  .badge-green { background:#E4F7ED; color:var(--green); }
+  .badge-red { background:#FBE4E1; color:var(--red); }
+  .msg { font-size:12px; margin-top:8px; display:none; }
+  #toast { position:fixed; top:16px; left:50%; transform:translateX(-50%); background:var(--navy); color:#fff; padding:10px 20px; border-radius:10px; font-size:13px; font-weight:700; z-index:999; opacity:0; transition:opacity 0.3s; pointer-events:none; max-width:88%; text-align:center; }
+  .status-banner { text-align:center; padding:30px 16px; }
+  .status-banner .icon { font-size:44px; margin-bottom:10px; }
+  .status-banner h2 { font-size:17px; margin:0 0 8px; color:var(--navy); }
+  .status-banner p { font-size:13px; color:var(--muted); line-height:1.6; margin:0; }
+  #app-root { display:none; }
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<div class="wrap">
+  <div class="head">
+    <img src="logo.png" alt="Wafi Tijarah Trading" />
+    <div>
+      <div class="t1">Portal Affiliate</div>
+      <div class="t2">Wafi Tijarah Trading</div>
+    </div>
+  </div>
+
+  <div id="app-root">
+    <!-- Diisi oleh JS ikut status: log-masuk / borang / menunggu / ditolak / dashboard -->
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://smepriytkoxkmpvjvvzq.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtZXByaXl0a294a21wdmp2dnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzODE1OTcsImV4cCI6MjA5ODk1NzU5N30.bLDjFNZ_gMm9ufCkA4TeFbw1rysuLnlQN-qW_WW0zr8';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const fmt = n => 'RM ' + Number(n||0).toFixed(2);
+const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = type==='err' ? 'var(--red)' : 'var(--navy)';
+  el.style.opacity = '1';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>el.style.opacity='0', 3200);
+}
+
+let CURRENT_USER = null;
+let AFFILIATE_ROW = null;
+
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  CURRENT_USER = session?.user || null;
+  if (!CURRENT_USER) return renderLogMasuk();
+  const { data, error } = await sb.from('affiliates').select('*').eq('id', CURRENT_USER.id).maybeSingle();
+  if (error) { document.getElementById('app-root').innerHTML = `<div class="card"><div class="empty">Ralat muat data: ${esc(error.message)}</div></div>`; document.getElementById('app-root').style.display=''; return; }
+  AFFILIATE_ROW = data;
+  if (!AFFILIATE_ROW) return renderBorangMohon();
+  if (AFFILIATE_ROW.status === 'menunggu') return renderStatusBanner('⏳', 'Permohonan Sedang Disemak', 'Terima kasih memohon! Pihak kami akan semak permohonan anda dan maklumkan keputusan melalui emel Google anda tidak lama lagi.');
+  if (AFFILIATE_ROW.status === 'ditolak') return renderStatusBanner('❌', 'Permohonan Tidak Diluluskan', AFFILIATE_ROW.sebab_tolak || 'Permohonan anda tidak diluluskan buat masa ini. Hubungi kami di wafitijarahtrading@gmail.com untuk maklumat lanjut.');
+  if (AFFILIATE_ROW.status === 'dinyahaktifkan') return renderStatusBanner('⏸️', 'Akaun Dinyahaktifkan', 'Akaun affiliate anda telah dinyahaktifkan. Hubungi kami di wafitijarahtrading@gmail.com jika ini satu kesilapan.');
+  renderDashboard();
+}
+
+function renderLogMasuk() {
+  const el = document.getElementById('app-root');
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="card" style="text-align:center">
+      <div style="font-size:36px;margin-bottom:10px">🤝</div>
+      <div class="card-title" style="text-align:center">Jadi Affiliate Kami</div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.6;margin:0 0 18px">Dapatkan komisen untuk setiap pesanan yang anda bawa kepada Wafi Tijarah Trading. Log masuk dengan Google untuk mohon atau semak status permohonan anda.</p>
+      <button class="btn btn-google" onclick="logMasukGoogle()">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34 5.1 29.3 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.2-.1-2.1-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 19 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34 5.1 29.3 3 24 3 15.6 3 8.5 8 6.3 14.7z"/><path fill="#4CAF50" d="M24 45c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 36.2 26.7 37 24 37c-5.2 0-9.6-3.4-11.2-8l-6.5 5C9.4 40 16.1 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.6l6.2 5.2C40.8 36 44 30.6 44 24c0-1.2-.1-2.1-.4-3.5z"/></svg>
+        Log Masuk dengan Google
+      </button>
+    </div>`;
+}
+
+async function logMasukGoogle() {
+  const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } });
+  if (error) toast('Gagal log masuk: ' + error.message, 'err');
+}
+
+function renderStatusBanner(icon, tajuk, mesej) {
+  const el = document.getElementById('app-root');
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="card status-banner">
+      <div class="icon">${icon}</div>
+      <h2>${esc(tajuk)}</h2>
+      <p>${esc(mesej)}</p>
+    </div>
+    <button class="btn btn-secondary" onclick="logKeluar()">Log Keluar</button>`;
+}
+
+function renderBorangMohon() {
+  const el = document.getElementById('app-root');
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-title">📝 Borang Mohon Jadi Affiliate</div>
+      <p style="font-size:12px;color:var(--muted);margin:-6px 0 14px">Log masuk sebagai <strong>${esc(CURRENT_USER.email)}</strong>. Lengkapkan borang di bawah untuk mohon.</p>
+      <div class="form-group"><label class="form-label">Nama Penuh</label><input type="text" class="form-input" id="m-nama" placeholder="Nama anda" /></div>
+      <div class="form-group"><label class="form-label">No. Telefon</label><input type="tel" class="form-input" id="m-telefon" placeholder="01x-xxxxxxx" /></div>
+      <div class="form-group"><label class="form-label">Cara Anda Akan Promosikan Kami</label><textarea class="form-input" id="m-cara" rows="3" placeholder="cth: Instagram @nama, TikTok, blog, dll"></textarea></div>
+      <button class="btn btn-primary" id="btn-mohon" onclick="hantarPermohonan()">📤 Hantar Permohonan</button>
+    </div>
+    <button class="btn btn-secondary" onclick="logKeluar()">Log Keluar</button>`;
+}
+
+async function hantarPermohonan() {
+  const nama = document.getElementById('m-nama').value.trim();
+  const telefon = document.getElementById('m-telefon').value.trim();
+  const cara = document.getElementById('m-cara').value.trim();
+  if (!nama || !telefon) return toast('Sila isi nama dan no. telefon', 'err');
+  const btn = document.getElementById('btn-mohon');
+  btn.disabled = true;
+  const { error } = await sb.rpc('mohon_jadi_affiliate', { p_nama: nama, p_telefon: telefon, p_cara_promosi: cara || null });
+  btn.disabled = false;
+  if (error) return toast('Gagal hantar permohonan: ' + error.message, 'err');
+  toast('✅ Permohonan dihantar!');
+  init();
+}
+
+async function renderDashboard() {
+  const el = document.getElementById('app-root');
+  el.style.display = '';
+  const linkAffiliate = `${location.origin}${location.pathname.replace(/affiliate\.html$/,'')}index.html?affiliate=${encodeURIComponent(AFFILIATE_ROW.kod_affiliate)}`;
+  el.innerHTML = `
+    <div class="kod-box">
+      <div style="font-size:11px;color:#BEE8D3;text-transform:uppercase;letter-spacing:0.05em">Kod Affiliate Anda</div>
+      <div class="k">${esc(AFFILIATE_ROW.kod_affiliate)}</div>
+      <div style="font-size:11px;color:#BEE8D3">Komisen ${AFFILIATE_ROW.kadar_komisen_peratus}% · Diskaun pelanggan ${AFFILIATE_ROW.kadar_diskaun_peratus}%</div>
+      <div class="link" id="link-affiliate">${esc(linkAffiliate)}</div>
+      <button class="btn btn-secondary" style="margin-top:10px" onclick="salinLink('${esc(linkAffiliate)}')">📋 Salin Pautan</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📊 Ringkasan Komisen</div>
+      <div class="stat-row">
+        <div class="stat-box"><div class="v" id="d-tertunggak">—</div><div class="l">Tertunggak</div></div>
+        <div class="stat-box"><div class="v" id="d-boleh-tuntut">—</div><div class="l">Boleh Tuntut</div></div>
+        <div class="stat-box"><div class="v" id="d-dibayar">—</div><div class="l">Dibayar</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-align:center">Jumlah pesanan dirujuk: <strong id="d-jumlah-pesanan">—</strong> · Komisen tertunggak matang selepas 14 hari (lindung drpd pembatalan)</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💸 Mohon Bayaran Komisen</div>
+      <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Transfer bank dibuat manual oleh pemilik selepas permohonan diluluskan.</p>
+      <div class="form-group"><label class="form-label">Jumlah Dipohon (RM)</label><input type="number" class="form-input" id="p-jumlah" step="0.01" min="0.01" /></div>
+      <button class="btn btn-primary" id="btn-payout" onclick="mohonBayaran()">📤 Hantar Permohonan Bayaran</button>
+      <div id="payout-list" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🏦 Butiran Bank</div>
+      <div class="form-group"><label class="form-label">Nama Bank</label><input type="text" class="form-input" id="b-bank" placeholder="cth: Maybank" value="${esc(AFFILIATE_ROW.nama_bank||'')}" /></div>
+      <div class="form-group"><label class="form-label">No. Akaun</label><input type="text" class="form-input" id="b-akaun" placeholder="No. akaun bank" value="${esc(AFFILIATE_ROW.no_akaun_bank||'')}" /></div>
+      <div class="form-group"><label class="form-label">Nama Pemegang Akaun</label><input type="text" class="form-input" id="b-pemegang" placeholder="Nama seperti dalam akaun bank" value="${esc(AFFILIATE_ROW.pemegang_akaun||'')}" /></div>
+      <button class="btn btn-secondary" onclick="simpanBank()">💾 Simpan Butiran Bank</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📜 Sejarah Pesanan Dirujuk</div>
+      <div id="earnings-list"><div class="empty">Memuatkan...</div></div>
+    </div>
+
+    <button class="btn btn-secondary" onclick="logKeluar()">Log Keluar</button>`;
+
+  const { data: dash } = await sb.rpc('dashboard_affiliate_saya');
+  const d = Array.isArray(dash) ? dash[0] : dash;
+  if (d) {
+    document.getElementById('d-tertunggak').textContent = fmt(d.tertunggak);
+    document.getElementById('d-boleh-tuntut').textContent = fmt(d.boleh_tuntut);
+    document.getElementById('d-dibayar').textContent = fmt(d.dibayar);
+    document.getElementById('d-jumlah-pesanan').textContent = d.jumlah_pesanan;
+  }
+
+  const { data: earnings } = await sb.from('affiliate_earnings').select('*').eq('affiliate_id', CURRENT_USER.id).order('created_at', { ascending: false }).limit(30);
+  const LABEL_STATUS = { tertunggak: ['Tertunggak','badge-gold'], boleh_tuntut: ['Boleh Tuntut','badge-green'], dibayar: ['Dibayar','badge-green'], dibatalkan: ['Dibatalkan','badge-red'] };
+  document.getElementById('earnings-list').innerHTML = (earnings||[]).map(r => {
+    const [lbl, kelas] = LABEL_STATUS[r.status] || [r.status,''];
+    return `<div class="list-item">
+      <div><div>${new Date(r.created_at).toLocaleDateString('ms-MY',{day:'2-digit',month:'short',year:'numeric'})}</div><div style="font-size:11px;color:var(--muted)">Pesanan ${fmt(r.jumlah_pesanan)} · Komisen ${r.kadar_komisen_peratus}%</div></div>
+      <div style="text-align:right"><div style="font-weight:800">${fmt(r.jumlah_komisen)}</div><span class="badge ${kelas}">${lbl}</span></div>
+    </div>`;
+  }).join('') || '<div class="empty">Belum ada pesanan dirujuk lagi</div>';
+
+  const { data: payouts } = await sb.from('affiliate_payout').select('*').eq('affiliate_id', CURRENT_USER.id).order('created_at', { ascending: false }).limit(10);
+  const LABEL_PAYOUT = { menunggu: ['Menunggu','badge-gold'], dibayar: ['Dibayar','badge-green'], ditolak: ['Ditolak','badge-red'] };
+  document.getElementById('payout-list').innerHTML = (payouts||[]).map(r => {
+    const [lbl, kelas] = LABEL_PAYOUT[r.status] || [r.status,''];
+    return `<div class="list-item"><div>${new Date(r.created_at).toLocaleDateString('ms-MY',{day:'2-digit',month:'short'})}</div><div style="text-align:right"><div style="font-weight:800">${fmt(r.jumlah)}</div><span class="badge ${kelas}">${lbl}</span></div></div>`;
+  }).join('');
+}
+
+function salinLink(link) {
+  navigator.clipboard?.writeText(link).then(()=>toast('📋 Pautan disalin!')).catch(()=>toast('Gagal salin — sila salin manual','err'));
+}
+
+async function mohonBayaran() {
+  const jum = +document.getElementById('p-jumlah').value;
+  if (!jum || jum <= 0) return toast('Masukkan jumlah yang sah', 'err');
+  const btn = document.getElementById('btn-payout');
+  btn.disabled = true;
+  const { error } = await sb.rpc('mohon_bayaran_affiliate', { p_jumlah: jum });
+  btn.disabled = false;
+  if (error) return toast('Gagal: ' + error.message, 'err');
+  toast('✅ Permohonan bayaran dihantar!');
+  document.getElementById('p-jumlah').value = '';
+  renderDashboard();
+}
+
+async function simpanBank() {
+  const bank = document.getElementById('b-bank').value.trim();
+  const akaun = document.getElementById('b-akaun').value.trim();
+  const pemegang = document.getElementById('b-pemegang').value.trim();
+  const { error } = await sb.rpc('kemaskini_bank_affiliate', { p_nama_bank: bank||null, p_no_akaun: akaun||null, p_pemegang: pemegang||null });
+  if (error) return toast('Gagal simpan: ' + error.message, 'err');
+  toast('✅ Butiran bank disimpan');
+}
+
+async function logKeluar() {
+  await sb.auth.signOut();
+  location.reload();
+}
+
+sb.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') init();
+});
+
+init();
+</script>
+</body>
+</html>

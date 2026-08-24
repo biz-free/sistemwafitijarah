@@ -1237,6 +1237,27 @@
       <button class="btn btn-secondary" onclick="bukaModalRujukanManual()">➕ Daftar No. Telefon Rujukan Manual</button>
     </div>
 
+    <!-- Sistem Affiliate — akaun sendiri log masuk Google (portal berasingan affiliate.html) -->
+    <div class="card" id="affiliate-card">
+      <div class="card-title">💰 Sistem Affiliate</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Akaun affiliate log masuk sendiri guna Google (portal berasingan: <code style="font-family:monospace">affiliate.html</code>). Setiap pesanan guna kod affiliate beri diskaun pelanggan + komisen affiliate — dikira automatik ikut kadar ditetapkan semasa kelulusan. Komisen matang selepas 14 hari sebelum boleh dituntut.</div>
+
+      <div id="aff-menunggu-wrap" style="display:none">
+        <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">⏳ MENUNGGU KELULUSAN</div>
+        <div id="aff-menunggu-list"></div>
+        <div class="divider"></div>
+      </div>
+
+      <div id="aff-payout-wrap" style="display:none">
+        <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">💸 PERMOHONAN BAYARAN MENUNGGU</div>
+        <div id="aff-payout-list"></div>
+        <div class="divider"></div>
+      </div>
+
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SENARAI AFFILIATE</div>
+      <div id="aff-senarai-list"></div>
+    </div>
+
     <!-- Hebahan WhatsApp / Marketing (pemilik sahaja) -->
     <div class="card" id="wa-hebahan-card">
       <div class="card-title">📣 Hebahan WhatsApp (Marketing)</div>
@@ -1519,6 +1540,19 @@
     </div>
     <div class="form-group"><label class="form-label">Kuantiti</label><input type="number" class="form-input" id="pulang-qty" placeholder="0" min="1" /></div>
     <button class="btn btn-primary" style="background:var(--gold)" onclick="pulangStok()">📤 Pulangkan Stok</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-lulus-affiliate">
+  <div class="modal-box">
+    <div class="modal-title">✅ Lulus Permohonan Affiliate<button class="modal-close" onclick="closeModal('modal-lulus-affiliate')">✕ Tutup</button></div>
+    <div id="lulus-aff-nama" style="font-size:13px;font-weight:700;margin-bottom:10px"></div>
+    <div class="form-group"><label class="form-label">Kod Affiliate (unik, utk pelanggan guna semasa checkout)</label><input type="text" class="form-input" id="lulus-aff-kod" style="text-transform:uppercase" placeholder="cth: AMIRUL10" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Kadar Komisen (%)</label><input type="number" class="form-input" id="lulus-aff-komisen" value="10" min="0" max="100" step="0.5" /></div>
+      <div class="form-group"><label class="form-label">Kadar Diskaun Pelanggan (%)</label><input type="number" class="form-input" id="lulus-aff-diskaun" value="5" min="0" max="100" step="0.5" /></div>
+    </div>
+    <button class="btn btn-primary" onclick="luluskanAffiliate()">✅ Luluskan</button>
   </div>
 </div>
 
@@ -2126,7 +2160,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','bonus-kedai-semua-card','status-sistem-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
+  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','bonus-kedai-semua-card','status-sistem-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','affiliate-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -2210,6 +2244,7 @@ async function setPage(p) {
       loadDataPembeli();
       loadTetapanWinback();
       loadTetapanRujukan();
+      renderAffiliate();
       whLoad();
       renderSenaraiCutiSemua();
       renderStatusLive();
@@ -7550,6 +7585,120 @@ async function renderRujukanManualSenarai() {
         <button class="btn-delete-icon" style="position:static" onclick="padamRujukanManual(${r.id},'${esc(r.telefon)}')" title="Padam">✕</button>
       </div>
     </div>`).join('') || '<div class="empty"><div class="empty-text">Belum ada nombor rujukan manual didaftar</div></div>';
+}
+
+// ════════════════════════════════════════════════════
+//  SISTEM AFFILIATE (pemilik: lulus/tolak permohonan, urus kadar, sahkan bayaran)
+//  Akaun affiliate sendiri log masuk Google di portal berasingan (affiliate.html) —
+//  lihat SQL_TAMBAHAN_111 utk RPC/jadual (affiliates/affiliate_earnings/affiliate_payout).
+// ════════════════════════════════════════════════════
+let AFFILIATE_CACHE = [];
+let AFFILIATE_LULUS_ID = null;
+
+async function renderAffiliate() {
+  if (!useCloud) return;
+  const { data, error } = await sb.from('affiliates').select('*').order('created_at', { ascending: false });
+  if (error) { console.warn('renderAffiliate gagal:', error.message); return; }
+  AFFILIATE_CACHE = data || [];
+
+  const menunggu = AFFILIATE_CACHE.filter(a => a.status === 'menunggu');
+  document.getElementById('aff-menunggu-wrap').style.display = menunggu.length ? '' : 'none';
+  document.getElementById('aff-menunggu-list').innerHTML = menunggu.map(a => `
+    <div class="list-item">
+      <div><div class="list-item-title">${esc(a.nama)}</div><div class="list-item-sub">${esc(a.telefon)}${a.cara_promosi?' · '+esc(a.cara_promosi):''}</div></div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn-primary btn-sm" onclick="bukaModalLulusAffiliate('${a.id}')">✅ Lulus</button>
+        <button class="btn btn-secondary btn-sm" onclick="tolakPermohonanAffiliate('${a.id}')">✕ Tolak</button>
+      </div>
+    </div>`).join('');
+
+  const { data: payouts } = await sb.from('affiliate_payout').select('*').eq('status', 'menunggu').order('created_at', { ascending: false });
+  document.getElementById('aff-payout-wrap').style.display = (payouts?.length) ? '' : 'none';
+  document.getElementById('aff-payout-list').innerHTML = (payouts || []).map(p => {
+    const a = AFFILIATE_CACHE.find(x => x.id === p.affiliate_id);
+    return `<div class="list-item">
+      <div><div class="list-item-title">${esc(a?.nama || p.affiliate_id)}</div><div class="list-item-sub">${esc(a?.nama_bank || '—')} · ${esc(a?.no_akaun_bank || '—')} (${esc(a?.pemegang_akaun || '—')})</div></div>
+      <div style="text-align:right">
+        <div style="font-weight:800">${fmt(p.jumlah)}</div>
+        <div style="display:flex;gap:8px;margin-top:4px;justify-content:flex-end">
+          <button class="btn-link" style="color:var(--green)" onclick="sahkanBayaranAffiliate('${p.id}')">✅ Sahkan</button>
+          <button class="btn-link" style="color:var(--red)" onclick="tolakBayaranAffiliate('${p.id}')">✕ Tolak</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const senarai = AFFILIATE_CACHE.filter(a => ['aktif', 'dinyahaktifkan'].includes(a.status));
+  document.getElementById('aff-senarai-list').innerHTML = senarai.map(a => `
+    <div class="list-item">
+      <div><div class="list-item-title">${esc(a.nama)} <span style="font-family:monospace;color:var(--teal)">${esc(a.kod_affiliate || '')}</span></div><div class="list-item-sub">Komisen ${a.kadar_komisen_peratus}% · Diskaun ${a.kadar_diskaun_peratus}%</div></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span class="badge ${a.status === 'aktif' ? 'badge-green' : 'badge-gold'}">${a.status === 'aktif' ? 'Aktif' : 'Tidak Aktif'}</span>
+        <button class="btn-link" onclick="toggleAktifAffiliate('${a.id}', ${a.status === 'aktif'})">${a.status === 'aktif' ? 'Nyahaktif' : 'Aktifkan'}</button>
+      </div>
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Belum ada affiliate lagi</div></div>';
+}
+
+function bukaModalLulusAffiliate(id) {
+  const a = AFFILIATE_CACHE.find(x => x.id === id);
+  if (!a) return;
+  AFFILIATE_LULUS_ID = id;
+  document.getElementById('lulus-aff-nama').textContent = `${a.nama} · ${a.telefon}`;
+  document.getElementById('lulus-aff-kod').value = '';
+  document.getElementById('lulus-aff-komisen').value = 10;
+  document.getElementById('lulus-aff-diskaun').value = 5;
+  showModal('modal-lulus-affiliate');
+}
+
+async function luluskanAffiliate() {
+  const kod = document.getElementById('lulus-aff-kod').value.trim();
+  const komisen = +document.getElementById('lulus-aff-komisen').value;
+  const diskaun = +document.getElementById('lulus-aff-diskaun').value;
+  if (!kod) return toast('Sila isi kod affiliate', 'err');
+  const { error } = await sb.rpc('lulus_permohonan_affiliate', { p_id: AFFILIATE_LULUS_ID, p_kod_affiliate: kod, p_kadar_komisen: komisen, p_kadar_diskaun: diskaun });
+  if (error) return toast('Gagal: ' + error.message, 'err');
+  closeModal('modal-lulus-affiliate');
+  toast(`✅ ${kod.toUpperCase()} diluluskan sebagai affiliate`);
+  renderAffiliate();
+}
+
+async function tolakPermohonanAffiliate(id) {
+  const sebab = prompt('Sebab tolak (pilihan, kosongkan jika tiada):');
+  if (sebab === null) return;
+  const { error } = await sb.rpc('tolak_permohonan_affiliate', { p_id: id, p_sebab: sebab || null });
+  if (error) return toast('Gagal: ' + error.message, 'err');
+  toast('Permohonan affiliate ditolak');
+  renderAffiliate();
+}
+
+async function toggleAktifAffiliate(id, aktifSemasa) {
+  const a = AFFILIATE_CACHE.find(x => x.id === id);
+  if (!a) return;
+  if (!confirm(aktifSemasa ? `Nyahaktifkan affiliate "${a.nama}"? Kod dia tak boleh diguna pelanggan lagi.` : `Aktifkan semula affiliate "${a.nama}"?`)) return;
+  const { error } = await sb.rpc('kemaskini_affiliate', {
+    p_id: id, p_kadar_komisen: a.kadar_komisen_peratus, p_kadar_diskaun: a.kadar_diskaun_peratus,
+    p_status: aktifSemasa ? 'dinyahaktifkan' : 'aktif',
+  });
+  if (error) return toast('Gagal: ' + error.message, 'err');
+  toast('Status affiliate dikemaskini');
+  renderAffiliate();
+}
+
+async function sahkanBayaranAffiliate(id) {
+  if (!confirm('Sahkan permohonan bayaran ini? PASTIKAN transfer bank SUDAH dibuat secara manual sebelum sahkan.')) return;
+  const { error } = await sb.rpc('sahkan_bayaran_affiliate', { p_id: id });
+  if (error) return toast('Gagal: ' + error.message, 'err');
+  toast('✅ Bayaran affiliate disahkan');
+  renderAffiliate();
+}
+
+async function tolakBayaranAffiliate(id) {
+  const sebab = prompt('Sebab tolak permohonan bayaran:');
+  if (sebab === null) return;
+  const { error } = await sb.rpc('tolak_bayaran_affiliate', { p_id: id, p_sebab: sebab || null });
+  if (error) return toast('Gagal: ' + error.message, 'err');
+  toast('Permohonan bayaran ditolak');
+  renderAffiliate();
 }
 
 // ════════════════════════════════════════════════════

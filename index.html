@@ -417,10 +417,19 @@
         </div>
         <div id="rujukan-mesej" style="font-size:12px;margin-top:6px;display:none"></div>
       </div>
+      <div class="form-group" id="affiliate-wrap">
+        <label class="form-label">🤝 Kod Affiliate (Optional)</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" class="form-input" id="c-kod-affiliate" placeholder="cth: AMIRUL10" style="text-transform:uppercase;flex:1;min-width:0" />
+          <button class="btn btn-primary" style="width:auto;flex-shrink:0;padding:12px 20px;font-size:15px" onclick="gunaAffiliate()">✅ Guna Kod</button>
+        </div>
+        <div id="affiliate-mesej" style="font-size:12px;margin-top:6px;display:none"></div>
+      </div>
       <div id="kiraan-jelas">
         <div class="kiraan-row"><span>Subjumlah</span><span id="kiraan-subtotal">RM 0.00</span></div>
         <div class="kiraan-row" id="kiraan-diskaun-row" style="display:none;color:var(--green)"><span>Diskaun Voucher (<span id="kiraan-diskaun-kod"></span>) <a href="javascript:void(0)" onclick="bukaVoucherTnc()" style="font-size:11px;color:var(--green);text-decoration:underline" title="Terma & Syarat voucher ini">ℹ️ T&C</a> <button class="btn-link" style="font-size:13px;padding:4px 6px" onclick="buangVoucher()">✕ Buang</button></span><span id="kiraan-diskaun">−RM 0.00</span></div>
         <div class="kiraan-row" id="kiraan-rujukan-row" style="display:none;color:var(--green)"><span>Diskaun Rujukan Kawan <button class="btn-link" style="font-size:13px;padding:4px 6px" onclick="buangRujukan()">✕ Buang</button></span><span id="kiraan-rujukan">−RM 0.00</span></div>
+        <div class="kiraan-row" id="kiraan-affiliate-row" style="display:none;color:var(--green)"><span>Diskaun Affiliate (<span id="kiraan-affiliate-kod"></span>) <button class="btn-link" style="font-size:13px;padding:4px 6px" onclick="buangAffiliate()">✕ Buang</button></span><span id="kiraan-affiliate">−RM 0.00</span></div>
         <div class="kiraan-row"><span>Kos Penghantaran<span id="kiraan-zon-label"></span></span><span id="kiraan-penghantaran">RM 0.00</span></div>
         <div class="kiraan-row jumlah"><span>JUMLAH AKHIR</span><span id="grand-total" style="color:var(--teal)">RM 0.00</span></div>
       </div>
@@ -449,6 +458,7 @@
       <button onclick="bukaTentangKami()">Tentang Kami</button>
       <button onclick="bukaModalInfo('ejen-modal')">🤝 Sertai Kami — Servis Marketing</button>
       <button onclick="bukaModalInfo('kerja-modal')">🛵 Sertai Kami — Kerja Kosong</button>
+      <a href="affiliate.html">💰 Jadi Affiliate Kami</a>
       <a href="pesan.html">Borang Pesanan Kedai Runcit</a>
       <a href="pengurusan.html">Log Masuk Pengurusan</a>
     </div>
@@ -921,6 +931,16 @@ async function initHalaman() {
   suntikItemListSchema();
   const produkParam = new URLSearchParams(location.search).get('produk');
   if (produkParam) kemaskiniSEOProduk(produkParam);
+  // Pautan affiliate (?affiliate=KOD) — pra-isi medan kod di checkout, simpan dlm
+  // sessionStorage supaya kekal walaupun pelanggan sempat navigasi produk dahulu
+  // sebelum checkout (bukan auto-validate — perlu no. telefon diisi dahulu).
+  const affiliateParam = new URLSearchParams(location.search).get('affiliate');
+  if (affiliateParam) sessionStorage.setItem('wt_kod_affiliate', affiliateParam);
+  const kodAffiliateTersimpan = sessionStorage.getItem('wt_kod_affiliate');
+  if (kodAffiliateTersimpan) {
+    const inputAffiliate = document.getElementById('c-kod-affiliate');
+    if (inputAffiliate) inputAffiliate.value = kodAffiliateTersimpan.toUpperCase();
+  }
   await muatkanStatusAkaun();
 }
 
@@ -1456,6 +1476,7 @@ function kemaskiniTotal() {
   const kosHantarFinal = hantarPercuma ? 0 : kosHantar;
   const diskaun = voucherAktif ? Math.min(voucherAktif.jenis_diskaun==='tetap' ? voucherAktif.nilai_diskaun : tot*voucherAktif.nilai_diskaun/100, tot) : 0;
   const rujukanDiskaun = rujukanAktif ? tot * rujukanAktif.diskaun_peratus / 100 : 0;
+  const affiliateDiskaun = affiliateAktif ? tot * affiliateAktif.diskaun_peratus / 100 : 0;
   document.getElementById('kiraan-subtotal').textContent = fmt(tot);
   document.getElementById('kiraan-diskaun-row').style.display = voucherAktif ? '' : 'none';
   if (voucherAktif) {
@@ -1464,15 +1485,21 @@ function kemaskiniTotal() {
   }
   document.getElementById('kiraan-rujukan-row').style.display = rujukanAktif ? '' : 'none';
   if (rujukanAktif) document.getElementById('kiraan-rujukan').textContent = '−' + fmt(rujukanDiskaun);
+  document.getElementById('kiraan-affiliate-row').style.display = affiliateAktif ? '' : 'none';
+  if (affiliateAktif) {
+    document.getElementById('kiraan-affiliate-kod').textContent = affiliateAktif.kod;
+    document.getElementById('kiraan-affiliate').textContent = '−' + fmt(affiliateDiskaun);
+  }
   document.getElementById('kiraan-penghantaran').innerHTML = hantarPercuma
     ? `<s style="color:var(--muted)">${fmt(kosHantar)}</s> <span style="color:var(--green);font-weight:800">PERCUMA</span>`
     : fmt(kosHantar);
   document.getElementById('kiraan-zon-label').textContent = zonId ? ` (${ZON[zonId]?.nama||''})` : '';
-  document.getElementById('grand-total').textContent = fmt(tot - diskaun - rujukanDiskaun + kosHantarFinal);
+  document.getElementById('grand-total').textContent = fmt(tot - diskaun - rujukanDiskaun - affiliateDiskaun + kosHantarFinal);
 }
 
 let voucherAktif = null; // { kod, jenis_diskaun, nilai_diskaun, minima_belanja, maksima_belanja, tarikh_luput, had_guna }
 let rujukanAktif = null; // { kod, diskaun_peratus }
+let affiliateAktif = null; // { kod, diskaun_peratus }
 
 function tunjukMesejVoucher(mesej, ok) {
   const el = document.getElementById('voucher-mesej');
@@ -1496,13 +1523,19 @@ async function gunaVoucher() {
     tarikh_luput: hasil.tarikh_luput, had_guna: hasil.had_guna,
     percuma_penghantaran: hasil.percuma_penghantaran,
   };
-  // Hanya satu promosi (voucher ATAU rujukan) dibenarkan setiap pesanan — elak double claim.
+  // Hanya satu promosi (voucher ATAU rujukan ATAU affiliate) dibenarkan setiap pesanan — elak double claim.
   let notaGabung = '';
   if (rujukanAktif) {
     rujukanAktif = null;
     document.getElementById('c-kod-rujukan').value = '';
     document.getElementById('rujukan-mesej').style.display = 'none';
     notaGabung = ' (kod rujukan kawan digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
+  }
+  if (affiliateAktif) {
+    affiliateAktif = null;
+    document.getElementById('c-kod-affiliate').value = '';
+    document.getElementById('affiliate-mesej').style.display = 'none';
+    notaGabung = ' (kod affiliate digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
   }
   tunjukMesejVoucher(`Kod voucher "${voucherAktif.kod}" diguna pakai${voucherAktif.percuma_penghantaran ? ' — 🚚 Percuma Penghantaran!' : ''}${notaGabung}`, true);
   kemaskiniTotal();
@@ -1532,13 +1565,19 @@ async function gunaRujukan() {
   if (error || !hasil) return tunjukMesejRujukan('Gagal semak kod rujukan','err');
   if (!hasil.sah) { rujukanAktif = null; kemaskiniTotal(); return tunjukMesejRujukan(hasil.mesej, false); }
   rujukanAktif = { kod: kod.replace(/\D/g,''), diskaun_peratus: hasil.diskaun_peratus };
-  // Hanya satu promosi (voucher ATAU rujukan) dibenarkan setiap pesanan — elak double claim.
+  // Hanya satu promosi (voucher ATAU rujukan ATAU affiliate) dibenarkan setiap pesanan — elak double claim.
   let notaGabung = '';
   if (voucherAktif) {
     voucherAktif = null;
     document.getElementById('c-kod-voucher').value = '';
     document.getElementById('voucher-mesej').style.display = 'none';
     notaGabung = ' (kod voucher digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
+  }
+  if (affiliateAktif) {
+    affiliateAktif = null;
+    document.getElementById('c-kod-affiliate').value = '';
+    document.getElementById('affiliate-mesej').style.display = 'none';
+    notaGabung = ' (kod affiliate digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
   }
   tunjukMesejRujukan(hasil.mesej + notaGabung, true);
   kemaskiniTotal();
@@ -1548,6 +1587,48 @@ function buangRujukan() {
   rujukanAktif = null;
   document.getElementById('c-kod-rujukan').value = '';
   document.getElementById('rujukan-mesej').style.display = 'none';
+  kemaskiniTotal();
+}
+
+function tunjukMesejAffiliate(mesej, ok) {
+  const el = document.getElementById('affiliate-mesej');
+  el.style.display = 'block';
+  el.style.color = ok ? 'var(--green)' : 'var(--red)';
+  el.textContent = (ok ? '✅ ' : '⚠️ ') + mesej;
+}
+
+async function gunaAffiliate() {
+  const kod = document.getElementById('c-kod-affiliate').value.trim();
+  if (!kod) return toast('Sila isi kod affiliate','err');
+  const tel = document.getElementById('c-tel').value.trim();
+  if (!tel) return tunjukMesejAffiliate('Sila isi no. telefon anda dahulu sebelum guna kod affiliate', false);
+  const { data, error } = await sb.rpc('validasi_kod_affiliate', { p_kod_affiliate: kod, p_telefon_pembeli: tel });
+  const hasil = Array.isArray(data) ? data[0] : data;
+  if (error || !hasil) return tunjukMesejAffiliate('Gagal semak kod affiliate','err');
+  if (!hasil.sah) { affiliateAktif = null; kemaskiniTotal(); return tunjukMesejAffiliate(hasil.mesej, false); }
+  affiliateAktif = { kod: kod.toUpperCase(), diskaun_peratus: hasil.diskaun_peratus };
+  // Hanya satu promosi (voucher ATAU rujukan ATAU affiliate) dibenarkan setiap pesanan — elak double claim.
+  let notaGabung = '';
+  if (voucherAktif) {
+    voucherAktif = null;
+    document.getElementById('c-kod-voucher').value = '';
+    document.getElementById('voucher-mesej').style.display = 'none';
+    notaGabung = ' (kod voucher digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
+  }
+  if (rujukanAktif) {
+    rujukanAktif = null;
+    document.getElementById('c-kod-rujukan').value = '';
+    document.getElementById('rujukan-mesej').style.display = 'none';
+    notaGabung = ' (kod rujukan kawan digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
+  }
+  tunjukMesejAffiliate(hasil.mesej + notaGabung, true);
+  kemaskiniTotal();
+}
+
+function buangAffiliate() {
+  affiliateAktif = null;
+  document.getElementById('c-kod-affiliate').value = '';
+  document.getElementById('affiliate-mesej').style.display = 'none';
   kemaskiniTotal();
 }
 
@@ -1614,6 +1695,7 @@ async function hantarPesanan() {
     kos_penghantaran: kosHantar,
     kod_baucar: voucherAktif?.kod || null,
     kod_rujukan: rujukanAktif?.kod || null,
+    kod_affiliate: affiliateAktif?.kod || null,
     jumlah: sub + kosHantar,
     alamat, poskod, bandar: bandar || null, negeri,
     zon_penghantaran: zonId,
