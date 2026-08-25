@@ -561,7 +561,7 @@
         <div class="card-title" style="color:var(--gold)">💳 <span id="bayar-section-title">Terima Bayaran Hutang</span></div>
         <div id="bayar-section-hint" style="font-size:11px;color:var(--muted);margin-bottom:10px;display:none">Permohonan anda perlu disahkan pemilik dahulu sebelum hutang kedai berkurang.</div>
         <div class="form-group">
-          <label class="form-label">Kedai</label>
+          <label class="form-label">Kedai & Peribadi</label>
           <select class="form-input" id="bayar-kedai-sel" onchange="kemaskiniInfoDiskaunHutang()"></select>
         </div>
         <div id="bayar-diskaun-info" style="display:none;background:#FFF3CD;border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px"></div>
@@ -3167,12 +3167,23 @@ function renderKedai(q='') {
   document.getElementById('kedai-sub').textContent = `${DATA.kedai.filter(k=>k.status==='aktif').length} aktif · Hutang: ${fmt(hutangTotal)}`;
 
   // Bayar hutang section — semua pekerja boleh kutip & MOHON (pemilik kekal terus
-  // sahkan sendiri), lihat mohon_bayaran_hutang()/rekodBayaran().
+  // sahkan sendiri), lihat mohon_bayaran_hutang()/rekodBayaran(). Turut sokong
+  // belian PERIBADI (tiada kedai_id) — dikumpul ikut nama_pembeli (satu-satunya
+  // identiti sedia ada utk pembeli peribadi), value diberi awalan "PERIBADI:"
+  // supaya rekodBayaran() boleh bezakan drpd kedai_id sebenar.
   const bKedai=DATA.kedai.filter(k=>k.hutang>0);
+  const hutangPeribadi={};
+  DATA.transaksi.filter(t=>!t.kedai_id && t.status==='hutang').forEach(t=>{
+    const nama=t.nama_pembeli||'Tanpa Nama';
+    hutangPeribadi[nama]=(hutangPeribadi[nama]||0)+t.jumlah;
+  });
+  const bPeribadi=Object.entries(hutangPeribadi).filter(([,jum])=>jum>0);
   const bSec=document.getElementById('bayar-section');
-  bSec.style.display=bKedai.length?'block':'none';
+  bSec.style.display=(bKedai.length||bPeribadi.length)?'block':'none';
   const bSel=document.getElementById('bayar-kedai-sel');
-  bSel.innerHTML=bKedai.map(k=>`<option value="${k.id}">${k.nama} · Hutang: ${fmt(k.hutang)}${k.diskaun_hutang_peratus>0?` (diskaun ${k.diskaun_hutang_peratus}% bayar penuh)`:''}</option>`).join('');
+  bSel.innerHTML=
+    bKedai.map(k=>`<option value="${esc(k.id)}">${esc(k.nama)} · Hutang: ${fmt(k.hutang)}${k.diskaun_hutang_peratus>0?` (diskaun ${k.diskaun_hutang_peratus}% bayar penuh)`:''}</option>`).join('') +
+    bPeribadi.map(([nama,jum])=>`<option value="PERIBADI:${encodeURIComponent(nama)}">👤 ${esc(nama)} (Peribadi) · Hutang: ${fmt(jum)}</option>`).join('');
   kemaskiniInfoDiskaunHutang();
   document.getElementById('bayar-section-title').textContent = currentRole==='pemilik' ? 'Terima Bayaran Hutang' : 'Mohon Rekod Bayaran Hutang';
   document.getElementById('bayar-section-hint').style.display = currentRole==='pemilik' ? 'none' : '';
@@ -3576,8 +3587,11 @@ async function rekodBayaran() {
   const nota=document.getElementById('bayar-nota').value.trim();
   const resitFile=document.getElementById('bayar-resit-file').files[0];
   const settlementPenuh=document.getElementById('bayar-settlement-penuh')?.checked||false;
-  if(!id||jum<=0) return toast('Pilih kedai dan masukkan jumlah','err');
+  if(!id||jum<=0) return toast('Pilih kedai/peribadi dan masukkan jumlah','err');
   if(kaedah==='transfer' && !resitFile) return toast('Sila lampir gambar resit/bukti transfer','err');
+  const isPeribadi = id.startsWith('PERIBADI:');
+  const kedaiId = isPeribadi ? null : id;
+  const namaPembeli = isPeribadi ? decodeURIComponent(id.slice('PERIBADI:'.length)) : null;
   if (useCloud) {
     const permohonanId = genId('PBH');
     let resitPath = null;
@@ -3587,12 +3601,15 @@ async function rekodBayaran() {
       if (upErr) return toast('Gagal muat naik resit: '+upErr.message,'err');
     }
     const { error } = await sb.rpc('mohon_bayaran_hutang', {
-      p_id: permohonanId, p_kedai_id: id, p_jumlah: jum, p_kaedah_bayaran: kaedah,
+      p_id: permohonanId, p_kedai_id: kedaiId, p_jumlah: jum, p_kaedah_bayaran: kaedah,
       p_resit_bukti_url: resitPath, p_nota: nota||null, p_settlement_penuh: settlementPenuh,
+      p_nama_pembeli: namaPembeli,
     });
     if (error) return toast('Gagal: '+error.message,'err');
     await loadData();
     if (currentRole==='pemilik') { renderKedai(); renderMenungguBayaranHutang(); }
+  } else if (isPeribadi) {
+    return toast('Belian peribadi perlu Supabase disambungkan (tiada sokongan mod tempatan)','err');
   } else if (settlementPenuh) {
     DATA.kedai=DATA.kedai.map(k=>k.id===id?{...k,hutang:0}:k);
     DATA.transaksi=DATA.transaksi.map(t=>t.kedai_id===id&&t.status==='hutang'?{...t,status:'selesai'}:t);
@@ -3626,10 +3643,12 @@ async function renderMenungguBayaranHutang() {
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
   const LABEL_KAEDAH = { tunai:'Tunai', transfer:'Online Transfer' };
   el.innerHTML = senarai.map(r=>{
-    const k = DATA.kedai.find(k=>k.id===r.kedai_id);
+    const k = r.kedai_id ? DATA.kedai.find(k=>k.id===r.kedai_id) : null;
+    const namaSasaran = r.kedai_id ? (k?.nama||r.kedai_id) : `👤 ${r.nama_pembeli} (Peribadi)`;
+    const badgePenuh = r.settlement_penuh ? (r.kedai_id ? ' <span class="badge badge-gold" style="font-size:9px">💯 PENUH (diskaun)</span>' : ' <span class="badge badge-gold" style="font-size:9px">💯 PENUH</span>') : '';
     return `<div class="list-item" style="display:block;border-left:3px solid var(--gold);padding-left:8px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div><div class="list-item-title">${esc(k?.nama||r.kedai_id)}${r.settlement_penuh?' <span class="badge badge-gold" style="font-size:9px">💯 PENUH (diskaun)</span>':''}</div><div class="list-item-sub">${esc(namaPekerja(r.pekerja_id))} · ${LABEL_KAEDAH[r.kaedah_bayaran]} · ${fmtDT(r.created_at)}${r.nota?' · '+esc(r.nota):''}</div></div>
+        <div><div class="list-item-title">${esc(namaSasaran)}${badgePenuh}</div><div class="list-item-sub">${esc(namaPekerja(r.pekerja_id))} · ${LABEL_KAEDAH[r.kaedah_bayaran]} · ${fmtDT(r.created_at)}${r.nota?' · '+esc(r.nota):''}</div></div>
         <div class="list-item-val">${fmt(r.jumlah)}</div>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
