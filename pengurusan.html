@@ -1552,6 +1552,7 @@
       <div class="form-group"><label class="form-label">Kadar Komisen (%)</label><input type="number" class="form-input" id="lulus-aff-komisen" value="10" min="0" max="100" step="0.5" /></div>
       <div class="form-group"><label class="form-label">Kadar Diskaun Pelanggan (%)</label><input type="number" class="form-input" id="lulus-aff-diskaun" value="5" min="0" max="100" step="0.5" /></div>
     </div>
+    <div class="form-group"><label class="form-label">Minima Belian utk Diskaun Terpakai (RM)</label><input type="number" class="form-input" id="lulus-aff-minima" value="500" min="0" step="10" /></div>
     <button class="btn btn-primary" onclick="luluskanAffiliate()">✅ Luluskan</button>
   </div>
 </div>
@@ -1564,6 +1565,7 @@
       <div class="form-group"><label class="form-label">Kadar Komisen (%)</label><input type="number" class="form-input" id="edit-kadar-aff-komisen" min="0" max="100" step="0.5" /></div>
       <div class="form-group"><label class="form-label">Kadar Diskaun Pelanggan (%)</label><input type="number" class="form-input" id="edit-kadar-aff-diskaun" min="0" max="100" step="0.5" /></div>
     </div>
+    <div class="form-group"><label class="form-label">Minima Belian utk Diskaun Terpakai (RM)</label><input type="number" class="form-input" id="edit-kadar-aff-minima" min="0" step="10" /></div>
     <button class="btn btn-primary" onclick="simpanKadarAffiliate()">💾 Simpan</button>
   </div>
 </div>
@@ -7694,7 +7696,7 @@ async function renderAffiliate() {
     return `<div class="list-item">
       <div>
         <div class="list-item-title">${esc(a.nama)} <span style="font-family:monospace;color:var(--teal)">${esc(a.kod_affiliate || '')}</span></div>
-        <div class="list-item-sub">Komisen ${a.kadar_komisen_peratus}% · Diskaun ${a.kadar_diskaun_peratus}%</div>
+        <div class="list-item-sub">Komisen ${a.kadar_komisen_peratus}% · Diskaun ${a.kadar_diskaun_peratus}% (min. belian RM${a.minima_belian ?? 500})</div>
         <div style="font-size:12px;font-weight:700;color:var(--gold);margin-top:2px">💰 Komisen diperoleh: ${fmt(e.jumlah)}${e.bolehTuntut > 0 ? ` <span style="color:var(--green);font-weight:400">(${fmt(e.bolehTuntut)} blm dituntut)</span>` : ''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
@@ -7714,6 +7716,7 @@ function bukaModalLulusAffiliate(id) {
   document.getElementById('lulus-aff-kod').value = '';
   document.getElementById('lulus-aff-komisen').value = 10;
   document.getElementById('lulus-aff-diskaun').value = 5;
+  document.getElementById('lulus-aff-minima').value = 500;
   showModal('modal-lulus-affiliate');
 }
 
@@ -7721,8 +7724,9 @@ async function luluskanAffiliate() {
   const kod = document.getElementById('lulus-aff-kod').value.trim();
   const komisen = +document.getElementById('lulus-aff-komisen').value;
   const diskaun = +document.getElementById('lulus-aff-diskaun').value;
+  const minima = +document.getElementById('lulus-aff-minima').value;
   if (!kod) return toast('Sila isi kod affiliate', 'err');
-  const { error } = await sb.rpc('lulus_permohonan_affiliate', { p_id: AFFILIATE_LULUS_ID, p_kod_affiliate: kod, p_kadar_komisen: komisen, p_kadar_diskaun: diskaun });
+  const { error } = await sb.rpc('lulus_permohonan_affiliate', { p_id: AFFILIATE_LULUS_ID, p_kod_affiliate: kod, p_kadar_komisen: komisen, p_kadar_diskaun: diskaun, p_minima_belian: minima });
   if (error) return toast('Gagal: ' + error.message, 'err');
   closeModal('modal-lulus-affiliate');
   toast(`✅ ${kod.toUpperCase()} diluluskan sebagai affiliate`);
@@ -7744,7 +7748,7 @@ async function toggleAktifAffiliate(id, aktifSemasa) {
   if (!confirm(aktifSemasa ? `Nyahaktifkan affiliate "${a.nama}"? Kod dia tak boleh diguna pelanggan lagi.` : `Aktifkan semula affiliate "${a.nama}"?`)) return;
   const { error } = await sb.rpc('kemaskini_affiliate', {
     p_id: id, p_kadar_komisen: a.kadar_komisen_peratus, p_kadar_diskaun: a.kadar_diskaun_peratus,
-    p_status: aktifSemasa ? 'dinyahaktifkan' : 'aktif',
+    p_status: aktifSemasa ? 'dinyahaktifkan' : 'aktif', p_minima_belian: a.minima_belian ?? 500,
   });
   if (error) return toast('Gagal: ' + error.message, 'err');
   toast('Status affiliate dikemaskini');
@@ -7759,6 +7763,7 @@ function bukaModalEditKadarAffiliate(id) {
   document.getElementById('edit-kadar-aff-nama').textContent = `${a.nama} · ${a.kod_affiliate || ''}`;
   document.getElementById('edit-kadar-aff-komisen').value = a.kadar_komisen_peratus;
   document.getElementById('edit-kadar-aff-diskaun').value = a.kadar_diskaun_peratus;
+  document.getElementById('edit-kadar-aff-minima').value = a.minima_belian ?? 500;
   showModal('modal-edit-kadar-affiliate');
 }
 
@@ -7767,9 +7772,10 @@ async function simpanKadarAffiliate() {
   if (!a) return;
   const komisen = +document.getElementById('edit-kadar-aff-komisen').value;
   const diskaun = +document.getElementById('edit-kadar-aff-diskaun').value;
-  if (isNaN(komisen) || isNaN(diskaun) || komisen < 0 || diskaun < 0) return toast('Sila isi kadar yang sah', 'err');
+  const minima = +document.getElementById('edit-kadar-aff-minima').value;
+  if (isNaN(komisen) || isNaN(diskaun) || isNaN(minima) || komisen < 0 || diskaun < 0 || minima < 0) return toast('Sila isi kadar yang sah', 'err');
   const { error } = await sb.rpc('kemaskini_affiliate', {
-    p_id: a.id, p_kadar_komisen: komisen, p_kadar_diskaun: diskaun, p_status: a.status,
+    p_id: a.id, p_kadar_komisen: komisen, p_kadar_diskaun: diskaun, p_status: a.status, p_minima_belian: minima,
   });
   if (error) return toast('Gagal: ' + error.message, 'err');
   closeModal('modal-edit-kadar-affiliate');

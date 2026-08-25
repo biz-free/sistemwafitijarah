@@ -178,7 +178,7 @@ async function renderDashboard() {
     <div class="kod-box">
       <div style="font-size:11px;color:#BEE8D3;text-transform:uppercase;letter-spacing:0.05em">Kod Affiliate Anda</div>
       <div class="k" id="kod-affiliate-paparan">${esc(AFFILIATE_ROW.kod_affiliate)}</div>
-      <div style="font-size:11px;color:#BEE8D3">Komisen ${AFFILIATE_ROW.kadar_komisen_peratus}% · Diskaun pelanggan ${AFFILIATE_ROW.kadar_diskaun_peratus}%</div>
+      <div style="font-size:11px;color:#BEE8D3">Komisen ${AFFILIATE_ROW.kadar_komisen_peratus}% · Diskaun pelanggan ${AFFILIATE_ROW.kadar_diskaun_peratus}% (min. belian RM${AFFILIATE_ROW.minima_belian ?? 500})</div>
       <div class="link" id="link-affiliate">${esc(linkAffiliate)}</div>
       <div style="display:flex;gap:8px;margin-top:10px">
         <button class="btn btn-secondary" style="flex:1" onclick="salinLink('${esc(linkAffiliate)}')">📋 Salin Pautan</button>

@@ -1602,7 +1602,7 @@ async function gunaAffiliate() {
   if (!kod) return toast('Sila isi kod affiliate','err');
   const tel = document.getElementById('c-tel').value.trim();
   if (!tel) return tunjukMesejAffiliate('Sila isi no. telefon anda dahulu sebelum guna kod affiliate', false);
-  const { data, error } = await sb.rpc('validasi_kod_affiliate', { p_kod_affiliate: kod, p_telefon_pembeli: tel });
+  const { data, error } = await sb.rpc('validasi_kod_affiliate', { p_kod_affiliate: kod, p_telefon_pembeli: tel, p_subjumlah: subtotal() });
   const hasil = Array.isArray(data) ? data[0] : data;
   if (error || !hasil) return tunjukMesejAffiliate('Gagal semak kod affiliate','err');
   if (!hasil.sah) { affiliateAktif = null; kemaskiniTotal(); return tunjukMesejAffiliate(hasil.mesej, false); }
