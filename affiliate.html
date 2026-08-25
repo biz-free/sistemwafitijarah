@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Portal Affiliate — Wafi Tijarah Trading</title>
 <link rel="icon" href="logo.png" />
+<link rel="manifest" href="manifest-affiliate.json" />
+<meta name="theme-color" content="#0B3D2E" />
 <!-- Elak browser paparkan salinan lama halaman ni selepas kemaskini kod (pernah
      jadi isu: affiliate berjaya log masuk tapi papan pemuka tak muncul sbb
      browser masih guna JS lama dari cache). -->
@@ -56,6 +58,12 @@
   .status-banner h2 { font-size:17px; margin:0 0 8px; color:var(--navy); }
   .status-banner p { font-size:13px; color:var(--muted); line-height:1.6; margin:0; }
   #app-root { display:none; }
+  .modal-overlay { position:fixed; inset:0; background:rgba(11,61,46,0.55); z-index:1000; display:none; align-items:center; justify-content:center; padding:20px; }
+  .modal-overlay.show { display:flex; }
+  .modal-box2 { background:#fff; border-radius:14px; padding:22px; max-width:400px; width:100%; text-align:center; }
+  .modal-box2 .icon { font-size:36px; margin-bottom:8px; }
+  .modal-box2 h3 { font-size:16px; color:var(--navy); margin:0 0 8px; }
+  .modal-box2 p { font-size:13px; color:var(--muted); line-height:1.6; margin:0 0 16px; }
 </style>
 </head>
 <body>
@@ -73,6 +81,16 @@
 
   <div id="app-root">
     <!-- Diisi oleh JS ikut status: log-masuk / borang / menunggu / ditolak / dashboard -->
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-gesa-aff">
+  <div class="modal-box2">
+    <div class="icon">🔔</div>
+    <h3>Jangan Terlepas Komisen Anda!</h3>
+    <p>Aktifkan notifikasi tolak supaya anda terus tahu bila kawan anda beli guna kod anda — dan pasang app ini di skrin utama untuk akses lebih pantas.</p>
+    <button class="btn btn-primary" style="margin-bottom:8px" onclick="gesaAksiUtama()">✅ Aktifkan Sekarang</button>
+    <button class="btn-secondary" style="background:none;border:none;color:var(--muted);font-size:12px;padding:6px;cursor:pointer" onclick="closeModal('modal-gesa-aff')">Nanti sahaja</button>
   </div>
 </div>
 
@@ -204,6 +222,14 @@ async function renderDashboard() {
     </div>
 
     <div class="card">
+      <div class="card-title">🔔 Notifikasi</div>
+      <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Terima push notification & emel serta-merta bila pemilik sahkan bayaran pesanan yang guna kod anda.</p>
+      <button class="btn btn-primary" id="btn-push-toggle-aff" onclick="togglPushNotifikasiAffiliate()">🔔 Aktifkan Notifikasi Tolak</button>
+      <div id="push-status-aff" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
+      <button class="btn btn-secondary" id="btn-install-pwa-aff" style="margin-top:8px;display:none" onclick="pasangPwaAffiliate()">📲 Pasang App di Skrin Utama</button>
+    </div>
+
+    <div class="card">
       <div class="card-title">💸 Mohon Bayaran Komisen</div>
       <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Transfer bank dibuat manual oleh pemilik selepas permohonan diluluskan.</p>
       <div class="form-group"><label class="form-label">Jumlah Dipohon (RM)</label><input type="number" class="form-input" id="p-jumlah" step="0.01" min="0.01" /></div>
@@ -251,6 +277,9 @@ async function renderDashboard() {
     const [lbl, kelas] = LABEL_PAYOUT[r.status] || [r.status,''];
     return `<div class="list-item"><div>${new Date(r.created_at).toLocaleDateString('ms-MY',{day:'2-digit',month:'short'})}</div><div style="text-align:right"><div style="font-weight:800">${fmt(r.jumlah)}</div><span class="badge ${kelas}">${lbl}</span></div></div>`;
   }).join('');
+
+  renderPushStatusAffiliate();
+  semakGesaanPushInstallAffiliate();
 }
 
 function salinLink(link) {
@@ -301,6 +330,142 @@ async function simpanKodBaharu() {
 async function logKeluar() {
   await sb.auth.signOut();
   location.reload();
+}
+
+function showModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// ── Push Notification (Web Push) — kunci awam sahaja, selamat didedahkan.
+// Guna semula jadual push_subscriptions sedia ada (user_id = auth.uid()
+// automatik ikut default lajur) — affiliate log masuk guna Google, jadi
+// auth.uid() di sini SAMA dengan affiliates.id. ──
+const VAPID_PUBLIC_KEY = 'BHn9H44ym7-erXGNS-netsYpsVNke8--awcoLbfcughKJHwb54aOEciUEbYDBidGYdGWDkJtBneOVkz3TDXPqDA';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+async function renderPushStatusAffiliate() {
+  const btn = document.getElementById('btn-push-toggle-aff');
+  const status = document.getElementById('push-status-aff');
+  if (!btn || !status) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    btn.disabled = true; btn.textContent = '🔔 Tidak Disokong';
+    status.textContent = 'Peranti/browser ini tidak menyokong notifikasi tolak.';
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      btn.textContent = '🔕 Matikan Notifikasi Tolak';
+      status.textContent = '✅ Aktif pada peranti/browser ini.';
+    } else {
+      btn.textContent = '🔔 Aktifkan Notifikasi Tolak';
+      status.textContent = Notification.permission === 'denied'
+        ? '⚠️ Kebenaran notifikasi disekat — kemaskini di tetapan browser/telefon dahulu.'
+        : '';
+    }
+  } catch (err) {
+    console.warn('renderPushStatusAffiliate gagal:', err);
+  }
+}
+
+async function togglPushNotifikasiAffiliate() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return toast('Peranti/browser ini tidak menyokong notifikasi tolak', 'err');
+  }
+  const btn = document.getElementById('btn-push-toggle-aff');
+  btn.disabled = true;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      await sb.from('push_subscriptions').delete().eq('endpoint', existing.endpoint);
+      await existing.unsubscribe();
+      toast('🔕 Notifikasi tolak dimatikan pada peranti ini');
+    } else {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { toast('Kebenaran notifikasi tidak diberikan', 'err'); return; }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+      const j = sub.toJSON();
+      const { error } = await sb.from('push_subscriptions').upsert({
+        endpoint: j.endpoint, p256dh: j.keys.p256dh, auth_key: j.keys.auth, user_agent: navigator.userAgent,
+      }, { onConflict: 'endpoint' });
+      if (error) { await sub.unsubscribe(); return toast('Gagal simpan langganan: ' + error.message, 'err'); }
+      toast('🔔 Notifikasi tolak diaktifkan pada peranti ini');
+    }
+  } catch (err) {
+    toast('Gagal: ' + (err?.message || err), 'err');
+  } finally {
+    btn.disabled = false;
+    renderPushStatusAffiliate();
+  }
+}
+
+// ── Pasang PWA (Tambah ke Skrin Utama) ──
+let DEFERRED_PWA_PROMPT = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  DEFERRED_PWA_PROMPT = e;
+  const btn = document.getElementById('btn-install-pwa-aff');
+  if (btn) btn.style.display = 'block';
+});
+window.addEventListener('appinstalled', () => { DEFERRED_PWA_PROMPT = null; });
+
+function iaPwaTerpasang() {
+  return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+}
+
+async function pasangPwaAffiliate() {
+  if (!DEFERRED_PWA_PROMPT) return toast('App sudah dipasang atau tidak disokong peranti ini', 'err');
+  DEFERRED_PWA_PROMPT.prompt();
+  await DEFERRED_PWA_PROMPT.userChoice;
+  DEFERRED_PWA_PROMPT = null;
+  document.getElementById('btn-install-pwa-aff').style.display = 'none';
+}
+
+// Butang utama modal gesaan — cuba aktifkan push DAN pasang PWA sekali gus.
+async function gesaAksiUtama() {
+  closeModal('modal-gesa-aff');
+  if ('serviceWorker' in navigator && 'PushManager' in window) {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) await togglPushNotifikasiAffiliate();
+    } catch {}
+  }
+  if (DEFERRED_PWA_PROMPT && !iaPwaTerpasang()) await pasangPwaAffiliate();
+}
+
+// Gesaan automatik SEKALI SEHARI (localStorage) SEHINGGA affiliate aktifkan
+// push notification & pasang PWA — elak terlepas notifikasi komisen baharu.
+async function semakGesaanPushInstallAffiliate() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    const pushAktif = !!sub;
+    const pwaTerpasang = iaPwaTerpasang();
+    if (pushAktif && pwaTerpasang) return; // kedua-dua dah aktif, tiada perlu gesa
+    if (typeof Notification !== 'undefined' && Notification.permission === 'denied' && pwaTerpasang) return;
+    const hariIni = new Date().toISOString().slice(0, 10);
+    if (localStorage.getItem('wafi_aff_gesa_terakhir') === hariIni) return;
+    localStorage.setItem('wafi_aff_gesa_terakhir', hariIni);
+    showModal('modal-gesa-aff');
+  } catch (err) {
+    console.warn('semakGesaanPushInstallAffiliate gagal:', err);
+  }
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(err => console.warn('SW gagal daftar:', err));
 }
 
 sb.auth.onAuthStateChange((event) => {

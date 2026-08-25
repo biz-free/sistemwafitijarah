@@ -3,10 +3,12 @@
 //  Membolehkan apps berfungsi offline
 // ═══════════════════════════════════════════════
 
-const CACHE_NAME = 'wafi-tijarah-v32';
+const CACHE_NAME = 'wafi-tijarah-v33';
 const ASSETS = [
   './pengurusan.html',
   './manifest.json',
+  './affiliate.html',
+  './manifest-affiliate.json',
   './logo.png',
   './icon-192.png',
   './icon-512.png',
@@ -53,7 +55,9 @@ self.addEventListener('fetch', e => {
           }
           return response;
         })
-        .catch(() => caches.match(e.request).then(cached => cached || caches.match('./pengurusan.html')))
+        .catch(() => caches.match(e.request).then(cached => cached || caches.match(
+          e.request.url.includes('affiliate.html') ? './affiliate.html' : './pengurusan.html'
+        )))
     );
     return;
   }
