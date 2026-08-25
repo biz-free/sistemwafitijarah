@@ -1348,72 +1348,6 @@ CREATE POLICY "pemilik baca winback_log" ON winback_log FOR SELECT USING (is_pem
 -- projek + CRON_SECRET sebenar) — lihat "🔁 Kempen Win-Back Automatik" dalam
 -- PANDUAN_SETUP.md untuk arahan penuh cara jadualkan selepas deploy fungsi.
 
--- ═══ Kod Referral "Bawa Kawan" ═══
-ALTER TABLE pesanan_edagang ADD COLUMN IF NOT EXISTS kod_rujukan text;
-ALTER TABLE pesanan_edagang ADD COLUMN IF NOT EXISTS rujukan_diskaun float NOT NULL DEFAULT 0;
-
-ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS rujukan_aktif boolean NOT NULL DEFAULT true;
-ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS rujukan_diskaun_kawan_peratus float NOT NULL DEFAULT 10;
-ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS rujukan_ganjaran_rm float NOT NULL DEFAULT 10;
-ALTER TABLE tetapan ADD COLUMN IF NOT EXISTS rujukan_luput_hari int NOT NULL DEFAULT 90;
-
-CREATE TABLE IF NOT EXISTS rujukan_ganjaran (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  pesanan_id text NOT NULL UNIQUE REFERENCES pesanan_edagang(id) ON DELETE CASCADE,
-  telefon_perujuk text NOT NULL,
-  telefon_kawan text NOT NULL,
-  kod_ganjaran text NOT NULL,
-  nilai_ganjaran float NOT NULL,
-  emel_dihantar boolean NOT NULL DEFAULT false,
-  created_at timestamptz DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_rujukan_ganjaran_perujuk ON rujukan_ganjaran(telefon_perujuk);
-ALTER TABLE rujukan_ganjaran ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "pemilik baca rujukan_ganjaran" ON rujukan_ganjaran;
-CREATE POLICY "pemilik baca rujukan_ganjaran" ON rujukan_ganjaran FOR SELECT USING (is_pemilik());
-
-CREATE OR REPLACE FUNCTION validasi_rujukan(p_kod_rujukan text, p_telefon_pembeli text)
-RETURNS TABLE(sah boolean, mesej text, diskaun_peratus float)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-  v_telefon_rujukan text;
-  v_telefon_pembeli text;
-  v_aktif boolean;
-  v_peratus float;
-  v_wujud boolean;
-BEGIN
-  SELECT rujukan_aktif, rujukan_diskaun_kawan_peratus INTO v_aktif, v_peratus FROM tetapan WHERE id = 1;
-  IF NOT COALESCE(v_aktif, true) THEN
-    RETURN QUERY SELECT false, 'Program rujukan tidak aktif', NULL::float; RETURN;
-  END IF;
-
-  v_telefon_rujukan := regexp_replace(trim(p_kod_rujukan), '[^0-9]', '', 'g');
-  v_telefon_pembeli := regexp_replace(trim(p_telefon_pembeli), '[^0-9]', '', 'g');
-  IF v_telefon_rujukan = '' THEN
-    RETURN QUERY SELECT false, 'Kod rujukan tidak sah', NULL::float; RETURN;
-  END IF;
-  IF v_telefon_rujukan = v_telefon_pembeli THEN
-    RETURN QUERY SELECT false, 'Tidak boleh guna nombor sendiri sebagai kod rujukan', NULL::float; RETURN;
-  END IF;
-
-  SELECT EXISTS(
-    SELECT 1 FROM pesanan_edagang
-    WHERE regexp_replace(pelanggan_telefon, '[^0-9]', '', 'g') = v_telefon_rujukan AND status_bayaran = 'disahkan'
-  ) INTO v_wujud;
-  IF NOT v_wujud THEN
-    RETURN QUERY SELECT false, 'Kod rujukan tidak dijumpai', NULL::float; RETURN;
-  END IF;
-
-  SELECT EXISTS(
-    SELECT 1 FROM pesanan_edagang WHERE regexp_replace(pelanggan_telefon, '[^0-9]', '', 'g') = v_telefon_pembeli
-  ) INTO v_wujud;
-  IF v_wujud THEN
-    RETURN QUERY SELECT false, 'Kod rujukan hanya untuk pelanggan baharu (pesanan pertama)', NULL::float; RETURN;
-  END IF;
-
-  RETURN QUERY SELECT true, format('Kod rujukan sah — diskaun %s%% untuk pesanan pertama anda!', v_peratus), v_peratus;
-END; $$;
-
 CREATE OR REPLACE FUNCTION validasi_harga_pesanan_edagang()
 RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $function$
@@ -1481,78 +1415,11 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
--- NOTA: jadual cron.schedule() untuk rujukan-ganjaran-cron TIDAK dimasukkan
--- di sini (ia perlu URL projek + CRON_SECRET sebenar) — lihat "🎁 Kod
--- Referral Bawa Kawan" dalam PANDUAN_SETUP.md untuk arahan penuh.
-
--- ═══ Daftar Nombor Rujukan Manual (option tambahan, tanpa perlu pernah membeli) ═══
-CREATE TABLE IF NOT EXISTS rujukan_manual (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  telefon text NOT NULL UNIQUE,
-  nama text,
-  emel text,
-  aktif boolean NOT NULL DEFAULT true,
-  created_at timestamptz DEFAULT now()
-);
-ALTER TABLE rujukan_manual ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "pemilik urus rujukan_manual" ON rujukan_manual;
-CREATE POLICY "pemilik urus rujukan_manual" ON rujukan_manual FOR ALL USING (is_pemilik()) WITH CHECK (is_pemilik());
-
-CREATE OR REPLACE FUNCTION validasi_rujukan(p_kod_rujukan text, p_telefon_pembeli text)
-RETURNS TABLE(sah boolean, mesej text, diskaun_peratus float)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-  v_telefon_rujukan text;
-  v_telefon_pembeli text;
-  v_aktif boolean;
-  v_peratus float;
-  v_wujud boolean;
-BEGIN
-  SELECT rujukan_aktif, rujukan_diskaun_kawan_peratus INTO v_aktif, v_peratus FROM tetapan WHERE id = 1;
-  IF NOT COALESCE(v_aktif, true) THEN
-    RETURN QUERY SELECT false, 'Program rujukan tidak aktif', NULL::float; RETURN;
-  END IF;
-
-  v_telefon_rujukan := regexp_replace(trim(p_kod_rujukan), '[^0-9]', '', 'g');
-  v_telefon_pembeli := regexp_replace(trim(p_telefon_pembeli), '[^0-9]', '', 'g');
-  IF v_telefon_rujukan = '' THEN
-    RETURN QUERY SELECT false, 'Kod rujukan tidak sah', NULL::float; RETURN;
-  END IF;
-  IF v_telefon_rujukan = v_telefon_pembeli THEN
-    RETURN QUERY SELECT false, 'Tidak boleh guna nombor sendiri sebagai kod rujukan', NULL::float; RETURN;
-  END IF;
-
-  SELECT EXISTS(
-    SELECT 1 FROM pesanan_edagang
-    WHERE regexp_replace(pelanggan_telefon, '[^0-9]', '', 'g') = v_telefon_rujukan AND status_bayaran = 'disahkan'
-  ) INTO v_wujud;
-
-  IF NOT v_wujud THEN
-    SELECT EXISTS(
-      SELECT 1 FROM rujukan_manual
-      WHERE regexp_replace(telefon, '[^0-9]', '', 'g') = v_telefon_rujukan AND aktif = true
-    ) INTO v_wujud;
-  END IF;
-
-  IF NOT v_wujud THEN
-    RETURN QUERY SELECT false, 'Kod rujukan tidak dijumpai', NULL::float; RETURN;
-  END IF;
-
-  SELECT EXISTS(
-    SELECT 1 FROM pesanan_edagang WHERE regexp_replace(pelanggan_telefon, '[^0-9]', '', 'g') = v_telefon_pembeli
-  ) INTO v_wujud;
-  IF v_wujud THEN
-    RETURN QUERY SELECT false, 'Kod rujukan hanya untuk pelanggan baharu (pesanan pertama)', NULL::float; RETURN;
-  END IF;
-
-  RETURN QUERY SELECT true, format('Kod rujukan sah — diskaun %s%% untuk pesanan pertama anda!', v_peratus), v_peratus;
-END; $$;
-
 -- ═══ Pembetulan bug susulan-auto-cron (ambang 24 jam tepat -> boleh tersekat) ═══
 -- NOTA: ini pembetulan kod Edge Function sahaja (bukan SQL) — deploy semula
 -- fungsi susulan-auto-cron dari kod sumber terkini. Tiada perubahan SQL.
 
--- ═══ Maklum & Semak Ganjaran Rujukan (kemaskini semak_status_pesanan + RPC baharu) ═══
+-- ═══ Kemaskini semak_status_pesanan (turut pulangkan pelanggan_telefon) ═══
 DROP FUNCTION IF EXISTS semak_status_pesanan(text);
 
 CREATE OR REPLACE FUNCTION public.semak_status_pesanan(p_id text)
@@ -1567,19 +1434,6 @@ AS $function$
   LIMIT 1;
 $function$;
 GRANT EXECUTE ON FUNCTION semak_status_pesanan(text) TO anon, authenticated;
-
-CREATE OR REPLACE FUNCTION semak_ganjaran_rujukan_saya(p_telefon text)
-RETURNS TABLE(kod_ganjaran text, nilai_ganjaran float, created_at timestamptz, tarikh_luput date, sudah_guna boolean, masih_aktif boolean)
-LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
-  SELECT rg.kod_ganjaran, rg.nilai_ganjaran, rg.created_at, b.tarikh_luput,
-         COALESCE(b.bilangan_guna, 0) > 0 AS sudah_guna,
-         COALESCE(b.aktif, false) AS masih_aktif
-  FROM rujukan_ganjaran rg
-  LEFT JOIN baucar b ON b.kod = rg.kod_ganjaran
-  WHERE regexp_replace(rg.telefon_perujuk, '[^0-9]', '', 'g') = regexp_replace(trim(p_telefon), '[^0-9]', '', 'g')
-  ORDER BY rg.created_at DESC;
-$$;
-GRANT EXECUTE ON FUNCTION semak_ganjaran_rujukan_saya(text) TO anon, authenticated;
 
 -- ═══ Pembetulan jumlah_terjual — kira jualan e-dagang online, bukan cuma consignment ═══
 CREATE OR REPLACE FUNCTION public.senarai_produk_awam()
@@ -1634,7 +1488,12 @@ BEGIN
 END;
 $function$;
 
--- ═══ Voucher & Kod Rujukan Saling Eksklusif (elak double claim promosi) ═══
+-- ═══ Voucher & Kod Affiliate Saling Eksklusif (elak double claim promosi) ═══
+-- NOTA: fail konsolidasi ni belum lagi merangkumi Sistem Affiliate penuh
+-- (SQL_TAMBAHAN_111+) — versi trigger di bawah cuma sokong voucher sahaja
+-- (kod affiliate diabaikan jika hantar, sebab lajur/RPC affiliate belum
+-- wujud dlm fail ni). Utk projek BAHARU perlukan Sistem Affiliate, jalankan
+-- SQL_TAMBAHAN_111.sql ke SQL_TAMBAHAN_120.sql secara berasingan selepas ini.
 CREATE OR REPLACE FUNCTION public.validasi_harga_pesanan_edagang()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1648,12 +1507,7 @@ DECLARE
   sub float := 0;
   kos_min float := 0;
   v_check RECORD;
-  v_rujukan RECORD;
 BEGIN
-  IF NEW.kod_baucar IS NOT NULL AND NEW.kod_baucar <> '' AND NEW.kod_rujukan IS NOT NULL AND NEW.kod_rujukan <> '' THEN
-    RAISE EXCEPTION 'Hanya satu promosi dibenarkan setiap pesanan — sila guna sama ada kod voucher ATAU kod rujukan, bukan kedua-duanya';
-  END IF;
-
   FOR item IN SELECT * FROM jsonb_array_elements(COALESCE(NEW.items, '[]'::jsonb)) LOOP
     SELECT harga_jual INTO harga_sebenar FROM stok WHERE id = item->>'stokId';
     IF harga_sebenar IS NULL THEN
@@ -1693,26 +1547,15 @@ BEGIN
     NEW.diskaun := 0;
   END IF;
 
-  IF NEW.kod_rujukan IS NOT NULL AND NEW.kod_rujukan <> '' THEN
-    SELECT * INTO v_rujukan FROM validasi_rujukan(NEW.kod_rujukan, NEW.pelanggan_telefon);
-    IF NOT v_rujukan.sah THEN
-      RAISE EXCEPTION '%', v_rujukan.mesej;
-    END IF;
-    NEW.rujukan_diskaun := ROUND((sub * v_rujukan.diskaun_peratus / 100)::numeric, 2);
-  ELSE
-    NEW.rujukan_diskaun := 0;
-  END IF;
-
-  NEW.jumlah := sub + NEW.kos_penghantaran - COALESCE(NEW.diskaun, 0) - COALESCE(NEW.rujukan_diskaun, 0);
+  NEW.jumlah := sub + NEW.kos_penghantaran - COALESCE(NEW.diskaun, 0);
   NEW.status_bayaran := 'menunggu';
 
   RETURN NEW;
 END;
 $function$;
 
--- ═══ Voucher Rujukan Terkumpul + Batalkan (bukan Padam) Pesanan/Pre-Order +
---     Dashboard Pre-Order Pekerja + Jumlah Produk Diproses + Fix Jejak Tracking +
---     Link Pesan.html Unik Per Pekerja — semuanya perubahan kod (pengurusan.html,
---     index.html, pesan.html) & Edge Function (rujukan-ganjaran-cron,
---     easyparcel-track-order) sahaja. Tiada perubahan SQL tambahan diperlukan
---     selain apa yang tersenarai di atas.
+-- ═══ Batalkan (bukan Padam) Pesanan/Pre-Order + Dashboard Pre-Order Pekerja +
+--     Jumlah Produk Diproses + Fix Jejak Tracking + Link Pesan.html Unik Per
+--     Pekerja — semuanya perubahan kod (pengurusan.html, index.html,
+--     pesan.html) & Edge Function (easyparcel-track-order) sahaja. Tiada
+--     perubahan SQL tambahan diperlukan selain apa yang tersenarai di atas.

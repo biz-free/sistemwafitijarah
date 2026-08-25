@@ -74,7 +74,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 64. `SQL_TAMBAHAN_110.sql` + kemaskini Edge Function `notifikasi-invois-lewat-cron` — **Notifikasi Tolak (Web Push)**: jadual `push_subscriptions` (langganan setiap peranti), butang **"🔔 Aktifkan Notifikasi Tolak"** di kad "👤 Profil Saya" (Lebih), dan `sw.js` dikemaskini utk terima & papar notifikasi. Bila invois melepasi tarikh bayaran, pekerja & pemilik kini terima makluman TERUS di telefon (tambahan kepada emel sedia ada, bukan ganti). **Setup wajib** (jika belum, push dilangkau senyap & emel tetap berjalan spt biasa) — lihat bahagian "🔔 Notifikasi Tolak (Web Push)" di bawah.
 > 65. Popup automatik **"🔔 Aktifkan Notifikasi Tolak"** kepada pekerja (bukan pemilik) yang belum langgan push — muncul sekali sehari selepas log masuk, berhenti sendiri sebaik diaktifkan. Tiada perubahan SQL diperlukan.
 > 66. Edge Function `notifikasi-kelulusan-pemilik` (permohonan padam/cuti/serahan cash/reject perlu kelulusan) turut dikemaskini hantar **Notifikasi Tolak** kepada pemilik SELARI dengan emel sedia ada — guna semula secret `VAPID_PRIVATE_KEY` yang sama, tiada setup tambahan diperlukan jika #64 sudah dibuat.
-> 67. `SQL_TAMBAHAN_111.sql` + halaman baharu **`affiliate.html`** — **Sistem Affiliate**: akaun affiliate log masuk sendiri guna Google (bukan sekadar nombor telefon spt Kod Referral sedia ada), permohonan awam → kelulusan pemilik (kad "💰 Sistem Affiliate", Lebih) → kod affiliate diguna pelanggan di checkout `index.html` (diskaun pelanggan + komisen affiliate utk SETIAP pesanan disahkan, bukan sekadar pertama). Komisen matang 14 hari selepas disahkan sebelum boleh dituntut; bayaran transfer bank MANUAL (pemilik sahkan lepas transfer dibuat di luar sistem). Kod affiliate SATU SLOT sahaja di checkout — tak boleh gabung dgn voucher/rujukan. **Setup wajib** (jika belum, affiliate tak boleh log masuk langsung) — lihat bahagian "🤝 Sistem Affiliate" di bawah.
+> 67. `SQL_TAMBAHAN_111.sql` + halaman baharu **`affiliate.html`** — **Sistem Affiliate**: akaun affiliate log masuk sendiri guna Google (bukan sekadar nombor telefon spt Kod Referral sedia ada), permohonan awam → kelulusan pemilik (kad "💰 Sistem Affiliate", Lebih) → kod affiliate diguna pelanggan di checkout `index.html` (diskaun pelanggan + komisen affiliate utk SETIAP pesanan disahkan, bukan sekadar pertama). Komisen matang 14 hari selepas disahkan sebelum boleh dituntut; bayaran transfer bank MANUAL (pemilik sahkan lepas transfer dibuat di luar sistem). Kod affiliate SATU SLOT sahaja di checkout — tak boleh gabung dgn voucher. **Setup wajib** (jika belum, affiliate tak boleh log masuk langsung) — lihat bahagian "🤝 Sistem Affiliate" di bawah.
 > 68. `SQL_TAMBAHAN_112.sql` — **Bonus Kedai Terkumpul matang kini tolak cash dipegang pekerja dahulu**: bila pemilik tekan "💰 Bayar Sekarang" (kad "🏪 Bonus Kedai Baru", Lebih), cash tunai yang pekerja masih PEGANG (belum diserah — `kira_cash_dipegang_pekerja()`, port SQL drpd `kiraCashDipegang()` client sedia ada) ditolak DAHULU drpd bonus matang; hanya BAKI dibayar sebagai baucar. Bahagian ditolak direkod sbg `serahan_cash` auto-disahkan (elak dikira 2x). Jika cash dipegang ≥ bonus matang, bonus ditanda dibayar sepenuhnya (nilai sudah offset cash) tanpa baucar RM0 dijana. Tiada setup tambahan diperlukan.
 > 69. `SQL_TAMBAHAN_113.sql` — **Terima Bayaran Hutang turut sokong Belian Peribadi** (bukan kedai sahaja): senarai/dropdown "Kedai & Peribadi" (Tab Kedai, kad Terima Bayaran Hutang) kini turut senaraikan pembeli peribadi (`transaksi.kedai_id IS NULL`) yang ada hutang, dikumpul ikut `nama_pembeli`. Sama corak dua-fasa spt kedai (pekerja mohon → pemilik sahkan; pemilik terus rekod). Tiada setup tambahan diperlukan.
 > 70. `SQL_TAMBAHAN_114.sql` — **Affiliate boleh tukar kod affiliate sendiri** (butang "✏️ Tukar Kod" di `affiliate.html`, sebelum ini kod hanya ditetapkan sekali oleh pemilik semasa lulus). Turut betulkan bug `affiliate.html` papar kosong selepas log masuk (JS guna `style.display=''` yg tak override CSS `display:none` asas — ditukar `'block'` eksplisit) & tambah meta cache-control elak browser papar salinan lama. Kad "💰 Sistem Affiliate" (pengurusan.html) kini turut papar jumlah komisen diperoleh setiap affiliate. Tiada setup tambahan diperlukan.
@@ -84,6 +84,7 @@ Kawasan liputan: Kedah, Perlis, Pulau Pinang & Perak
 > 74. `SQL_TAMBAHAN_119.sql` — **Push/emel notifikasi bila ada TEMPAHAN PRE-ORDER BAHARU masuk** (pesan.html — sambungan #73, pola sama: tiada trigger sedia ada). Trigger `trg_notify_pemilik_preorder_baru` (AFTER INSERT ON `pre_order`) guna semula Edge Function yg sama (kini turut sokong `jenis='Pre-Order Baharu'` dgn label "Kedai"). Diuji hidup — push berjaya sampai (`pushDihantar:2`). Tiada setup tambahan diperlukan; perlu redeploy Edge Function `notifikasi-kelulusan-pemilik` (sekali dgn #73, sama fail).
 > 75. Butang **"✏️ Edit Kadar"** pada setiap affiliate aktif (kad "💰 Sistem Affiliate", Lebih, pemilik) — sebelum ni kadar komisen/diskaun cuma boleh ditetapkan SEKALI semasa lulus permohonan, tiada cara ubah selepas aktif. Modal baharu (`modal-edit-kadar-affiliate`) benarkan pemilik tukar kadar bila-bila masa, guna semula RPC `kemaskini_affiliate` sedia ada (backend dah sokong, cuma tak disambung ke UI). Tiada setup SQL/Edge Function tambahan diperlukan.
 > 76. `SQL_TAMBAHAN_120.sql` — **Diskaun pelanggan affiliate kini BERSYARAT** (minima belian, default RM500, **editable setiap affiliate** — lajur baharu `minima_belian`). Diskaun cuma terpakai jika subjumlah pesanan >= minima; jika kurang, kod affiliate tetap SAH (checkout tak gagal) tapi diskaun = 0 dgn mesej jelas "Belanja RM_ lagi untuk dapat diskaun". **Komisen affiliate TIDAK terjejas** — affiliate tetap dapat komisen penuh atas SEBARANG pesanan yg guna kod dia, tak kira jumlah (disahkan diuji hidup). Semakan muktamad di SERVER (trigger `validasi_harga_pesanan_edagang`), bukan client sahaja. Medan "Minima Belian (RM)" ditambah pada modal Lulus Permohonan & Edit Kadar (pengurusan.html), dan dipaparkan di affiliate.html (dashboard affiliate sendiri). Tiada setup tambahan diperlukan.
+> 77. `SQL_TAMBAHAN_121.sql` — **🚫 GUGURKAN sepenuhnya "Kod Referral 'Bawa Kawan'"** (sistem lama berasaskan no. telefon, changelog #55/#56/#58) — digantikan Sistem Affiliate (#67+) yang lebih sistematik. Dipadam KEKAL: jadual `rujukan_ganjaran` & `rujukan_manual`, lajur `kod_rujukan`/`rujukan_diskaun` (`pesanan_edagang`) & `rujukan_*` (`tetapan`), fungsi `validasi_rujukan`/`semak_ganjaran_rujukan_saya`, cron `rujukan-ganjaran-setiap-15-minit`, Edge Function `rujukan-ganjaran-cron` (fail sumber dibuang dari repo — **fungsi live di dashboard Supabase perlu dipadam manual**, tiada API padam Edge Function). Kad "🎁 Kod Referral" & modal daftar manual dibuang dari pengurusan.html; ruangan kod rujukan, banner teaser & panel "Kongsi & Dapat Ganjaran" dibuang dari index.html. Trigger checkout (`validasi_harga_pesanan_edagang`) kini cuma sokong voucher + affiliate (2 kod, bukan 3). **Data sejarah ganjaran & senarai nombor manual dipadam kekal, tiada cara pulih** — disahkan oleh pemilik sebelum dijalankan. `SETUP_SQL_LENGKAP.sql` turut dikemaskini (fail konsolidasi tak sertakan lagi ciri ni utk pemasangan baharu). Tiada setup tambahan diperlukan.
 >
 > Tak perlu jalankan `SETUP_SQL_LENGKAP.sql` semula jika projek Supabase anda dah aktif (fail itu sudah dikemas kini dengan pembetulan yang sama untuk pemasangan BAHARU).
 
@@ -525,44 +526,6 @@ select cron.schedule(
   $$
   select net.http_post(
     url := 'https://<project-ref>.supabase.co/functions/v1/winback-auto-cron',
-    headers := '{"Content-Type": "application/json", "x-cron-secret": "<CRON_SECRET>"}'::jsonb,
-    body := '{}'::jsonb
-  );
-  $$
-);
-```
-
-### 🎁 Kod Referral "Bawa Kawan"
-Kad **"🎁 Kod Referral 'Bawa Kawan'"** (Lebih → dekat "👥 Data Pembeli", pemilik sahaja) — program rujukan viral: setiap pelanggan kongsi **nombor telefon mereka sendiri** sebagai "kod rujukan" (tiada kod berasingan perlu dijana/diingati — mudah kongsi).
-
-**Bagaimana ia berfungsi:**
-0. **Banner teaser** "🎁 Rujuk kawan & dapat ganjaran voucher!" dipaparkan kekal di laman utama `index.html` (bawah header, atas marquee promo) — ketik untuk buka modal penerangan penuh (macam mana ia berfungsi + ruangan semak ganjaran sendiri). Banner ni berasingan dari mesej promo pemilik (`promo_mesej`) — sentiasa kelihatan tak kira apa mesej promo semasa.
-1. Selepas pesanan pertama berjaya (checkout `index.html`) — **kedua-dua kaedah bayaran** (Transfer Manual & Billplz) — pelanggan nampak paparan "🎁 Kongsi & Dapat Ganjaran!" dengan nombor telefon mereka sebagai kod rujukan — mereka kongsi ni dengan kawan (WhatsApp, dsb).
-2. Kawan yang **pesanan PERTAMA** masukkan nombor tu dalam ruangan "🎁 Kod Rujukan Kawan" semasa checkout, tekan "✅ Guna Kod" — sistem sahkan (nombor tu memang pelanggan sedia ada yang pernah bayar, bukan nombor sendiri, dan pembeli ni memang pelanggan baharu) lalu papar diskaun (default **10%**) terus dalam jumlah akhir.
-3. Diskaun **disahkan & dikira semula di server** (trigger `validasi_harga_pesanan_edagang`, sama pattern macam voucher) — bukan dipercayai daripada client.
-4. Bila pesanan kawan tu **disahkan bayar** (bukan serta-merta semasa checkout — elak ganjaran untuk pesanan yang tak jadi dibayar), sistem automatik jana **baucar ganjaran** (default **RM10**, sah 90 hari) untuk perujuk, dan hantar emel pemberitahuan (jika perujuk ada alamat emel berdaftar) — diproses oleh `rujukan-ganjaran-cron` setiap **15 minit** (pg_cron).
-5. Kalau perujuk tiada emel berdaftar (atau emel tak sampai/hilang), perujuk boleh **semak sendiri** — dalam modal teaser (langkah 0), ruangan "🔍 Dah Rujuk Kawan? Semak Ganjaran Anda", masukkan no. telefon sendiri → papar semua kod ganjaran (kod, nilai, status sudah/belum guna, tarikh luput) guna RPC awam `semak_ganjaran_rujukan_saya`. Pemilik juga boleh lihat sejarah penuh dalam kad admin "Sejarah Ganjaran Rujukan".
-
-**Tetapan boleh ubah**: Diskaun Kawan (%), Ganjaran Perujuk (RM), Tempoh Luput Ganjaran (hari) — semua di kad ni. Toggle "Aktifkan Program Rujukan" — **AKTIF (ON) secara default** (berbeza dari Win-Back) sebab tiada risiko emel pukal tanpa kelulusan; diskaun/ganjaran cuma berlaku hasil tindakan pelanggan sebenar (bukan hantaran pukal automatik).
-
-Butang **"🎁 Jana Ganjaran Sekarang (Ujian/Manual)"** — jalankan serta-merta tanpa tunggu 15 minit (berguna untuk uji atau proses segera lepas sahkan bayaran manual).
-
-**➕ Daftar No. Telefon Rujukan Manual (option tambahan)**: Butang di bahagian bawah kad ni buka modal untuk pemilik daftar terus mana-mana nombor telefon (cth staf, influencer, rakan niaga) sebagai kod rujukan sah — **TANPA perlu nombor itu pernah membeli**. Isi No. Telefon (wajib), Nama & Emel (optional — emel diperlukan untuk terima notifikasi ganjaran automatik bila kawan yang dirujuk beli). Senarai nombor didaftar dipaparkan dalam modal yang sama, dengan butang ⏸️/▶️ untuk nyahaktif/aktifkan semula dan ✕ untuk padam. `validasi_rujukan()` semak KEDUA-DUA sumber (pelanggan sedia ada YANG disahkan bayar, ATAU nombor dalam senarai manual yang aktif) — mana-mana satu memadai untuk kod rujukan sah.
-
-**Setup wajib — 3 langkah (dari folder `wafi-app`):**
-1. Jalankan `SQL_TAMBAHAN_45.sql` (lajur `kod_rujukan`/`rujukan_diskaun` pada `pesanan_edagang`, lajur tetapan pada `tetapan`, jadual `rujukan_ganjaran`, RPC `validasi_rujukan`, kemaskini trigger `validasi_harga_pesanan_edagang`), `SQL_TAMBAHAN_46.sql` (jadual `rujukan_manual` untuk daftar nombor manual + kemaskini `validasi_rujukan()`), dan `SQL_TAMBAHAN_47.sql` (kemaskini `semak_status_pesanan()` pulangkan `pelanggan_telefon` + RPC baharu `semak_ganjaran_rujukan_saya`).
-2. Deploy fungsi (guna semula secret `RESEND_API_KEY` & `CRON_SECRET` sedia ada):
-```
-npx supabase functions deploy rujukan-ganjaran-cron --no-verify-jwt
-```
-3. Jadualkan panggilan setiap 15 minit (jalankan SEKALI di SQL Editor Supabase, gantikan `<CRON_SECRET>`):
-```sql
-select cron.schedule(
-  'rujukan-ganjaran-setiap-15-minit',
-  '*/15 * * * *',
-  $$
-  select net.http_post(
-    url := 'https://<project-ref>.supabase.co/functions/v1/rujukan-ganjaran-cron',
     headers := '{"Content-Type": "application/json", "x-cron-secret": "<CRON_SECRET>"}'::jsonb,
     body := '{}'::jsonb
   );

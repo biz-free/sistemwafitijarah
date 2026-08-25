@@ -1216,27 +1216,6 @@
       <div id="wb-log-list"></div>
     </div>
 
-    <!-- Kod Referral "Bawa Kawan" (pemilik sahaja) -->
-    <div class="card" id="rujukan-card">
-      <div class="card-title">🎁 Kod Referral "Bawa Kawan"</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Setiap pelanggan kongsi NO. TELEFON mereka sendiri sebagai kod rujukan. Kawan yang buat pesanan PERTAMA guna kod tu dapat diskaun; bila pesanan kawan disahkan bayar, perujuk automatik dapat baucar ganjaran (dihantar via emel, setiap 15 minit — pg_cron).</div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:14px"><input type="checkbox" id="rj-aktif" style="width:auto" onchange="simpanTetapanRujukan()" /> Aktifkan Program Rujukan</label>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Diskaun Kawan (%)</label><input type="number" class="form-input" id="rj-diskaun-peratus" min="0" max="100" step="1" /></div>
-        <div class="form-group"><label class="form-label">Ganjaran Perujuk (RM)</label><input type="number" class="form-input" id="rj-ganjaran-rm" min="0" step="1" /></div>
-      </div>
-      <div class="form-group"><label class="form-label">Tempoh Luput Ganjaran (hari)</label><input type="number" class="form-input" id="rj-luput-hari" min="1" step="1" /></div>
-      <button class="btn btn-primary" onclick="simpanTetapanRujukan()">💾 Simpan Tetapan</button>
-      <button class="btn btn-secondary" style="margin-top:8px" onclick="janaRujukanSekarang()" id="rj-btn-jana">🎁 Jana Ganjaran Sekarang (Ujian/Manual)</button>
-      <div id="rj-status" style="font-size:12px;font-weight:700;margin-top:10px;display:none"></div>
-      <div class="divider"></div>
-      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SEJARAH GANJARAN RUJUKAN</div>
-      <div id="rj-log-list"></div>
-      <div class="divider"></div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Option tambahan: daftar terus mana-mana nombor telefon (cth staf, influencer, rakan niaga) sebagai kod rujukan sah — TANPA perlu nombor itu pernah membeli.</div>
-      <button class="btn btn-secondary" onclick="bukaModalRujukanManual()">➕ Daftar No. Telefon Rujukan Manual</button>
-    </div>
-
     <!-- Sistem Affiliate — akaun sendiri log masuk Google (portal berasingan affiliate.html) -->
     <div class="card" id="affiliate-card">
       <div class="card-title">💰 Sistem Affiliate</div>
@@ -1725,20 +1704,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="modal-rujukan-manual">
-  <div class="modal-box">
-    <div class="modal-title"><span>➕ Daftar No. Telefon Rujukan Manual</span><button class="modal-close" onclick="closeModal('modal-rujukan-manual')">✕ Tutup</button></div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Nombor yang didaftar di sini boleh terus digunakan sebagai kod rujukan "Bawa Kawan" — TANPA perlu nombor itu pernah membeli (cth staf, influencer, rakan niaga).</div>
-    <div class="form-group"><label class="form-label">No. Telefon</label><input type="tel" class="form-input" id="rm-telefon" placeholder="cth: 0123456789" /></div>
-    <div class="form-group"><label class="form-label">Nama</label><input type="text" class="form-input" id="rm-nama" placeholder="cth: Along (Influencer IG)" /></div>
-    <div class="form-group"><label class="form-label">Emel (optional — untuk terima notifikasi ganjaran automatik)</label><input type="email" class="form-input" id="rm-emel" placeholder="cth: along@email.com" /></div>
-    <button class="btn btn-primary" onclick="tambahRujukanManual()">+ Daftar</button>
-    <div class="divider"></div>
-    <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SENARAI NOMBOR RUJUKAN MANUAL</div>
-    <div id="rm-senarai"></div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="modal-tambah-kedai">
   <div class="modal-box">
     <div class="modal-title">🏪 <span id="kedai-modal-title">Daftar Kedai Baru</span><button class="modal-close" onclick="closeModal('modal-tambah-kedai')">✕ Tutup</button></div>
@@ -2174,7 +2139,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','bonus-kedai-semua-card','status-sistem-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','rujukan-card','affiliate-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
+  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','bonus-kedai-semua-card','status-sistem-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','affiliate-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -2257,7 +2222,6 @@ async function setPage(p) {
       renderVoucherList();
       loadDataPembeli();
       loadTetapanWinback();
-      loadTetapanRujukan();
       renderAffiliate();
       whLoad();
       renderSenaraiCutiSemua();
@@ -2293,7 +2257,6 @@ const LEBIH_SHORTCUTS = [
   { id: 'voucher-card', icon: '🎟️', label: 'Voucher' },
   { id: 'data-pembeli-card', icon: '👥', label: 'Data Pembeli' },
   { id: 'winback-card', icon: '🔁', label: 'Win-Back' },
-  { id: 'rujukan-card', icon: '🎁', label: 'Referral' },
   { id: 'affiliate-card', icon: '💰', label: 'Affiliate' },
   { id: 'wa-hebahan-card', icon: '📣', label: 'Hebahan WA' },
   { id: 'easyparcel-card', icon: '🚚', label: 'EasyParcel' },
@@ -7154,7 +7117,6 @@ function statusSistemBaris(ikon, label, ket) {
 }
 
 const CRON_LABEL_SISTEM = {
-  'rujukan-ganjaran-setiap-15-minit': 'Automasi: Ganjaran Rujukan (tiap 15 minit)',
   'susulan-bayaran-harian': 'Automasi: Susulan Bayaran (harian 2 pagi)',
   'kempen-winback-mingguan': 'Automasi: Kempen Win-Back (mingguan Isnin)'
 };
@@ -7503,138 +7465,6 @@ async function renderWinbackLog() {
     </div>`).join('') || '<div class="empty"><div class="empty-text">Belum ada kempen win-back dihantar lagi</div></div>';
 }
 
-// ════════════════════════════════════════════════════
-//  KOD REFERRAL "BAWA KAWAN" — pelanggan kongsi no. telefon sendiri sebagai
-//  kod rujukan; kawan yang buat pesanan pertama dapat diskaun, perujuk dapat
-//  baucar ganjaran automatik guna Edge Function rujukan-ganjaran-cron.
-// ════════════════════════════════════════════════════
-async function loadTetapanRujukan() {
-  if (!useCloud) return;
-  const { data, error } = await sb.from('tetapan')
-    .select('rujukan_aktif, rujukan_diskaun_kawan_peratus, rujukan_ganjaran_rm, rujukan_luput_hari')
-    .eq('id', 1).single();
-  if (error || !data) return;
-  document.getElementById('rj-aktif').checked = !!data.rujukan_aktif;
-  document.getElementById('rj-diskaun-peratus').value = data.rujukan_diskaun_kawan_peratus ?? 10;
-  document.getElementById('rj-ganjaran-rm').value = data.rujukan_ganjaran_rm ?? 10;
-  document.getElementById('rj-luput-hari').value = data.rujukan_luput_hari ?? 90;
-  renderRujukanLog();
-}
-
-async function simpanTetapanRujukan() {
-  const payload = {
-    rujukan_aktif: document.getElementById('rj-aktif').checked,
-    rujukan_diskaun_kawan_peratus: +document.getElementById('rj-diskaun-peratus').value || 0,
-    rujukan_ganjaran_rm: +document.getElementById('rj-ganjaran-rm').value || 0,
-    rujukan_luput_hari: +document.getElementById('rj-luput-hari').value || 90,
-  };
-  const { error } = await sb.from('tetapan').update(payload).eq('id', 1);
-  if (error) return toast('Gagal simpan tetapan rujukan: '+error.message,'err');
-  toast(payload.rujukan_aktif ? 'Program rujukan diaktifkan' : 'Tetapan rujukan disimpan');
-}
-
-async function janaRujukanSekarang() {
-  const btn = document.getElementById('rj-btn-jana');
-  const statusEl = document.getElementById('rj-status');
-  btn.disabled = true;
-  btn.textContent = '⏳ Menjana...';
-  statusEl.style.display = 'none';
-
-  const { data, error } = await sb.functions.invoke('rujukan-ganjaran-cron', { body: {} });
-
-  btn.disabled = false;
-  btn.textContent = '🎁 Jana Ganjaran Sekarang (Ujian/Manual)';
-  if (error || data?.error) {
-    let pesan = data?.error || error.message;
-    if (error?.context) {
-      try { const body = await error.context.json(); if (body?.error) pesan = body.error; } catch { /* biar mesej asal */ }
-    }
-    statusEl.style.display = '';
-    statusEl.style.color = 'var(--red)';
-    statusEl.textContent = '⚠️ ' + pesan;
-    return;
-  }
-
-  statusEl.style.display = '';
-  statusEl.style.color = 'var(--teal)';
-  statusEl.textContent = `✅ ${data.dijana} ganjaran dijana (${data.emelDihantar} emel dihantar, ${data.jumlahCalon} calon diperiksa).`;
-  toast(`${data.dijana} ganjaran rujukan dijana`);
-  renderRujukanLog();
-}
-
-async function renderRujukanLog() {
-  const el = document.getElementById('rj-log-list');
-  if (!useCloud) { el.innerHTML = ''; return; }
-  const { data, error } = await sb.from('rujukan_ganjaran').select('*').order('created_at', { ascending: false }).limit(15);
-  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
-  el.innerHTML = (data||[]).map(r => `
-    <div class="list-item">
-      <div>
-        <div class="list-item-title">${esc(r.telefon_perujuk)} <span class="badge badge-green" style="font-size:9px">${r.emel_dihantar?'✉️ Emel dihantar':'⚠️ Tiada emel'}</span></div>
-        <div class="list-item-sub">Rujuk ${esc(r.telefon_kawan)} · kod ${esc(r.kod_ganjaran)} · ${fmtD(r.created_at)}</div>
-      </div>
-      <div class="list-item-val" style="color:var(--teal)">${fmt(r.nilai_ganjaran)}</div>
-    </div>`).join('') || '<div class="empty"><div class="empty-text">Belum ada ganjaran rujukan dijana lagi</div></div>';
-}
-
-// ── Daftar No. Telefon Rujukan Manual (option tambahan, tanpa perlu pernah membeli) ──
-function bukaModalRujukanManual() {
-  document.getElementById('rm-telefon').value = '';
-  document.getElementById('rm-nama').value = '';
-  document.getElementById('rm-emel').value = '';
-  showModal('modal-rujukan-manual');
-  renderRujukanManualSenarai();
-}
-
-async function tambahRujukanManual() {
-  const telefon = document.getElementById('rm-telefon').value.trim();
-  const nama = document.getElementById('rm-nama').value.trim();
-  const emel = document.getElementById('rm-emel').value.trim();
-  if (!telefon) return toast('Sila isi no. telefon','err');
-  const { error } = await sb.from('rujukan_manual').upsert(
-    { telefon, nama: nama || null, emel: emel || null, aktif: true },
-    { onConflict: 'telefon' }
-  );
-  if (error) return toast('Gagal daftar nombor rujukan: '+error.message,'err');
-  toast(`Nombor ${telefon} didaftarkan sebagai kod rujukan`);
-  document.getElementById('rm-telefon').value = '';
-  document.getElementById('rm-nama').value = '';
-  document.getElementById('rm-emel').value = '';
-  renderRujukanManualSenarai();
-}
-
-async function toggleRujukanManualAktif(id, aktif) {
-  const { error } = await sb.from('rujukan_manual').update({ aktif }).eq('id', id);
-  if (error) return toast('Gagal kemaskini: '+error.message,'err');
-  renderRujukanManualSenarai();
-}
-
-async function padamRujukanManual(id, telefon) {
-  if (!confirm(`Padam nombor rujukan manual "${telefon}"?`)) return;
-  const { error } = await sb.from('rujukan_manual').delete().eq('id', id);
-  if (error) return toast('Gagal padam: '+error.message,'err');
-  toast('Nombor rujukan manual dipadam');
-  renderRujukanManualSenarai();
-}
-
-async function renderRujukanManualSenarai() {
-  const el = document.getElementById('rm-senarai');
-  if (!useCloud) { el.innerHTML = ''; return; }
-  const { data, error } = await sb.from('rujukan_manual').select('*').order('created_at', { ascending: false });
-  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
-  el.innerHTML = (data||[]).map(r => `
-    <div class="list-item">
-      <div>
-        <div class="list-item-title">${esc(r.telefon)}</div>
-        <div class="list-item-sub">${esc(r.nama||'—')}${r.emel?' · '+esc(r.emel):''}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span class="badge ${r.aktif?'badge-green':'badge-gold'}">${r.aktif?'✅ Aktif':'⏸️ Tidak Aktif'}</span>
-        <button class="btn-delete-icon" style="position:static" onclick="toggleRujukanManualAktif(${r.id},${!r.aktif})" title="${r.aktif?'Nyahaktif':'Aktifkan'}">${r.aktif?'⏸️':'▶️'}</button>
-        <button class="btn-delete-icon" style="position:static" onclick="padamRujukanManual(${r.id},'${esc(r.telefon)}')" title="Padam">✕</button>
-      </div>
-    </div>`).join('') || '<div class="empty"><div class="empty-text">Belum ada nombor rujukan manual didaftar</div></div>';
-}
 
 // ════════════════════════════════════════════════════
 //  SISTEM AFFILIATE (pemilik: lulus/tolak permohonan, urus kadar, sahkan bayaran)

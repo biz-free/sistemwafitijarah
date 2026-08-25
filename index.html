@@ -267,10 +267,6 @@
   <div id="voucher-marquee-track"></div>
 </div>
 
-<div id="rujukan-teaser" onclick="bukaModalInfo('rujukan-info-modal')" style="background:var(--gold);color:var(--navy);text-align:center;font-size:12px;font-weight:800;padding:8px 12px;cursor:pointer">
-  🎁 Rujuk kawan & dapat ganjaran voucher! Kod rujukan = no. telefon anda sendiri — ketik untuk tahu lebih lanjut
-</div>
-
 <div id="main">
   <div id="form-card">
    <div id="view-produk">
@@ -409,14 +405,6 @@
         </div>
         <div id="voucher-mesej" style="font-size:12px;margin-top:6px;display:none"></div>
       </div>
-      <div class="form-group" id="rujukan-wrap">
-        <label class="form-label">🎁 Kod Rujukan Kawan (Optional — untuk pelanggan baharu)</label>
-        <div style="display:flex;gap:8px">
-          <input type="tel" class="form-input" id="c-kod-rujukan" placeholder="No. telefon kawan yang rujuk anda" style="flex:1;min-width:0" />
-          <button class="btn btn-primary" style="width:auto;flex-shrink:0;padding:12px 20px;font-size:15px" onclick="gunaRujukan()">✅ Guna Kod</button>
-        </div>
-        <div id="rujukan-mesej" style="font-size:12px;margin-top:6px;display:none"></div>
-      </div>
       <div class="form-group" id="affiliate-wrap">
         <label class="form-label">🤝 Kod Affiliate (Optional)</label>
         <div style="display:flex;gap:8px">
@@ -428,7 +416,6 @@
       <div id="kiraan-jelas">
         <div class="kiraan-row"><span>Subjumlah</span><span id="kiraan-subtotal">RM 0.00</span></div>
         <div class="kiraan-row" id="kiraan-diskaun-row" style="display:none;color:var(--green)"><span>Diskaun Voucher (<span id="kiraan-diskaun-kod"></span>) <a href="javascript:void(0)" onclick="bukaVoucherTnc()" style="font-size:11px;color:var(--green);text-decoration:underline" title="Terma & Syarat voucher ini">ℹ️ T&C</a> <button class="btn-link" style="font-size:13px;padding:4px 6px" onclick="buangVoucher()">✕ Buang</button></span><span id="kiraan-diskaun">−RM 0.00</span></div>
-        <div class="kiraan-row" id="kiraan-rujukan-row" style="display:none;color:var(--green)"><span>Diskaun Rujukan Kawan <button class="btn-link" style="font-size:13px;padding:4px 6px" onclick="buangRujukan()">✕ Buang</button></span><span id="kiraan-rujukan">−RM 0.00</span></div>
         <div class="kiraan-row" id="kiraan-affiliate-row" style="display:none;color:var(--green)"><span>Diskaun Affiliate (<span id="kiraan-affiliate-kod"></span>) <button class="btn-link" style="font-size:13px;padding:4px 6px" onclick="buangAffiliate()">✕ Buang</button></span><span id="kiraan-affiliate">−RM 0.00</span></div>
         <div class="kiraan-row"><span>Kos Penghantaran<span id="kiraan-zon-label"></span></span><span id="kiraan-penghantaran">RM 0.00</span></div>
         <div class="kiraan-row jumlah"><span>JUMLAH AKHIR</span><span id="grand-total" style="color:var(--teal)">RM 0.00</span></div>
@@ -442,11 +429,6 @@
     <div class="icon">✅</div>
     <h2>Pesanan Diterima!</h2>
     <p>Terima kasih atas pembelian anda. Pihak kami akan sahkan pesanan & mula proses penghantaran tidak lama lagi.</p>
-    <div style="background:#F0FFF4;border:1px solid #1D7A4A;border-radius:10px;padding:14px;margin-top:16px;text-align:center">
-      <div style="font-weight:800;color:#0B3D2E;margin-bottom:4px">🎁 Kongsi & Dapat Ganjaran!</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Kongsi kod rujukan anda (no. telefon anda) dengan kawan — bila kawan buat pesanan pertama guna kod ni, dia dapat diskaun & anda dapat ganjaran voucher!</div>
-      <div id="success-kod-rujukan" style="font-size:18px;font-weight:800;letter-spacing:1px;color:var(--teal)"></div>
-    </div>
   </div>
 
 </div>
@@ -545,28 +527,6 @@
       <p style="margin-bottom:10px"><strong>Penyimpanan Data</strong><br/>Data disimpan secara selamat menggunakan infrastruktur Supabase dengan kawalan akses ketat — hanya staf dibenarkan boleh mengakses maklumat pesanan.</p>
       <p><strong>Hak Anda</strong><br/>Anda boleh memohon akses, pembetulan, atau pemadaman maklumat peribadi anda pada bila-bila masa dengan menghubungi wafitijarahtrading@gmail.com.</p>
     </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="rujukan-info-modal">
-  <div class="modal-box">
-    <button class="modal-close" onclick="tutupModalInfo('rujukan-info-modal')">✕</button>
-    <div class="section-title">🎁 Rujuk Kawan, Dapat Ganjaran!</div>
-    <div style="font-size:13px;color:var(--text);line-height:1.7">
-      <p style="margin-bottom:10px">Senang je — kod rujukan anda ialah <strong>nombor telefon anda sendiri</strong>. Tiada kod berasingan perlu diingati.</p>
-      <p style="margin-bottom:10px"><strong>1. Kongsi</strong><br/>Selepas buat pesanan pertama, kongsi nombor telefon anda dengan kawan yang belum pernah membeli di sini.</p>
-      <p style="margin-bottom:10px"><strong>2. Kawan Dapat Diskaun</strong><br/>Kawan anda masukkan nombor tu dalam ruangan "🎁 Kod Rujukan Kawan" semasa checkout pesanan PERTAMA mereka — terus dapat diskaun.</p>
-      <p style="margin-bottom:10px"><strong>3. Anda Dapat Ganjaran</strong><br/>Bila pembayaran pesanan kawan anda disahkan, anda automatik terima emel dengan kod baucar ganjaran — guna kod tu untuk diskaun pada pesanan seterusnya!</p>
-      <p style="font-size:11px;color:var(--muted)">Nota: hanya untuk pelanggan baharu (pesanan pertama). Sebarang pertanyaan, hubungi kami di wafitijarahtrading@gmail.com.</p>
-    </div>
-    <div class="divider"></div>
-    <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px">🔍 Dah Rujuk Kawan? Semak Ganjaran Anda</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Tak terima emel ganjaran, atau nak semak semula kod anda? Masukkan nombor telefon anda (kod rujukan anda sendiri) di bawah.</div>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <input type="tel" class="form-input" id="rj-semak-tel" placeholder="No. telefon anda" onkeydown="if(event.key==='Enter')semakGanjaranRujukanSaya()" />
-      <button class="btn btn-primary btn-sm" style="flex-shrink:0;width:auto" onclick="semakGanjaranRujukanSaya()">🔍 Semak</button>
-    </div>
-    <div id="rj-semak-hasil"></div>
   </div>
 </div>
 
@@ -1030,30 +990,6 @@ async function jejakPesanan() {
   }
 }
 
-async function semakGanjaranRujukanSaya() {
-  const tel = document.getElementById('rj-semak-tel').value.trim();
-  const hasilEl = document.getElementById('rj-semak-hasil');
-  if (!tel) return toast('Sila masukkan no. telefon anda','err');
-  hasilEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Mencari...</div>';
-  const { data, error } = await sb.rpc('semak_ganjaran_rujukan_saya', { p_telefon: tel });
-  if (error) { hasilEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--red);font-size:12px">⚠️ Gagal semak. Sila cuba lagi.</div>'; return; }
-  if (!data || !data.length) {
-    hasilEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px">Tiada ganjaran rujukan dijumpai untuk nombor ini lagi.</div>';
-    return;
-  }
-  hasilEl.innerHTML = data.map(r => {
-    const luput = r.tarikh_luput ? new Date(r.tarikh_luput).toLocaleDateString('ms-MY',{day:'2-digit',month:'short',year:'numeric'}) : '';
-    const statusTxt = r.sudah_guna ? '✅ Sudah digunakan' : (r.masih_aktif ? '🎁 Belum digunakan' : '⏰ Luput/Tidak aktif');
-    return `<div style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="font-weight:800;font-size:15px;letter-spacing:1px;color:var(--teal)">${esc(r.kod_ganjaran)}</div>
-        <div style="font-weight:800;color:var(--navy)">${fmt(r.nilai_ganjaran)}</div>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">${statusTxt}${luput?' · sah sehingga '+luput:''}</div>
-    </div>`;
-  }).join('');
-}
-
 async function semakStatusLiveKurier(orderId) {
   const liveEl = document.getElementById('jejak-live-status');
   if (!liveEl) return;
@@ -1475,7 +1411,6 @@ function kemaskiniTotal() {
   const hantarPercuma = !!voucherAktif?.percuma_penghantaran;
   const kosHantarFinal = hantarPercuma ? 0 : kosHantar;
   const diskaun = voucherAktif ? Math.min(voucherAktif.jenis_diskaun==='tetap' ? voucherAktif.nilai_diskaun : tot*voucherAktif.nilai_diskaun/100, tot) : 0;
-  const rujukanDiskaun = rujukanAktif ? tot * rujukanAktif.diskaun_peratus / 100 : 0;
   const affiliateDiskaun = affiliateAktif ? tot * affiliateAktif.diskaun_peratus / 100 : 0;
   document.getElementById('kiraan-subtotal').textContent = fmt(tot);
   document.getElementById('kiraan-diskaun-row').style.display = voucherAktif ? '' : 'none';
@@ -1483,8 +1418,6 @@ function kemaskiniTotal() {
     document.getElementById('kiraan-diskaun-kod').textContent = voucherAktif.kod;
     document.getElementById('kiraan-diskaun').textContent = '−' + fmt(diskaun);
   }
-  document.getElementById('kiraan-rujukan-row').style.display = rujukanAktif ? '' : 'none';
-  if (rujukanAktif) document.getElementById('kiraan-rujukan').textContent = '−' + fmt(rujukanDiskaun);
   document.getElementById('kiraan-affiliate-row').style.display = affiliateAktif ? '' : 'none';
   if (affiliateAktif) {
     document.getElementById('kiraan-affiliate-kod').textContent = affiliateAktif.kod;
@@ -1494,11 +1427,10 @@ function kemaskiniTotal() {
     ? `<s style="color:var(--muted)">${fmt(kosHantar)}</s> <span style="color:var(--green);font-weight:800">PERCUMA</span>`
     : fmt(kosHantar);
   document.getElementById('kiraan-zon-label').textContent = zonId ? ` (${ZON[zonId]?.nama||''})` : '';
-  document.getElementById('grand-total').textContent = fmt(tot - diskaun - rujukanDiskaun - affiliateDiskaun + kosHantarFinal);
+  document.getElementById('grand-total').textContent = fmt(tot - diskaun - affiliateDiskaun + kosHantarFinal);
 }
 
 let voucherAktif = null; // { kod, jenis_diskaun, nilai_diskaun, minima_belanja, maksima_belanja, tarikh_luput, had_guna }
-let rujukanAktif = null; // { kod, diskaun_peratus }
 let affiliateAktif = null; // { kod, diskaun_peratus }
 
 function tunjukMesejVoucher(mesej, ok) {
@@ -1523,14 +1455,8 @@ async function gunaVoucher() {
     tarikh_luput: hasil.tarikh_luput, had_guna: hasil.had_guna,
     percuma_penghantaran: hasil.percuma_penghantaran,
   };
-  // Hanya satu promosi (voucher ATAU rujukan ATAU affiliate) dibenarkan setiap pesanan — elak double claim.
+  // Hanya satu promosi (voucher ATAU affiliate) dibenarkan setiap pesanan — elak double claim.
   let notaGabung = '';
-  if (rujukanAktif) {
-    rujukanAktif = null;
-    document.getElementById('c-kod-rujukan').value = '';
-    document.getElementById('rujukan-mesej').style.display = 'none';
-    notaGabung = ' (kod rujukan kawan digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
-  }
   if (affiliateAktif) {
     affiliateAktif = null;
     document.getElementById('c-kod-affiliate').value = '';
@@ -1545,48 +1471,6 @@ function buangVoucher() {
   voucherAktif = null;
   document.getElementById('c-kod-voucher').value = '';
   document.getElementById('voucher-mesej').style.display = 'none';
-  kemaskiniTotal();
-}
-
-function tunjukMesejRujukan(mesej, ok) {
-  const el = document.getElementById('rujukan-mesej');
-  el.style.display = 'block';
-  el.style.color = ok ? 'var(--green)' : 'var(--red)';
-  el.textContent = (ok ? '✅ ' : '⚠️ ') + mesej;
-}
-
-async function gunaRujukan() {
-  const kod = document.getElementById('c-kod-rujukan').value.trim();
-  if (!kod) return toast('Sila isi kod rujukan','err');
-  const tel = document.getElementById('c-tel').value.trim();
-  if (!tel) return tunjukMesejRujukan('Sila isi no. telefon anda dahulu sebelum guna kod rujukan', false);
-  const { data, error } = await sb.rpc('validasi_rujukan', { p_kod_rujukan: kod, p_telefon_pembeli: tel });
-  const hasil = Array.isArray(data) ? data[0] : data;
-  if (error || !hasil) return tunjukMesejRujukan('Gagal semak kod rujukan','err');
-  if (!hasil.sah) { rujukanAktif = null; kemaskiniTotal(); return tunjukMesejRujukan(hasil.mesej, false); }
-  rujukanAktif = { kod: kod.replace(/\D/g,''), diskaun_peratus: hasil.diskaun_peratus };
-  // Hanya satu promosi (voucher ATAU rujukan ATAU affiliate) dibenarkan setiap pesanan — elak double claim.
-  let notaGabung = '';
-  if (voucherAktif) {
-    voucherAktif = null;
-    document.getElementById('c-kod-voucher').value = '';
-    document.getElementById('voucher-mesej').style.display = 'none';
-    notaGabung = ' (kod voucher digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
-  }
-  if (affiliateAktif) {
-    affiliateAktif = null;
-    document.getElementById('c-kod-affiliate').value = '';
-    document.getElementById('affiliate-mesej').style.display = 'none';
-    notaGabung = ' (kod affiliate digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
-  }
-  tunjukMesejRujukan(hasil.mesej + notaGabung, true);
-  kemaskiniTotal();
-}
-
-function buangRujukan() {
-  rujukanAktif = null;
-  document.getElementById('c-kod-rujukan').value = '';
-  document.getElementById('rujukan-mesej').style.display = 'none';
   kemaskiniTotal();
 }
 
@@ -1607,19 +1491,13 @@ async function gunaAffiliate() {
   if (error || !hasil) return tunjukMesejAffiliate('Gagal semak kod affiliate','err');
   if (!hasil.sah) { affiliateAktif = null; kemaskiniTotal(); return tunjukMesejAffiliate(hasil.mesej, false); }
   affiliateAktif = { kod: kod.toUpperCase(), diskaun_peratus: hasil.diskaun_peratus };
-  // Hanya satu promosi (voucher ATAU rujukan ATAU affiliate) dibenarkan setiap pesanan — elak double claim.
+  // Hanya satu promosi (voucher ATAU affiliate) dibenarkan setiap pesanan — elak double claim.
   let notaGabung = '';
   if (voucherAktif) {
     voucherAktif = null;
     document.getElementById('c-kod-voucher').value = '';
     document.getElementById('voucher-mesej').style.display = 'none';
     notaGabung = ' (kod voucher digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
-  }
-  if (rujukanAktif) {
-    rujukanAktif = null;
-    document.getElementById('c-kod-rujukan').value = '';
-    document.getElementById('rujukan-mesej').style.display = 'none';
-    notaGabung = ' (kod rujukan kawan digugurkan — hanya satu promosi dibenarkan setiap pesanan)';
   }
   tunjukMesejAffiliate(hasil.mesej + notaGabung, true);
   kemaskiniTotal();
@@ -1694,7 +1572,6 @@ async function hantarPesanan() {
     subjumlah: sub,
     kos_penghantaran: kosHantar,
     kod_baucar: voucherAktif?.kod || null,
-    kod_rujukan: rujukanAktif?.kod || null,
     kod_affiliate: affiliateAktif?.kod || null,
     jumlah: sub + kosHantar,
     alamat, poskod, bandar: bandar || null, negeri,
@@ -1749,10 +1626,8 @@ async function hantarPesanan() {
   }
 
   voucherAktif = null;
-  rujukanAktif = null;
   document.getElementById('form-card').style.display='none';
   document.getElementById('cart-bar').className='';
-  document.getElementById('success-kod-rujukan').textContent = telNormalized.replace(/^60/, '0');
   document.getElementById('success-box').style.display='block';
 }
 
@@ -1769,13 +1644,7 @@ async function semakBalikanBillplz() {
   if (error || !s) {
     box.innerHTML = `<div class="section-title">⚠️ Tidak dapat sahkan status pesanan</div><p style="font-size:13px;color:var(--muted)">Sila hubungi kami dengan nombor pesanan <strong>${esc(id)}</strong> untuk semakan.</p>`;
   } else if (s.status_bayaran === 'disahkan') {
-    const kodRujukanSaya = (s.pelanggan_telefon || '').replace(/\D/g,'').replace(/^60/, '0');
-    box.innerHTML = `<div class="section-title">✅ Bayaran Berjaya!</div><p style="font-size:13px;color:var(--muted)">Terima kasih! Pesanan <strong>${esc(id)}</strong> (${fmt(s.jumlah)}) telah disahkan. Pihak kami akan mula proses penghantaran tidak lama lagi.</p>
-      ${kodRujukanSaya ? `<div style="background:#F0FFF4;border:1px solid #1D7A4A;border-radius:10px;padding:14px;margin-top:16px;text-align:center">
-        <div style="font-weight:800;color:#0B3D2E;margin-bottom:4px">🎁 Kongsi & Dapat Ganjaran!</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Kongsi kod rujukan anda (no. telefon anda) dengan kawan — bila kawan buat pesanan pertama guna kod ni, dia dapat diskaun & anda dapat ganjaran voucher!</div>
-        <div style="font-size:18px;font-weight:800;letter-spacing:1px;color:var(--teal)">${esc(kodRujukanSaya)}</div>
-      </div>` : ''}`;
+    box.innerHTML = `<div class="section-title">✅ Bayaran Berjaya!</div><p style="font-size:13px;color:var(--muted)">Terima kasih! Pesanan <strong>${esc(id)}</strong> (${fmt(s.jumlah)}) telah disahkan. Pihak kami akan mula proses penghantaran tidak lama lagi.</p>`;
   } else if (s.status_bayaran === 'gagal') {
     box.innerHTML = `<div class="section-title">❌ Bayaran Gagal</div><p style="font-size:13px;color:var(--muted)">Bayaran untuk pesanan <strong>${esc(id)}</strong> tidak berjaya. Sila hubungi kami untuk cuba semula.</p>`;
   } else {
