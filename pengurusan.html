@@ -1556,6 +1556,18 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-edit-kadar-affiliate">
+  <div class="modal-box">
+    <div class="modal-title">✏️ Edit Kadar Affiliate<button class="modal-close" onclick="closeModal('modal-edit-kadar-affiliate')">✕ Tutup</button></div>
+    <div id="edit-kadar-aff-nama" style="font-size:13px;font-weight:700;margin-bottom:10px"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Kadar Komisen (%)</label><input type="number" class="form-input" id="edit-kadar-aff-komisen" min="0" max="100" step="0.5" /></div>
+      <div class="form-group"><label class="form-label">Kadar Diskaun Pelanggan (%)</label><input type="number" class="form-input" id="edit-kadar-aff-diskaun" min="0" max="100" step="0.5" /></div>
+    </div>
+    <button class="btn btn-primary" onclick="simpanKadarAffiliate()">💾 Simpan</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-gesa-push">
   <div class="modal-box" style="text-align:center">
     <div style="font-size:40px;margin-bottom:10px">🔔</div>
@@ -7687,6 +7699,7 @@ async function renderAffiliate() {
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
         <span class="badge ${a.status === 'aktif' ? 'badge-green' : 'badge-gold'}">${a.status === 'aktif' ? 'Aktif' : 'Tidak Aktif'}</span>
+        <button class="btn-link" onclick="bukaModalEditKadarAffiliate('${a.id}')">✏️ Edit Kadar</button>
         <button class="btn-link" onclick="toggleAktifAffiliate('${a.id}', ${a.status === 'aktif'})">${a.status === 'aktif' ? 'Nyahaktif' : 'Aktifkan'}</button>
       </div>
     </div>`;
@@ -7735,6 +7748,32 @@ async function toggleAktifAffiliate(id, aktifSemasa) {
   });
   if (error) return toast('Gagal: ' + error.message, 'err');
   toast('Status affiliate dikemaskini');
+  renderAffiliate();
+}
+
+let EDIT_KADAR_AFFILIATE_ID = null;
+function bukaModalEditKadarAffiliate(id) {
+  const a = AFFILIATE_CACHE.find(x => x.id === id);
+  if (!a) return;
+  EDIT_KADAR_AFFILIATE_ID = id;
+  document.getElementById('edit-kadar-aff-nama').textContent = `${a.nama} · ${a.kod_affiliate || ''}`;
+  document.getElementById('edit-kadar-aff-komisen').value = a.kadar_komisen_peratus;
+  document.getElementById('edit-kadar-aff-diskaun').value = a.kadar_diskaun_peratus;
+  showModal('modal-edit-kadar-affiliate');
+}
+
+async function simpanKadarAffiliate() {
+  const a = AFFILIATE_CACHE.find(x => x.id === EDIT_KADAR_AFFILIATE_ID);
+  if (!a) return;
+  const komisen = +document.getElementById('edit-kadar-aff-komisen').value;
+  const diskaun = +document.getElementById('edit-kadar-aff-diskaun').value;
+  if (isNaN(komisen) || isNaN(diskaun) || komisen < 0 || diskaun < 0) return toast('Sila isi kadar yang sah', 'err');
+  const { error } = await sb.rpc('kemaskini_affiliate', {
+    p_id: a.id, p_kadar_komisen: komisen, p_kadar_diskaun: diskaun, p_status: a.status,
+  });
+  if (error) return toast('Gagal: ' + error.message, 'err');
+  closeModal('modal-edit-kadar-affiliate');
+  toast('✅ Kadar affiliate dikemaskini');
   renderAffiliate();
 }
 
