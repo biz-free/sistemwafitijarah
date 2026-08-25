@@ -7622,9 +7622,22 @@ let AFFILIATE_LULUS_ID = null;
 
 async function renderAffiliate() {
   if (!useCloud) return;
-  const { data, error } = await sb.from('affiliates').select('*').order('created_at', { ascending: false });
+  const [{ data, error }, { data: earningsData }] = await Promise.all([
+    sb.from('affiliates').select('*').order('created_at', { ascending: false }),
+    sb.from('affiliate_earnings').select('affiliate_id, jumlah_komisen, status'),
+  ]);
   if (error) { console.warn('renderAffiliate gagal:', error.message); return; }
   AFFILIATE_CACHE = data || [];
+
+  // Jumlah komisen DIPEROLEH (kumulatif, tak kira status — kecuali dibatalkan)
+  // + pecahan "boleh tuntut" (blm dimohon/dibayar) setiap affiliate.
+  const earningsIkutAffiliate = {};
+  (earningsData || []).forEach(e => {
+    if (e.status === 'dibatalkan') return;
+    const rec = earningsIkutAffiliate[e.affiliate_id] ||= { jumlah: 0, bolehTuntut: 0 };
+    rec.jumlah += e.jumlah_komisen;
+    if (e.status === 'boleh_tuntut') rec.bolehTuntut += e.jumlah_komisen;
+  });
 
   const menunggu = AFFILIATE_CACHE.filter(a => a.status === 'menunggu');
   document.getElementById('aff-menunggu-wrap').style.display = menunggu.length ? '' : 'none';
@@ -7654,14 +7667,20 @@ async function renderAffiliate() {
   }).join('');
 
   const senarai = AFFILIATE_CACHE.filter(a => ['aktif', 'dinyahaktifkan'].includes(a.status));
-  document.getElementById('aff-senarai-list').innerHTML = senarai.map(a => `
-    <div class="list-item">
-      <div><div class="list-item-title">${esc(a.nama)} <span style="font-family:monospace;color:var(--teal)">${esc(a.kod_affiliate || '')}</span></div><div class="list-item-sub">Komisen ${a.kadar_komisen_peratus}% · Diskaun ${a.kadar_diskaun_peratus}%</div></div>
+  document.getElementById('aff-senarai-list').innerHTML = senarai.map(a => {
+    const e = earningsIkutAffiliate[a.id] || { jumlah: 0, bolehTuntut: 0 };
+    return `<div class="list-item">
+      <div>
+        <div class="list-item-title">${esc(a.nama)} <span style="font-family:monospace;color:var(--teal)">${esc(a.kod_affiliate || '')}</span></div>
+        <div class="list-item-sub">Komisen ${a.kadar_komisen_peratus}% · Diskaun ${a.kadar_diskaun_peratus}%</div>
+        <div style="font-size:12px;font-weight:700;color:var(--gold);margin-top:2px">💰 Komisen diperoleh: ${fmt(e.jumlah)}${e.bolehTuntut > 0 ? ` <span style="color:var(--green);font-weight:400">(${fmt(e.bolehTuntut)} blm dituntut)</span>` : ''}</div>
+      </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
         <span class="badge ${a.status === 'aktif' ? 'badge-green' : 'badge-gold'}">${a.status === 'aktif' ? 'Aktif' : 'Tidak Aktif'}</span>
         <button class="btn-link" onclick="toggleAktifAffiliate('${a.id}', ${a.status === 'aktif'})">${a.status === 'aktif' ? 'Nyahaktif' : 'Aktifkan'}</button>
       </div>
-    </div>`).join('') || '<div class="empty"><div class="empty-text">Belum ada affiliate lagi</div></div>';
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-text">Belum ada affiliate lagi</div></div>';
 }
 
 function bukaModalLulusAffiliate(id) {

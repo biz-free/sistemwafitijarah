@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Portal Affiliate — Wafi Tijarah Trading</title>
 <link rel="icon" href="logo.png" />
+<!-- Elak browser paparkan salinan lama halaman ni selepas kemaskini kod (pernah
+     jadi isu: affiliate berjaya log masuk tapi papan pemuka tak muncul sbb
+     browser masih guna JS lama dari cache). -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
@@ -171,10 +177,20 @@ async function renderDashboard() {
   el.innerHTML = `
     <div class="kod-box">
       <div style="font-size:11px;color:#BEE8D3;text-transform:uppercase;letter-spacing:0.05em">Kod Affiliate Anda</div>
-      <div class="k">${esc(AFFILIATE_ROW.kod_affiliate)}</div>
+      <div class="k" id="kod-affiliate-paparan">${esc(AFFILIATE_ROW.kod_affiliate)}</div>
       <div style="font-size:11px;color:#BEE8D3">Komisen ${AFFILIATE_ROW.kadar_komisen_peratus}% · Diskaun pelanggan ${AFFILIATE_ROW.kadar_diskaun_peratus}%</div>
       <div class="link" id="link-affiliate">${esc(linkAffiliate)}</div>
-      <button class="btn btn-secondary" style="margin-top:10px" onclick="salinLink('${esc(linkAffiliate)}')">📋 Salin Pautan</button>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="salinLink('${esc(linkAffiliate)}')">📋 Salin Pautan</button>
+        <button class="btn btn-secondary" style="flex:1" onclick="bukaEditKod()">✏️ Tukar Kod</button>
+      </div>
+      <div id="edit-kod-wrap" style="display:none;margin-top:10px;text-align:left">
+        <input type="text" class="form-input" id="kod-baharu-input" style="text-transform:uppercase;text-align:center;color:var(--text)" placeholder="KOD BAHARU (huruf/nombor sahaja)" maxlength="20" />
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-primary" style="flex:1" id="btn-simpan-kod" onclick="simpanKodBaharu()">💾 Simpan</button>
+          <button class="btn btn-secondary" style="flex:1" onclick="document.getElementById('edit-kod-wrap').style.display='none'">Batal</button>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -261,6 +277,25 @@ async function simpanBank() {
   const { error } = await sb.rpc('kemaskini_bank_affiliate', { p_nama_bank: bank||null, p_no_akaun: akaun||null, p_pemegang: pemegang||null });
   if (error) return toast('Gagal simpan: ' + error.message, 'err');
   toast('✅ Butiran bank disimpan');
+}
+
+function bukaEditKod() {
+  const wrap = document.getElementById('edit-kod-wrap');
+  const tunjuk = wrap.style.display !== 'none';
+  wrap.style.display = tunjuk ? 'none' : 'block';
+  if (!tunjuk) document.getElementById('kod-baharu-input').value = AFFILIATE_ROW.kod_affiliate;
+}
+
+async function simpanKodBaharu() {
+  const kod = document.getElementById('kod-baharu-input').value.trim();
+  if (!kod) return toast('Sila isi kod baharu', 'err');
+  const btn = document.getElementById('btn-simpan-kod');
+  btn.disabled = true;
+  const { error } = await sb.rpc('kemaskini_kod_affiliate_sendiri', { p_kod_baharu: kod });
+  btn.disabled = false;
+  if (error) return toast('Gagal: ' + error.message, 'err');
+  toast('✅ Kod affiliate dikemaskini');
+  init();
 }
 
 async function logKeluar() {
