@@ -14,6 +14,10 @@
 // pelanggan buat tempahan e-dagang baharu (index.html/pesan.html) — jenis
 // 'Tempahan E-Dagang Baharu' guna label "Pelanggan" & wording jualan, bukan
 // "perlu kelulusan" (order bukan permohonan pekerja).
+//
+// Turut dipanggil oleh trg_notify_pemilik_preorder_baru (SQL_TAMBAHAN_119) bila
+// kedai buat tempahan pre-order baharu (pesan.html) — jenis 'Pre-Order Baharu'
+// guna label "Kedai".
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
@@ -61,9 +65,12 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "jenis diperlukan" }), { status: 400, headers: corsHeaders });
     }
     const iaTempahan = jenis === "Tempahan E-Dagang Baharu";
-    const labelOrang = iaTempahan ? "Pelanggan" : "Pekerja";
-    const headingEmel = iaTempahan ? "🛒 Tempahan E-Dagang Baharu" : "🔔 Permohonan Baharu Perlu Kelulusan";
-    const subjekEmel = iaTempahan ? `🛒 ${jenis}` : `🔔 ${jenis} — Perlu Kelulusan`;
+    const iaPreOrder = jenis === "Pre-Order Baharu";
+    const iaJualan = iaTempahan || iaPreOrder;
+    const labelOrang = iaTempahan ? "Pelanggan" : iaPreOrder ? "Kedai" : "Pekerja";
+    const ikonJualan = iaPreOrder ? "📦" : "🛒";
+    const headingEmel = iaJualan ? `${ikonJualan} ${jenis}` : "🔔 Permohonan Baharu Perlu Kelulusan";
+    const subjekEmel = iaJualan ? `${ikonJualan} ${jenis}` : `🔔 ${jenis} — Perlu Kelulusan`;
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
     if (!resendKey) {
@@ -98,7 +105,7 @@ Deno.serve(async (req) => {
     const html = `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
         <h2 style="color:#0D2137">${headingEmel}</h2>
-        ${iaTempahan ? "" : `<p><b>Jenis:</b> ${esc(jenis)}</p>`}
+        ${iaJualan ? "" : `<p><b>Jenis:</b> ${esc(jenis)}</p>`}
         <p><b>${labelOrang}:</b> ${esc(pekerja_nama)}</p>
         <p><b>Butiran:</b> ${esc(butiran)}</p>
         <p style="margin-top:20px">
