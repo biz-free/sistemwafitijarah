@@ -9,6 +9,11 @@
 // Push (susulan SQL_TAMBAHAN_110 — Notifikasi Tolak): hantar push SELARI dgn emel
 // (bukan ganti) kpd setiap pemilik yg sudah langgan. Jika VAPID_PRIVATE_KEY belum
 // ditetapkan, push dilangkau senyap — emel tetap berjalan spt biasa.
+//
+// Turut dipanggil oleh trg_notify_pemilik_pesanan_baru (SQL_TAMBAHAN_118) bila
+// pelanggan buat tempahan e-dagang baharu (index.html/pesan.html) — jenis
+// 'Tempahan E-Dagang Baharu' guna label "Pelanggan" & wording jualan, bukan
+// "perlu kelulusan" (order bukan permohonan pekerja).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
@@ -55,6 +60,10 @@ Deno.serve(async (req) => {
     if (!jenis) {
       return new Response(JSON.stringify({ error: "jenis diperlukan" }), { status: 400, headers: corsHeaders });
     }
+    const iaTempahan = jenis === "Tempahan E-Dagang Baharu";
+    const labelOrang = iaTempahan ? "Pelanggan" : "Pekerja";
+    const headingEmel = iaTempahan ? "🛒 Tempahan E-Dagang Baharu" : "🔔 Permohonan Baharu Perlu Kelulusan";
+    const subjekEmel = iaTempahan ? `🛒 ${jenis}` : `🔔 ${jenis} — Perlu Kelulusan`;
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
     if (!resendKey) {
@@ -88,9 +97,9 @@ Deno.serve(async (req) => {
 
     const html = `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-        <h2 style="color:#0D2137">🔔 Permohonan Baharu Perlu Kelulusan</h2>
-        <p><b>Jenis:</b> ${esc(jenis)}</p>
-        <p><b>Pekerja:</b> ${esc(pekerja_nama)}</p>
+        <h2 style="color:#0D2137">${headingEmel}</h2>
+        ${iaTempahan ? "" : `<p><b>Jenis:</b> ${esc(jenis)}</p>`}
+        <p><b>${labelOrang}:</b> ${esc(pekerja_nama)}</p>
         <p><b>Butiran:</b> ${esc(butiran)}</p>
         <p style="margin-top:20px">
           <a href="https://www.wafitijarahtrading.com/pengurusan.html" style="background:#0D2137;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none">Buka Sistem Pengurusan</a>
@@ -104,7 +113,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         from: FROM_EMAIL,
         to: emails,
-        subject: `🔔 ${jenis} — Perlu Kelulusan`,
+        subject: subjekEmel,
         html,
       }),
     });
@@ -115,8 +124,8 @@ Deno.serve(async (req) => {
 
     let pushDihantar = 0;
     if (pushAktif) {
-      const pushTitle = `🔔 ${jenis} — Perlu Kelulusan`;
-      const pushBody = `${pekerja_nama || "Pekerja"}: ${butiran || ""}`.trim();
+      const pushTitle = subjekEmel;
+      const pushBody = `${pekerja_nama || labelOrang}: ${butiran || ""}`.trim();
       for (const p of pemilikList) {
         pushDihantar += await hantarPushKePengguna(adminClient, p.id, pushTitle, pushBody);
       }
