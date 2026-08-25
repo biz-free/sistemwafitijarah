@@ -3635,12 +3635,14 @@ async function rekodBayaran() {
 async function renderMenungguBayaranHutang() {
   const el = document.getElementById('bayar-hutang-menunggu-list');
   if (!el) return;
-  const { data, error } = await sb.from('permohonan_bayaran_hutang').select('*').eq('status','menunggu').order('created_at',{ascending:false});
+  const [{ data, error }, { data: profil }] = await Promise.all([
+    sb.from('permohonan_bayaran_hutang').select('*').eq('status','menunggu').order('created_at',{ascending:false}),
+    sb.from('profiles').select('id,nama'),
+  ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   const senarai = data || [];
   document.getElementById('bayar-hutang-menunggu-card').style.display = senarai.length ? '' : 'none';
   if (!senarai.length) return;
-  const { data: profil } = await sb.from('profiles').select('id,nama');
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
   const LABEL_KAEDAH = { tunai:'Tunai', transfer:'Online Transfer' };
   el.innerHTML = senarai.map(r=>{
@@ -3940,9 +3942,11 @@ let STOK_MOBILE_PEKERJA_CACHE = []; // pekerja yang SEDANG bawa stok (>0) — un
 let STOK_SEMUA_PEKERJA_CACHE = [];  // semua pekerja — untuk pilihan "kepada" (boleh terima stok walau belum bawa apa-apa)
 async function renderStokMobileSemua() {
   const el = document.getElementById('stok-mobile-semua-list');
-  const { data, error } = await sb.from('stok_pekerja').select('pekerja_id,stok_id,kuantiti').gt('kuantiti', 0);
+  const [{ data, error }, { data: profil }] = await Promise.all([
+    sb.from('stok_pekerja').select('pekerja_id,stok_id,kuantiti').gt('kuantiti', 0),
+    sb.from('profiles').select('id,nama').eq('role','pekerja'),
+  ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
-  const { data: profil } = await sb.from('profiles').select('id,nama').eq('role','pekerja');
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
   const ikutPekerja = {};
   (data||[]).forEach(r => { (ikutPekerja[r.pekerja_id] ||= []).push(r); });
@@ -4206,10 +4210,12 @@ async function loadSerahanProdukSaya() {
 async function renderSerahanProdukSemua() {
   const el = document.getElementById('serahan-produk-semua-list');
   if (!el) return;
-  const { data, error } = await sb.from('serahan_produk').select('*').order('created_at',{ascending:false}).limit(100);
+  const [{ data, error }, { data: profil }] = await Promise.all([
+    sb.from('serahan_produk').select('*').order('created_at',{ascending:false}).limit(100),
+    sb.from('profiles').select('id,nama'),
+  ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   const senarai = data || [];
-  const { data: profil } = await sb.from('profiles').select('id,nama');
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
 
   const menunggu = senarai.filter(r=>r.jenis==='reject' && r.status==='menunggu');
@@ -4314,11 +4320,13 @@ async function renderSerahanProdukSemua() {
 async function renderKosStokPergerakan() {
   const el = document.getElementById('kos-stok-pergerakan-list');
   if (!el) return;
-  const { data, error } = await sb.from('serahan_produk').select('pekerja_id,stok_id,kuantiti,jenis').in('jenis', ['ambil','baik','padam_pulang']).eq('status','disahkan');
+  const [{ data, error }, { data: profil }, { data: pelupusanData }] = await Promise.all([
+    sb.from('serahan_produk').select('pekerja_id,stok_id,kuantiti,jenis').in('jenis', ['ambil','baik','padam_pulang']).eq('status','disahkan'),
+    sb.from('profiles').select('id,nama'),
+    sb.from('pelupusan_stok').select('pekerja_id,stok_id,kuantiti,jenis'),
+  ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
-  const { data: profil } = await sb.from('profiles').select('id,nama');
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
-  const { data: pelupusanData } = await sb.from('pelupusan_stok').select('pekerja_id,stok_id,kuantiti,jenis');
 
   const kosong = () => ({ diambil:0, dipulangkan:0, dijual:0, dilupuskan:0 });
   const ringkasan = {};
@@ -4404,10 +4412,12 @@ async function kemaskiniKuantitiAmbilStok(id) {
 async function renderSejarahStokGudang() {
   const el = document.getElementById('sejarah-stok-gudang-list');
   if (!el) return;
-  const { data, error } = await sb.from('serahan_produk').select('*').in('jenis', ['restock','ambil','baik']).eq('status','disahkan').order('created_at',{ascending:false}).limit(50);
+  const [{ data, error }, { data: profil }] = await Promise.all([
+    sb.from('serahan_produk').select('*').in('jenis', ['restock','ambil','baik']).eq('status','disahkan').order('created_at',{ascending:false}).limit(50),
+    sb.from('profiles').select('id,nama'),
+  ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   const senarai = data || [];
-  const { data: profil } = await sb.from('profiles').select('id,nama');
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
   const ARAH = { restock:'+', ambil:'−', baik:'+' };
   const WARNA = { restock:'var(--green)', ambil:'var(--red)', baik:'var(--green)' };
@@ -8671,9 +8681,11 @@ async function renderSenaraiCutiSaya() {
 
 async function renderSenaraiCutiSemua() {
   const el = document.getElementById('senarai-cuti-semua');
-  const { data, error } = await sb.from('permohonan_cuti').select('*').order('created_at',{ascending:false});
+  const [{ data, error }, { data: profil }] = await Promise.all([
+    sb.from('permohonan_cuti').select('*').order('created_at',{ascending:false}),
+    sb.from('profiles').select('id,nama'),
+  ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
-  const { data: profil } = await sb.from('profiles').select('id,nama');
   const namaPekerja = id => profil?.find(p=>p.id===id)?.nama || id;
   el.innerHTML = (data||[]).map(c=>`
     <div class="list-item">
@@ -9316,12 +9328,13 @@ async function renderLaporanKehadiran() {
   const tarikh = document.getElementById('kh-tarikh').value;
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
 
-  const { data: sesi, error } = await sb.from('kehadiran').select('*')
-    .gte('thumb_in_masa', tarikh+'T00:00:00').lte('thumb_in_masa', tarikh+'T23:59:59')
-    .order('thumb_in_masa');
+  const [{ data: sesi, error }, { data: profil }] = await Promise.all([
+    sb.from('kehadiran').select('*')
+      .gte('thumb_in_masa', tarikh+'T00:00:00').lte('thumb_in_masa', tarikh+'T23:59:59')
+      .order('thumb_in_masa'),
+    sb.from('profiles').select('id,nama'),
+  ]);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
-
-  const { data: profil } = await sb.from('profiles').select('id,nama');
 
   // Gabungkan semua sesi (walaupun thumb in/out berganda) ikut pekerja — tetap dikira 1 hari
   const kumpulan = {};
