@@ -208,8 +208,23 @@
        kertas (padding 2px kiri/kanan, @page margin 3mm) supaya lebih jelas dicetak
        guna printer mini. */
     .resit-box { background:#fff;border-radius:0;padding:8px 2px;font-family:'Courier New',monospace;font-size:20px;line-height:1.25;max-width:210mm;margin:0 auto; }
+    /* Varian "PDF" (bingkai/klasik) — dipasang sementara pd #resit-print sblm jana
+       PDF berbingkai (lihat muatTurunResitPDF), ditanggalkan lepas siap supaya
+       paparan skrin & "PDF (Cetak)" kekal guna gaya tanpa bingkai biasa. */
+    .resit-box.bingkai { border:2px solid var(--navy);border-radius:12px;padding:16px 14px;font-size:13px;line-height:1.5;max-width:480px; }
+    .resit-box.bingkai .resit-header { margin-bottom:12px;padding-bottom:10px; }
+    .resit-box.bingkai .resit-row { padding:4px 0; }
+    .resit-box.bingkai .resit-items { margin:8px 0; }
+    .resit-box.bingkai .resit-item-row td { padding:4px 3px; }
+    .resit-box.bingkai .resit-total { font-size:16px;margin-top:8px;padding-top:8px; }
+    .resit-box.bingkai .resit-footer { font-size:10px;padding-top:10px;margin-top:10px; }
     .resit-header { text-align:center;margin-bottom:10px;padding-bottom:8px;border-bottom:2px dashed var(--border); }
-    .resit-row { display:flex;justify-content:space-between;padding:6px 0; }
+    /* Baris label/nilai (NO. INVOIS, TARIKH, ALAMAT dll) guna jadual (bukan flex) —
+       sama sebab spt .resit-item-row: html2canvas (jana PDF) kurang boleh dipercayai
+       bila nilai (cth alamat panjang) wrap berbilang baris dalam flexbox. */
+    .resit-row { display:table;width:100%;table-layout:fixed;padding:6px 0; }
+    .resit-row > span:first-child { display:table-cell;text-align:left;vertical-align:top;width:34%; }
+    .resit-row > span:last-child { display:table-cell;text-align:right;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word; }
     .resit-items { border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:8px 0;margin:8px 0; }
     /* Jadual sebenar (bukan CSS grid) utk baris produk — html2canvas (jana PDF)
        tak konsisten kira semula ketinggian baris bila nama produk panjang
@@ -288,9 +303,11 @@
          (layout), jadi enjin cetak kira jumlah muka surat ikut TINGGI PENUH keseluruhan
          apl (yg tersembunyi) → hasilkan banyak muka surat kosong (aduan pemilik). html/body
          dipaksa height:0+overflow:hidden supaya jumlah tinggi susunan collapse ke 0; kotak
-         resit/baucar (dipindah jadi anak terus <body> oleh cetakResit()/cetakBaucar() sblm
+         resit/baucar (dipindah jadi anak terus <body> oleh cetakBaucar() sblm
          window.print()) kekal position:absolute relatif drpd initial containing block
-         (bukan body), jadi TIDAK turut terpotong oleh overflow:hidden body. */
+         (bukan body), jadi TIDAK turut terpotong oleh overflow:hidden body. Resit sendiri
+         kini guna html2canvas+jsPDF (muatTurunResitPDF) sepenuhnya, bukan window.print() —
+         dasar #resit-print di bawah dikekalkan sekiranya diperlukan semula kelak. */
       html, body { height: 0 !important; overflow: hidden !important; }
       body * { visibility: hidden; }
       #resit-print, #resit-print *, #baucar-print, #baucar-print * { visibility: visible; }
@@ -1005,8 +1022,8 @@
       </div>
       <div id="resit-preview"></div>
       <div class="btn-row">
-        <button class="btn btn-secondary" onclick="cetakResit()">🖨️ Cetak</button>
-        <button class="btn btn-gold" onclick="muatTurunResitPDF()">📄 Muat Turun PDF</button>
+        <button class="btn btn-secondary" onclick="muatTurunResitPDF(true)">📄 PDF</button>
+        <button class="btn btn-gold" onclick="muatTurunResitPDF(false)">📄 PDF (Cetak)</button>
       </div>
       <button class="btn btn-whatsapp" style="width:100%;margin-top:8px" onclick="hantarResitWhatsapp()">📱 Hantar Resit via WhatsApp</button>
     </div>
@@ -4850,8 +4867,8 @@ function formKonsainanHTML(t) {
     <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
       <div style="font-size:10px;color:var(--muted);margin-bottom:4px">🧾 Invois (kongsi kpd kedai — belum terima bayaran, auto kemaskini ikut jualan disahkan setakat ini):</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" style="flex:1;min-width:80px" onclick="resitCepatKonsainan('${t.id}','cetak')">🖨️ Cetak</button>
-        <button class="btn btn-gold btn-sm" style="flex:1;min-width:80px" onclick="resitCepatKonsainan('${t.id}','pdf')">📄 PDF</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;min-width:80px" onclick="resitCepatKonsainan('${t.id}','pdf-bingkai')">📄 PDF</button>
+        <button class="btn btn-gold btn-sm" style="flex:1;min-width:80px" onclick="resitCepatKonsainan('${t.id}','pdf')">📄 PDF (Cetak)</button>
         <button class="btn btn-whatsapp btn-sm" style="flex:1;min-width:80px" onclick="resitCepatKonsainan('${t.id}','wa')">📱 WhatsApp</button>
       </div>
     </div>`;
@@ -5953,18 +5970,6 @@ async function renderResitPelupusan(resitNo) {
   </div>`;
 }
 
-function cetakResit() {
-  const box=document.getElementById('resit-print');
-  if(!box) return toast('Sila pilih transaksi dahulu','err');
-  // Pindah kotak resit jadi anak TERUS <body> sblm cetak (asalnya tertanam dalam .card
-  // yg berposisi position:relative — elak isu absolute-position/clipping yg tak menentu),
-  // kembalikan ke tempat asal lepas dialog cetak ditutup.
-  const asalIbu = box.parentNode, asalSeterus = box.nextSibling;
-  document.body.appendChild(box);
-  window.print();
-  if (asalSeterus) asalIbu.insertBefore(box, asalSeterus); else asalIbu.appendChild(box);
-}
-
 // iOS Safari (termasuk PWA "Add to Home Screen") sering GAGAL SENYAP pada pdf.save()
 // jsPDF — ia bergantung pada atribut HTML `download` utk Blob URL yang TAK konsisten
 // disokong di Safari/iOS (pekerja tekan butang PDF, tiada apa berlaku, tiada ralat pun).
@@ -6009,37 +6014,36 @@ async function simpanPdfSerasiIOS(pdf, namaFail) {
   }
 }
 
-async function muatTurunResitPDF() {
+async function muatTurunResitPDF(bingkai) {
   const box=document.getElementById('resit-print');
   if(!box) { toast('Sila pilih transaksi dahulu','err'); return null; }
   const id=document.getElementById('resit-sel').value;
   const isLupus = id.startsWith('LUPUS_');
   const t = isLupus ? null : DATA.transaksi.find(t=>t.id===id);
   toast('Menjana PDF...');
-  const canvas = await html2canvas(box, { scale:2, backgroundColor:'#ffffff', useCORS:true });
+  // "PDF" (bingkai/klasik) — pasang class .bingkai sementara sblm tangkap gambar,
+  // tanggalkan lepas siap supaya paparan skrin biasa tak terjejas.
+  if (bingkai) box.classList.add('bingkai');
+  let canvas;
+  try {
+    canvas = await html2canvas(box, { scale:2, backgroundColor:'#ffffff', useCORS:true });
+  } finally {
+    if (bingkai) box.classList.remove('bingkai');
+  }
   const img = canvas.toDataURL('image/png');
   const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({ unit:'mm', format:'a4' }); // saiz kertas A4, lebar tetap — panjang boleh >1 muka surat
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  const margin = 3; // hampir ke sisi kertas (3mm) — padan dgn @page cetak
+  const pageW = 210; // lebar A4 (mm) — kekal, cuma panjang muka surat dibuat automatik
+  const margin = 3; // hampir ke sisi kertas (3mm)
   const imgW = pageW - margin*2;
   const imgH = imgW * (canvas.height/canvas.width);
-  const usableH = pageH - margin*2;
-  // Lebar ikut kertas sepenuhnya, panjang bebas — kalau gambar lebih panjang drpd 1 muka
-  // surat, sambung ke muka surat seterusnya (bukan susutkan/paksa muat 1 muka spt dulu).
-  // Kira bilangan muka surat guna Math.ceil dgn toleransi kecil (0.5mm) supaya baki
-  // pecahan disebabkan rounding tak tercipta muka surat tambahan yg hampir kosong/
-  // nampak "berulang" (aduan sebelum ini: QR/kandungan nampak double kerana lebihan
-  // sedikit tercalit ke muka surat baharu).
-  const jumlahMuka = Math.max(1, Math.ceil((imgH - 0.5) / usableH));
-  for (let muka=0; muka<jumlahMuka; muka++) {
-    if (muka > 0) pdf.addPage();
-    pdf.addImage(img, 'PNG', margin, margin - (muka*usableH), imgW, imgH);
-  }
+  // SATU muka surat panjang sepadan tepat dgn tinggi kandungan (bukan A4 tetap
+  // dipecah berbilang muka) — elak sepenuhnya isu baris/QR tercalit/berulang
+  // merentasi sempadan muka surat (aduan pemilik sebelum ini).
+  const pdf = new jsPDF({ unit:'mm', format:[pageW, imgH + margin*2] });
+  pdf.addImage(img, 'PNG', margin, margin, imgW, imgH);
   const namaFail = isLupus
     ? `${id.slice(6)}-Pelupusan`.replace(/[\/\\?%*:|"<>]/g,'-')
-    : `${t?noRujukanTrx(t):id}-${t?namaDestinasiTrx(t):'Kedai'}-RM${(t?.jumlah||0).toFixed(2)}`.replace(/[\/\\?%*:|"<>]/g,'-');
+    : `${t?noRujukanTrx(t):id}-${t?namaDestinasiTrx(t):'Kedai'}-RM${(t?.jumlah||0).toFixed(2)}${bingkai?'-Bingkai':''}`.replace(/[\/\\?%*:|"<>]/g,'-');
   simpanPdfSerasiIOS(pdf, namaFail);
   return t;
 }
@@ -6055,7 +6059,7 @@ function formatNoTelefonMY(tel) {
 async function hantarResitWhatsapp(waTabSedia) {
   const id=document.getElementById('resit-sel').value;
   if(!id) return toast('Sila pilih transaksi dahulu','err');
-  if (id.startsWith('LUPUS_')) return toast('Hantar WhatsApp belum disokong untuk resit pelupusan — guna Cetak/Muat Turun PDF','err');
+  if (id.startsWith('LUPUS_')) return toast('Hantar WhatsApp belum disokong untuk resit pelupusan — guna Muat Turun PDF','err');
   const t=DATA.transaksi.find(t=>t.id===id); if(!t) return;
   const k=DATA.kedai.find(k=>k.id===t.kedai_id);
   const tel=formatNoTelefonMY(k?.telefon);
@@ -6097,7 +6101,7 @@ async function hantarResitWhatsapp(waTabSedia) {
 // Pautan pantas resit (Tab Hantar/Tempahan > Kemaskini Jualan consignment) — bawa
 // terus ke Tab Lebih > Resit, pra-isi transaksi terpilih & terus cetak/PDF/WhatsApp
 // tanpa pekerja perlu navigate/cari manual dlm dropdown. Guna semula enjin resit
-// sedia ada (renderResit/cetakResit/muatTurunResitPDF/hantarResitWhatsapp) supaya
+// sedia ada (renderResit/muatTurunResitPDF/hantarResitWhatsapp) supaya
 // SATU sumber kebenaran utk paparan resit (elak duplicate HTML/CSS).
 async function resitCepatKonsainan(trxId, aksi) {
   const t = DATA.transaksi.find(x=>x.id===trxId);
@@ -6121,8 +6125,8 @@ async function resitCepatKonsainan(trxId, aksi) {
   if (sel) sel.value = trxId;
   await renderResit(trxId);
 
-  if (aksi==='cetak') return cetakResit();
-  if (aksi==='pdf') return muatTurunResitPDF();
+  if (aksi==='pdf-bingkai') return muatTurunResitPDF(true);
+  if (aksi==='pdf') return muatTurunResitPDF(false);
   if (aksi==='wa') return hantarResitWhatsapp(waTab);
   lebihScrollTo('resit-card');
 }
@@ -6694,8 +6698,8 @@ async function cetakBaucar(id) {
   const nama = PROFIL_NAMA_CACHE[v.pekerja_id] || v.pekerja_id;
   document.getElementById('baucar-print-preview').innerHTML = bangunkanBaucarPrintBox(v, nama);
   setTimeout(() => {
-    // Sama corak spt cetakResit() — pindah ke anak terus <body> sblm cetak, elak
-    // banyak muka surat kosong akibat kotak tertanam dlm .card/tab lain.
+    // Pindah ke anak terus <body> sblm cetak, elak banyak muka surat kosong
+    // akibat kotak tertanam dlm .card/tab lain.
     const box = document.getElementById('baucar-print');
     const asalIbu = box?.parentNode, asalSeterus = box?.nextSibling;
     if (box) document.body.appendChild(box);
