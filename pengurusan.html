@@ -211,7 +211,13 @@
     .resit-header { text-align:center;margin-bottom:10px;padding-bottom:8px;border-bottom:2px dashed var(--border); }
     .resit-row { display:flex;justify-content:space-between;padding:6px 0; }
     .resit-items { border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:8px 0;margin:8px 0; }
-    .resit-item-row { display:grid;grid-template-columns:3fr 1fr 1.2fr 1.2fr;padding:5px 0; }
+    /* Jadual sebenar (bukan CSS grid) utk baris produk — html2canvas (jana PDF)
+       tak konsisten kira semula ketinggian baris bila nama produk panjang
+       terpaksa berbaris berbilang (wrap) dalam CSS grid, menyebabkan baris
+       item bertindih/nampak "double" dalam PDF (walaupun live view di skrin okay).
+       <table> beri html2canvas ketinggian baris yg tepat & konsisten. */
+    .resit-items table { width:100%;border-collapse:collapse;table-layout:fixed; }
+    .resit-item-row td { padding:5px 4px;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word; }
     .resit-total { font-weight:900;font-size:27px;border-top:2px solid var(--navy);margin-top:10px;padding-top:10px; }
     .resit-footer { text-align:center;border-top:2px dashed var(--border);padding-top:10px;margin-top:12px;font-size:15px;color:var(--muted); }
 
@@ -5834,24 +5840,26 @@ async function renderResit(id) {
     ${t.kaedah_bayaran==='consignment' && t.jualan_disahkan?`<div class="resit-row" style="color:var(--purple);font-weight:700"><span>🤝 CONSIGNMENT</span><span>Jualan Disahkan Penuh</span></div>`:''}
     ${t.kaedah_bayaran==='consignment' && !t.jualan_disahkan && adaProgresKonsainan?`<div class="resit-row" style="color:var(--purple);font-weight:700"><span>🤝 CONSIGNMENT</span><span>Separa Disahkan — ada baki belum pasti</span></div>`:''}
     <div class="resit-items">
-      <div class="resit-item-row" style="font-weight:700;color:var(--muted);font-size:14px;padding-bottom:6px;letter-spacing:0.04em">
-        <span>PRODUK</span><span style="text-align:center">QTY</span><span style="text-align:right">HARGA</span><span style="text-align:right">JUMLAH</span>
-      </div>
-      ${t.items.map(it=>{
-        const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'};
-        const terjualQ=(t.items_terjual||[]).find(x=>x.stokId===it.stokId)?.qty||0;
-        const pulangQ=(t.items_pulang||[]).find(x=>x.stokId===it.stokId)?.qty||0;
-        const bakiQ=it.qty-terjualQ-pulangQ;
-        const owedQty=it.qty-pulangQ;
-        const bahagian=[];
-        if(t.kaedah_bayaran==='consignment'&&(terjualQ||pulangQ||t.jualan_disahkan)){
-          if(terjualQ) bahagian.push(`✓ ${terjualQ} terjual`);
-          if(pulangQ) bahagian.push(`↩ ${pulangQ} dipulangkan`);
-          if(bakiQ>0) bahagian.push(`⏳ ${bakiQ} baki (belum pasti)`);
-        }
-        const sub=bahagian.length?`<div style="font-size:14px;color:var(--muted);margin-top:2px">${bahagian.join(' · ')}</div>`:'';
-        return `<div class="resit-item-row"><span>${esc(s.nama)}${sub}</span><span style="text-align:center">${owedQty}</span><span style="text-align:right">RM${it.harga.toFixed(2)}</span><span style="text-align:right;font-weight:700">RM${(it.harga*owedQty).toFixed(2)}</span></div>`;
-      }).join('')}
+      <table>
+        <tr class="resit-item-row" style="font-weight:700;color:var(--muted);font-size:14px;letter-spacing:0.04em">
+          <td style="width:44%;text-align:left">PRODUK</td><td style="width:18%;text-align:center">QTY</td><td style="width:19%;text-align:right">HARGA</td><td style="width:19%;text-align:right">JUMLAH</td>
+        </tr>
+        ${t.items.map(it=>{
+          const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'};
+          const terjualQ=(t.items_terjual||[]).find(x=>x.stokId===it.stokId)?.qty||0;
+          const pulangQ=(t.items_pulang||[]).find(x=>x.stokId===it.stokId)?.qty||0;
+          const bakiQ=it.qty-terjualQ-pulangQ;
+          const owedQty=it.qty-pulangQ;
+          const bahagian=[];
+          if(t.kaedah_bayaran==='consignment'&&(terjualQ||pulangQ||t.jualan_disahkan)){
+            if(terjualQ) bahagian.push(`✓ ${terjualQ} terjual`);
+            if(pulangQ) bahagian.push(`↩ ${pulangQ} dipulangkan`);
+            if(bakiQ>0) bahagian.push(`⏳ ${bakiQ} baki (belum pasti)`);
+          }
+          const sub=bahagian.length?`<div style="font-size:14px;color:var(--muted);margin-top:2px">${bahagian.join(' · ')}</div>`:'';
+          return `<tr class="resit-item-row"><td style="text-align:left">${esc(s.nama)}${sub}</td><td style="text-align:center">${owedQty}</td><td style="text-align:right">RM${it.harga.toFixed(2)}</td><td style="text-align:right;font-weight:700">RM${(it.harga*owedQty).toFixed(2)}</td></tr>`;
+        }).join('')}
+      </table>
     </div>
     ${t.diskaun_peratus>0?`<div class="resit-row"><span>SUBJUMLAH</span><span>RM ${(t.jumlah_asal??t.jumlah).toFixed(2)}</span></div>
     <div class="resit-row" style="color:var(--green)"><span>DISKAUN (${t.diskaun_peratus}%)</span><span>−RM ${((t.jumlah_asal??t.jumlah)-t.jumlah).toFixed(2)}</span></div>`:''}
@@ -5906,7 +5914,7 @@ async function renderResitPelupusan(resitNo) {
     pekerja = pf;
   }
 
-  const baris = r => { const s=DATA.stok.find(s=>s.id===r.stok_id)||{nama:r.stok_id,unit:''}; return `<div class="resit-item-row"><span>${esc(s.nama)}</span><span style="text-align:center">${r.kuantiti} ${esc(s.unit||'')}</span><span style="text-align:right;font-weight:700">RM${(r.kos||0).toFixed(2)}</span></div>`; };
+  const baris = r => { const s=DATA.stok.find(s=>s.id===r.stok_id)||{nama:r.stok_id,unit:''}; return `<tr class="resit-item-row"><td style="width:56%;text-align:left">${esc(s.nama)}</td><td style="width:22%;text-align:center">${r.kuantiti} ${esc(s.unit||'')}</td><td style="width:22%;text-align:right;font-weight:700">RM${(r.kos||0).toFixed(2)}</td></tr>`; };
   const jumlahDiambil = diambil.reduce((a,r)=>a+(r.kos||0),0);
   const jumlahGantian = gantian.reduce((a,r)=>a+(r.kos||0),0);
 
@@ -5923,15 +5931,19 @@ async function renderResitPelupusan(resitNo) {
     ${pekerja?`<div class="resit-row"><span>PEKERJA</span><span>${esc(pekerja.nama||'-')}</span></div>`:''}
     ${kedai?`<div class="resit-row"><span>KEDAI</span><span style="text-align:right;max-width:60%">${esc(kedai.nama)}</span></div>`:''}
     <div class="resit-items">
-      <div class="resit-item-row" style="font-weight:700;color:var(--muted);font-size:14px;padding-bottom:6px;letter-spacing:0.04em">
-        <span>PRODUK</span><span style="text-align:center">QTY</span><span style="text-align:right">NILAI</span>
-      </div>
-      <div style="font-size:15px;font-weight:700;color:var(--red);margin:6px 0">${isTukar?'🔄 BARANG DIAMBIL BALIK (EXPIRED)':'🗑️ BARANG DILUPUSKAN'}</div>
-      ${diambil.map(baris).join('')}
+      <div style="font-size:15px;font-weight:700;color:var(--red);margin-bottom:6px">${isTukar?'🔄 BARANG DIAMBIL BALIK (EXPIRED)':'🗑️ BARANG DILUPUSKAN'}</div>
+      <table>
+        <tr class="resit-item-row" style="font-weight:700;color:var(--muted);font-size:14px;letter-spacing:0.04em">
+          <td style="width:56%;text-align:left">PRODUK</td><td style="width:22%;text-align:center">QTY</td><td style="width:22%;text-align:right">NILAI</td>
+        </tr>
+        ${diambil.map(baris).join('')}
+      </table>
     </div>
     ${gantian.length?`<div class="resit-items" style="margin-top:8px">
       <div style="font-size:15px;font-weight:700;color:var(--green);margin-bottom:6px">🔄 BARANG GANTIAN DIBERI (PERCUMA)</div>
-      ${gantian.map(baris).join('')}
+      <table>
+        ${gantian.map(baris).join('')}
+      </table>
     </div>`:''}
     <div class="resit-total" style="display:flex;justify-content:space-between"><span>${isTukar?'NILAI EXPIRED:':'JUMLAH KERUGIAN:'}</span><span>RM ${jumlahDiambil.toFixed(2)}</span></div>
     ${gantian.length?`<div class="resit-row" style="margin-top:6px"><span style="font-weight:700">NILAI GANTIAN</span><span>RM ${jumlahGantian.toFixed(2)}</span></div>`:''}
