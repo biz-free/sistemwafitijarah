@@ -2860,7 +2860,10 @@ async function renderServisKedai() {
         <span class="badge badge-gold">${daysSince(k.last_visit)} hari</span>
       </div>
       <div style="font-size:12px;color:var(--muted)">📍 ${esc(k.alamat)}</div>
-      ${k.telefon?`<div style="font-size:12px;color:var(--muted)">📞 ${esc(k.telefon)}</div>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px">
+        ${k.telefon?`<div style="font-size:12px;color:var(--muted)">📞 ${esc(k.telefon)}</div>`:'<div></div>'}
+        ${k.telefon?`<button class="btn btn-whatsapp btn-sm" style="width:auto;flex-shrink:0" onclick="whatsappFollowUpServis('${k.id}', event)">📱 Follow-up</button>`:''}
+      </div>
     </div>`;
 
   let html = '';
@@ -2897,6 +2900,32 @@ function focusServisKedai(id) {
   servisMap.setCenter({lat:k.lat,lng:k.lng});
   servisMap.setZoom(15);
   document.getElementById('servis-map').scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+// Follow-up WhatsApp terus dari senarai "Perlu Servis" — buka WhatsApp kedai dgn
+// mesej contoh pra-isi (pekerja edit sendiri sebelum hantar) + pautan pesan.html
+// khusus kedai tu, supaya kedai boleh terus repeat order dari WhatsApp.
+function whatsappFollowUpServis(kedaiId, ev) {
+  if (ev) ev.stopPropagation(); // elak turut cetuskan klik kad (fokus peta)
+  const k = DATA.kedai.find(k=>k.id===kedaiId);
+  if (!k) return;
+  const tel = formatNoTelefonMY(k.telefon);
+  if (!tel) return toast('No. telefon kedai tiada — kemaskini profil kedai dahulu','err');
+  const linkPesan = `${location.origin}${location.pathname.replace(/pengurusan\.html$/,'')}pesan.html?kedai=${encodeURIComponent(k.id)}`;
+  const mesej = `Assalamualaikum 😊
+Servis mingguan Wafi Tijarah Trading 🛍️
+
+Ada nak tanya produk, tambah stok atau buat repeat order? Boleh terus WhatsApp kami 👍
+
+Selain produk yang biasa anda ambil, kami juga ada pelbagai lagi produk Muslim Bumiputera untuk kegunaan harian & jualan.
+
+📲 Amir: 017-480 9956
+🏢 Office: 014-636 3831
+
+🔗 Pesan online terus: ${linkPesan}
+
+Wafi Tijarah Trading – Produk Muslim Pilihan Kami`;
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`, '_blank');
 }
 
 // ── Urus Route Kedai (pemilik sahaja) ──
