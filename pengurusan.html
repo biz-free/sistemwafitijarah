@@ -965,6 +965,7 @@
       <div class="card-title">👤 Profil Saya</div>
       <div class="form-group"><label class="form-label">Nama</label><input type="text" class="form-input" id="profil-nama" /></div>
       <div class="form-group"><label class="form-label">No. Telefon</label><input type="tel" class="form-input" id="profil-telefon" placeholder="01x-xxxxxxx" /></div>
+      <div class="form-group"><label class="form-label">Singkatan (nama panggilan untuk mesej WhatsApp Follow-up, cth: Amy)</label><input type="text" class="form-input" id="profil-singkatan" placeholder="Kosongkan utk guna nama penuh" /></div>
       <button class="btn btn-primary" onclick="kemaskiniProfilSaya()">💾 Kemaskini Profil</button>
       <div class="divider"></div>
       <div class="form-group"><label class="form-label">Kata Laluan Baharu (kosongkan jika tak mahu tukar)</label><input type="password" class="form-input" id="profil-pass-baru" placeholder="••••••••" /></div>
@@ -976,6 +977,14 @@
         <button class="btn btn-secondary" id="btn-push-toggle" style="width:100%" onclick="togglPushNotifikasi()">🔔 Aktifkan Notifikasi Tolak</button>
         <div id="push-status" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
       </div>
+    </div>
+
+    <!-- Mesej Follow-up WhatsApp (pemilik sahaja) -->
+    <div class="card" id="mesej-followup-card">
+      <div class="card-title">📱 Mesej Follow-up WhatsApp</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Mesej yang terisi automatik bila pekerja tekan "📱 Follow-up" di senarai "📍 Perlu Servis" (Tab Kedai). Guna <code>{nama}</code> (singkatan pekerja yg hantar — ditetapkan di "Profil Saya" masing-masing), <code>{telefon}</code> (no. telefon pekerja tu) & <code>{link_pesan}</code> (pautan pesan online khusus kedai). Pekerja masih boleh edit dlm WhatsApp sebelum hantar.</div>
+      <div class="form-group"><textarea class="form-input" id="set-mesej-followup" rows="10" style="line-height:1.5"></textarea></div>
+      <button class="btn btn-primary" onclick="simpanMesejFollowup()">💾 Simpan Mesej</button>
     </div>
 
     <!-- Kiraan Upah Saya (pekerja) -->
@@ -2079,7 +2088,7 @@ async function doLogin() {
       const { data: profile, error: pErr } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
       if (pErr || !profile) { errEl.textContent='Akaun tiada profil. Hubungi pentadbir.'; errEl.className='login-err show'; await sb.auth.signOut(); return; }
       currentRole = profile.role;
-      DATA.currentUser = { id: data.user.id, email, role: profile.role, nama: profile.nama, telefon: profile.telefon };
+      DATA.currentUser = { id: data.user.id, email, role: profile.role, nama: profile.nama, telefon: profile.telefon, singkatan: profile.singkatan };
       if (profile.must_change_password) {
         pendingForcedPasswordChange = true;
         showModal('modal-set-katalaluan-baru');
@@ -2162,7 +2171,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','bonus-kedai-semua-card','status-sistem-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','affiliate-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card'];
+  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','bonus-kedai-semua-card','status-sistem-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','affiliate-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card','mesej-followup-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -2230,6 +2239,7 @@ async function setPage(p) {
     if (currentRole==='pemilik') { renderBaucarList(); renderLaporanHarian(); renderBonusKedaiSemua(); }
     document.getElementById('profil-nama').value = DATA.currentUser?.nama || '';
     document.getElementById('profil-telefon').value = DATA.currentUser?.telefon || '';
+    document.getElementById('profil-singkatan').value = DATA.currentUser?.singkatan || '';
     renderPushStatus();
     if (!document.getElementById('upah-saya-bulan').value) document.getElementById('upah-saya-bulan').value = bulanTempatan();
     renderUpahSaya();
@@ -2242,6 +2252,7 @@ async function setPage(p) {
       if (!document.getElementById('kh-tarikh').value) document.getElementById('kh-tarikh').value = tarikhTempatan();
       renderLaporanKehadiran();
       loadTetapanDiskaun();
+      document.getElementById('set-mesej-followup').value = TETAPAN_DISKAUN.mesej_followup_servis || '';
       renderVoucherList();
       loadDataPembeli();
       loadTetapanWinback();
@@ -2285,6 +2296,7 @@ const LEBIH_SHORTCUTS = [
   { id: 'easyparcel-card', icon: '🚚', label: 'EasyParcel' },
   { id: 'status-sistem-card', icon: '🩺', label: 'Status Sistem' },
   { id: 'urus-pekerja-card', icon: '👥', label: 'Urus Pekerja' },
+  { id: 'mesej-followup-card', icon: '📱', label: 'Mesej Follow-up' },
   { id: 'status-live-card', icon: '📡', label: 'Status Live' },
   { id: 'kehadiran-report-card', icon: '📍', label: 'Kehadiran' },
 ];
@@ -2904,7 +2916,10 @@ function focusServisKedai(id) {
 
 // Follow-up WhatsApp terus dari senarai "Perlu Servis" — buka WhatsApp kedai dgn
 // mesej contoh pra-isi (pekerja edit sendiri sebelum hantar) + pautan pesan.html
-// khusus kedai tu, supaya kedai boleh terus repeat order dari WhatsApp.
+// khusus kedai tu, supaya kedai boleh terus repeat order dari WhatsApp. Nama
+// pekerja dlm mesej ikut "singkatan" (nama panggilan, cth Amy) yg pekerja
+// tetapkan sendiri di Profil Saya — fallback ke nama penuh jika kosong. Format
+// keseluruhan mesej (templat) boleh diubah pemilik di kad "📱 Mesej Follow-up".
 function whatsappFollowUpServis(kedaiId, ev) {
   if (ev) ev.stopPropagation(); // elak turut cetuskan klik kad (fokus peta)
   const k = DATA.kedai.find(k=>k.id===kedaiId);
@@ -2912,19 +2927,20 @@ function whatsappFollowUpServis(kedaiId, ev) {
   const tel = formatNoTelefonMY(k.telefon);
   if (!tel) return toast('No. telefon kedai tiada — kemaskini profil kedai dahulu','err');
   const linkPesan = `${location.origin}${location.pathname.replace(/pengurusan\.html$/,'')}pesan.html?kedai=${encodeURIComponent(k.id)}`;
-  const mesej = `Assalamualaikum 😊
+  const namaPekerja = DATA.currentUser?.singkatan || DATA.currentUser?.nama || 'Kami';
+  const telPekerja = DATA.currentUser?.telefon || '';
+  const templat = TETAPAN_DISKAUN.mesej_followup_servis || `Assalamualaikum 😊
 Servis mingguan Wafi Tijarah Trading 🛍️
 
 Ada nak tanya produk, tambah stok atau buat repeat order? Boleh terus WhatsApp kami 👍
 
-Selain produk yang biasa anda ambil, kami juga ada pelbagai lagi produk Muslim Bumiputera untuk kegunaan harian & jualan.
+📲 {nama}: {telefon}
 
-📲 Amir: 017-480 9956
-🏢 Office: 014-636 3831
-
-🔗 Pesan online terus: ${linkPesan}
-
-Wafi Tijarah Trading – Produk Muslim Pilihan Kami`;
+🔗 Pesan online terus: {link_pesan}`;
+  const mesej = templat
+    .replace(/\{nama\}/g, namaPekerja)
+    .replace(/\{telefon\}/g, telPekerja)
+    .replace(/\{link_pesan\}/g, linkPesan);
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`, '_blank');
 }
 
@@ -3721,10 +3737,10 @@ let hDiskaunPilihan = null; // null | 0 | 'cod' | 'transfer'
 // Kadar diskaun ikut kaedah bayaran — guna semula tetapan yang sama dengan
 // diskaun pre-order (Lebih > Tetapan Pre-Order & Diskaun), supaya satu sahaja
 // tempat untuk ubah kadar, tak kira borang mana yang guna.
-let TETAPAN_DISKAUN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5, qr_bank_url: null, butiran_bank: '' };
+let TETAPAN_DISKAUN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5, qr_bank_url: null, butiran_bank: '', mesej_followup_servis: '' };
 async function muatTetapanDiskaunUntukHantar() {
   if (!useCloud) return;
-  const { data } = await sb.from('tetapan').select('minima_transfer, diskaun_peratus, diskaun_cod_peratus, qr_bank_url, butiran_bank').eq('id', 1).single();
+  const { data } = await sb.from('tetapan').select('minima_transfer, diskaun_peratus, diskaun_cod_peratus, qr_bank_url, butiran_bank, mesej_followup_servis').eq('id', 1).single();
   if (data) TETAPAN_DISKAUN = { ...TETAPAN_DISKAUN, ...data };
 }
 // Jumlah >= minima_transfer: pekerja WAJIB pilih diskaun eksplisit (0%/kadar tunai/
@@ -7319,6 +7335,15 @@ async function simpanPromoMesej() {
   toast(mesej ? 'Mesej promosi disimpan — kini papar di laman utama' : 'Mesej promosi dikosongkan — notifikasi disembunyikan');
 }
 
+async function simpanMesejFollowup() {
+  const mesej = document.getElementById('set-mesej-followup').value.trim();
+  if (!mesej) return toast('Sila isi mesej follow-up','err');
+  const { error } = await sb.from('tetapan').update({ mesej_followup_servis: mesej }).eq('id', 1);
+  if (error) return toast('Gagal simpan mesej: '+error.message,'err');
+  TETAPAN_DISKAUN.mesej_followup_servis = mesej;
+  toast('✅ Mesej Follow-up WhatsApp dikemaskini');
+}
+
 // ════════════════════════════════════════════════════
 //  DATA PEMBELI — satukan pesanan_edagang ikut nombor telefon supaya pemilik
 //  nampak senarai pelanggan (bukan senarai pesanan) untuk susulan & marketing.
@@ -8181,10 +8206,11 @@ async function kemaskiniProfilSaya() {
   if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
   const nama = document.getElementById('profil-nama').value.trim();
   const telefon = document.getElementById('profil-telefon').value.trim();
+  const singkatan = document.getElementById('profil-singkatan').value.trim();
   if (!nama) return toast('Nama tidak boleh kosong','err');
-  const { error } = await sb.rpc('kemaskini_profil_sendiri', { p_nama:nama, p_telefon:telefon });
+  const { error } = await sb.rpc('kemaskini_profil_sendiri', { p_nama:nama, p_telefon:telefon, p_singkatan:singkatan||null });
   if (error) return toast('Gagal kemaskini profil: '+error.message,'err');
-  DATA.currentUser.nama = nama; DATA.currentUser.telefon = telefon;
+  DATA.currentUser.nama = nama; DATA.currentUser.telefon = telefon; DATA.currentUser.singkatan = singkatan||null;
   toast('Profil berjaya dikemaskini');
 }
 
@@ -9339,7 +9365,7 @@ window.addEventListener('load',()=>{
         const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
         if (profile) {
           currentRole = profile.role;
-          DATA.currentUser = { id: session.user.id, email: session.user.email, role: profile.role, nama: profile.nama, telefon: profile.telefon };
+          DATA.currentUser = { id: session.user.id, email: session.user.email, role: profile.role, nama: profile.nama, telefon: profile.telefon, singkatan: profile.singkatan };
           if (profile.must_change_password) {
             pendingForcedPasswordChange = true;
             document.getElementById('login-screen').className='active';
