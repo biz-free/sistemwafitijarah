@@ -2865,7 +2865,10 @@ async function renderServisKedai() {
 
   const { data: routes } = useCloud ? await sb.from('route_kedai').select('*').order('nama') : { data: [] };
 
-  const kedaiCardHtml = k => `
+  const kedaiCardHtml = k => {
+    const status = followupStatusAktif(k);
+    const statusInfo = status ? FOLLOWUP_STATUS_LABEL[status] : null;
+    return `
     <div class="kedai-card lama" style="cursor:pointer" onclick="focusServisKedai('${k.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
         <div style="font-weight:800;font-size:14px">${esc(k.nama)}</div>
@@ -2876,16 +2879,22 @@ async function renderServisKedai() {
         ${k.telefon?`<div style="font-size:12px;color:var(--muted)">📞 ${esc(k.telefon)}</div>`:'<div></div>'}
         ${k.telefon?`<button class="btn btn-whatsapp btn-sm" style="width:auto;flex-shrink:0" onclick="whatsappFollowUpServis('${k.id}', event)">📱 Follow-up</button>`:''}
       </div>
+      ${statusInfo?`<div style="font-size:11px;color:${statusInfo.warna};margin-top:6px">${statusInfo.label} · ${fmtDT(k.followup_status_pada)}</div>`:''}
+      <select class="input" style="margin-top:6px;font-size:12px;padding:6px 8px" onclick="event.stopPropagation()" onchange="tandaFollowUpServis('${k.id}', this.value, event)">
+        <option value="" ${!status?'selected':''}>☑️ Tandakan status follow-up…</option>
+        ${Object.entries(FOLLOWUP_STATUS_LABEL).map(([val,info])=>`<option value="${val}" ${status===val?'selected':''}>${info.label}</option>`).join('')}
+      </select>
     </div>`;
+  };
 
   let html = '';
   (routes||[]).forEach(r => {
-    const kedaiRoute = susunRouteIkutJarak(perluServis.filter(k=>k.route_id===r.id));
+    const kedaiRoute = susunSenaraiFollowUp(susunRouteIkutJarak(perluServis.filter(k=>k.route_id===r.id)));
     if (!kedaiRoute.length) return;
     html += `<div style="font-weight:800;font-size:13px;color:var(--teal);margin:14px 0 8px">🗺️ ${esc(r.nama)} (${kedaiRoute.length} kedai)</div>`;
     html += kedaiRoute.map(kedaiCardHtml).join('');
   });
-  const takBerRoute = perluServis.filter(k=>!k.route_id).sort((a,b)=>daysSince(b.last_visit)-daysSince(a.last_visit));
+  const takBerRoute = susunSenaraiFollowUp(perluServis.filter(k=>!k.route_id).sort((a,b)=>daysSince(b.last_visit)-daysSince(a.last_visit)));
   if (takBerRoute.length) {
     if (html) html += `<div style="font-weight:800;font-size:13px;color:var(--muted);margin:14px 0 8px">📍 Belum Ada Route</div>`;
     html += takBerRoute.map(kedaiCardHtml).join('');
@@ -2942,6 +2951,40 @@ Ada nak tanya produk, tambah stok atau buat repeat order? Boleh terus WhatsApp k
     .replace(/\{telefon\}/g, telPekerja)
     .replace(/\{link_pesan\}/g, linkPesan);
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(mesej)}`, '_blank');
+}
+
+// Senarai Semak Follow-up (Tab "📍 Perlu Servis") — pekerja tandakan status
+// lepas WhatsApp follow-up. Kedai yang sudah ditandakan automatik "turun ke
+// bawah" senarai (susunSenaraiFollowUp) supaya kedai yang belum diproses
+// kekal di atas untuk perhatian. Tanda jadi STALE (dianggap tiada tanda lagi)
+// automatik bila kedai tu betul-betul dilawati semula (last_visit lebih baru
+// drpd tanda) — elak status lama "Tak Berminat"/"Belum Reply" tersekat
+// selama-lamanya walaupun kedai dah repeat order.
+const FOLLOWUP_STATUS_LABEL = {
+  ada_stok:   { label:'✅ Masih Ada Produk',       warna:'var(--green,#1a7a4c)' },
+  nak_tambah: { label:'🛒 Nak Tambah Produk',       warna:'var(--teal)' },
+  xreply:     { label:'⏳ Tidak Reply — Follow-up Lagi', warna:'var(--gold,#b8860b)' },
+  xberminat:  { label:'❌ Tidak Berminat',          warna:'var(--red)' },
+};
+function followupStatusAktif(k) {
+  if (!k.followup_status || !k.followup_status_pada) return null;
+  if (k.last_visit && new Date(k.followup_status_pada) < new Date(k.last_visit)) return null; // dah dilawati semula — tanda lama tak relevan lagi
+  return k.followup_status;
+}
+function susunSenaraiFollowUp(list) {
+  const belum = list.filter(k=>!followupStatusAktif(k));
+  const sudah = list.filter(k=>followupStatusAktif(k));
+  return [...belum, ...sudah];
+}
+async function tandaFollowUpServis(kedaiId, status, ev) {
+  if (ev) ev.stopPropagation();
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  const { error } = await sb.rpc('tanda_followup_servis', { p_kedai_id: kedaiId, p_status: status || null });
+  if (error) return toast('Gagal kemaskini status: '+error.message,'err');
+  const k = DATA.kedai.find(k=>k.id===kedaiId);
+  if (k) { k.followup_status = status || null; k.followup_status_pada = status ? new Date().toISOString() : null; }
+  toast(status ? `${FOLLOWUP_STATUS_LABEL[status].label} — kedai ditandakan` : 'Status follow-up dikosongkan');
+  renderServisKedai();
 }
 
 // ── Urus Route Kedai (pemilik sahaja) ──
