@@ -473,6 +473,7 @@
       <div class="stat-box"><div class="stat-icon">🏪</div><div class="stat-label">Kedai Aktif</div><div class="stat-val" id="s-kedai" style="color:var(--teal)">—</div></div>
       <div class="stat-box"><div class="stat-icon">💰</div><div class="stat-label" id="s-hasil-label">Hasil Diterima</div><div class="stat-val" id="s-hasil" style="color:var(--green)">—</div></div>
       <div class="stat-box"><div class="stat-icon">⚠️</div><div class="stat-label" id="s-hutang-label">Hutang</div><div class="stat-val" id="s-hutang" style="color:var(--red)">—</div></div>
+      <div class="stat-box"><div class="stat-icon">🤝</div><div class="stat-label" id="s-consignment-label">Consignment</div><div class="stat-val" id="s-consignment" style="color:var(--purple)">—</div></div>
       <div class="stat-box"><div class="stat-icon">📦</div><div class="stat-label">Produk</div><div class="stat-val" id="s-produk" style="color:var(--gold)">—</div></div>
       <div class="stat-box"><div class="stat-icon">💵</div><div class="stat-label" id="s-cash-label">Cash Dipegang</div><div class="stat-val" id="s-cash-pegang" style="color:var(--gold)">—</div></div>
     </div>
@@ -917,7 +918,8 @@
       <div class="stat-box"><div class="stat-icon">💰</div><div class="stat-label">Jumlah Jualan</div><div class="stat-val" id="an-jualan" style="color:var(--green)">—</div></div>
       <div class="stat-box"><div class="stat-icon">📦</div><div class="stat-label">Jumlah Modal</div><div class="stat-val" id="an-modal" style="color:var(--gold)">—</div></div>
       <div class="stat-box"><div class="stat-icon">📈</div><div class="stat-label">Untung Kasar</div><div class="stat-val" id="an-untung" style="color:var(--teal)">—</div></div>
-      <div class="stat-box"><div class="stat-icon">⚠️</div><div class="stat-label">Hutang Semasa (Semua Masa)</div><div class="stat-val" id="an-hutang" style="color:var(--red)">—</div></div>
+      <div class="stat-box"><div class="stat-icon">⚠️</div><div class="stat-label">Hutang Semasa (Tulen)</div><div class="stat-val" id="an-hutang" style="color:var(--red)">—</div></div>
+      <div class="stat-box"><div class="stat-icon">🤝</div><div class="stat-label">Consignment Semasa</div><div class="stat-val" id="an-consignment-total" style="color:var(--purple)">—</div></div>
     </div>
 
     <div class="card">
@@ -2365,30 +2367,30 @@ function renderDashboard() {
   renderCashDipegangDashboard();
   kemaskiniNotifikasi();
   const aktif = DATA.kedai.filter(k=>k.status==='aktif').length;
-  // Hasil Diterima & Hutang — pekerja nampak jumlah PENGHANTARAN SENDIRI sahaja
-  // (bukan jumlah keseluruhan syarikat), pemilik kekal nampak jumlah semua.
-  // Filter bulanan (default bulan terkini, boleh tukar ke "Semua") — bila "Semua"
-  // dipilih, Hutang pemilik kekal guna kedai.hutang (baki tertunggak SEMASA sebenar,
-  // sepadan dgn tab Kedai) sbg legacy; bila bulan spesifik dipilih, tiada pecahan
-  // ikut bulan utk kedai.hutang (ia baki hidup, bukan rekod bertarikh) jadi jatuh
-  // balik guna jumlah transaksi berstatus 'hutang' pada bulan tu (konsisten dgn
-  // cara pekerja dikira) — anggaran munasabah "hutang yang tercipta bulan ini".
+  // Hasil Diterima, Hutang & Consignment — pekerja nampak jumlah PENGHANTARAN SENDIRI
+  // sahaja (bukan jumlah keseluruhan syarikat), pemilik kekal nampak jumlah semua.
+  // Filter bulanan (default bulan terkini, boleh tukar ke "Semua"). Hutang & Consignment
+  // kini DIPECAHKAN berasingan (dulu 1 nombor "Hutang" bercampur kedua-dua kaedah
+  // bayaran, sepadan isu sama yg dibetulkan di Analisis — kedai.hutang ialah medan
+  // agregat gabungan, tak boleh dipisah, jadi dikira terus drpd transaksi supaya
+  // konsisten ikut kaedah bayaran sebenar walaupun bila "Semua" dipilih).
   const isPemilik = currentRole==='pemilik';
   const papatSemuaBulan = document.getElementById('dash-semua-bulan')?.checked;
   const bulanDipilih = document.getElementById('dash-bulan')?.value || bulanTempatan();
   const filSayaSemua = isPemilik ? DATA.transaksi : DATA.transaksi.filter(t=>t.created_by===DATA.currentUser?.id);
   const filSaya = papatSemuaBulan ? filSayaSemua : filSayaSemua.filter(t=>t.tarikh_masa && tarikhTempatan(t.tarikh_masa).slice(0,7)===bulanDipilih);
-  const hutang = (isPemilik && papatSemuaBulan)
-    ? DATA.kedai.reduce((a,k)=>a+k.hutang,0)
-    : filSaya.filter(t=>t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
+  const hutang = filSaya.filter(t=>t.kaedah_bayaran==='hutang' && t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
+  const consignment = filSaya.filter(t=>t.kaedah_bayaran==='consignment' && t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
   const hasil  = filSaya.filter(t=>t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
   const skopLabel = papatSemuaBulan ? '' : ` (${fmtBulanMY(bulanDipilih)})`;
   document.getElementById('s-hasil-label').textContent = (isPemilik ? 'Hasil Diterima' : 'Hasil Diterima (Saya)') + skopLabel;
   document.getElementById('s-hutang-label').textContent = (isPemilik ? 'Hutang' : 'Hutang (Saya)') + skopLabel;
+  document.getElementById('s-consignment-label').textContent = (isPemilik ? 'Consignment' : 'Consignment (Saya)') + skopLabel;
 
   document.getElementById('s-kedai').textContent = aktif;
   document.getElementById('s-hasil').textContent = fmt(hasil);
   document.getElementById('s-hutang').textContent = fmt(hutang);
+  document.getElementById('s-consignment').textContent = fmt(consignment);
   document.getElementById('s-produk').textContent = DATA.stok.length;
 
   // Badges — produk dinyahaktifkan tak perlu amaran stok rendah/luput lagi (dah tak dijual).
@@ -6930,12 +6932,27 @@ function renderAnalisis() {
   // (100% ambil dari margin, sama pattern spt renderLaporan()) — sblm ni tertinggal.
   const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
   const untung = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(x=>x.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0),0) - diskaunKedai;
-  const hutangSemasa = DATA.kedai.reduce((a,k)=>a+k.hutang,0);
+
+  // Hutang Semasa & Consignment Semasa — dipecahkan berasingan (bukan lagi 1 nombor
+  // "Hutang Semasa (Semua Masa)" bercampur, spt kedai.hutang yg gabungkan kedua-dua
+  // kaedah bayaran). Dikira terus drpd transaksi (SEMUA MASA, tidak terjejas filter
+  // an-dari/an-hingga di atas — ia baki tertunggak semasa, bukan jumlah tempoh).
+  const hutangIkutKedai = {};
+  DATA.transaksi.filter(t=>t.kaedah_bayaran==='hutang' && t.status==='hutang' && t.kedai_id).forEach(t=>{
+    hutangIkutKedai[t.kedai_id] = (hutangIkutKedai[t.kedai_id]||0) + t.jumlah;
+  });
+  const consignIkutKedai = {};
+  DATA.transaksi.filter(t=>t.kaedah_bayaran==='consignment' && t.status==='hutang' && t.kedai_id).forEach(t=>{
+    consignIkutKedai[t.kedai_id] = (consignIkutKedai[t.kedai_id]||0) + t.jumlah;
+  });
+  const hutangSemasa = Object.values(hutangIkutKedai).reduce((a,v)=>a+v,0);
+  const consignmentSemasa = Object.values(consignIkutKedai).reduce((a,v)=>a+v,0);
 
   document.getElementById('an-jualan').textContent = fmt(jualan);
   document.getElementById('an-modal').textContent = fmt(modal);
   document.getElementById('an-untung').textContent = fmt(untung);
   document.getElementById('an-hutang').textContent = fmt(hutangSemasa);
+  document.getElementById('an-consignment-total').textContent = fmt(consignmentSemasa);
 
   // Produk paling laris (dalam julat dipilih)
   const jualanProduk = {};
@@ -6946,14 +6963,8 @@ function renderAnalisis() {
     return `<div class="list-item"><div class="list-item-title">${esc(s?.nama||id)}</div><div class="list-item-val">${qty} ${esc(s?.unit||'')}</div></div>`;
   }).join('') || '<div class="empty"><div class="empty-text">Tiada jualan dalam julat ini</div></div>';
 
-  // Kedai hutang tertinggi — HANYA kaedah bayaran='hutang' (guna k.hutang SEBELUM ini
-  // yg mencampurkan hutang biasa & consignment sekali, sebab kedai.hutang ialah medan
-  // agregat gabungan kedua-dua kaedah — kini dikira terus drpd transaksi supaya kad ni
-  // benar2 asingan drpd kad Consignment Tertinggi di bawah, tiada kaedah bercampur).
-  const hutangIkutKedai = {};
-  DATA.transaksi.filter(t=>t.kaedah_bayaran==='hutang' && t.status==='hutang' && t.kedai_id).forEach(t=>{
-    hutangIkutKedai[t.kedai_id] = (hutangIkutKedai[t.kedai_id]||0) + t.jumlah;
-  });
+  // Kedai hutang/consignment tertinggi — guna dict yg sama dah dikira di atas
+  // (hutangIkutKedai/consignIkutKedai), asingan penuh antara kedua-dua kaedah bayaran.
   const hutangTertinggi = Object.entries(hutangIkutKedai)
     .map(([kedaiId, jumlah])=>({ nama: DATA.kedai.find(k=>k.id===kedaiId)?.nama || kedaiId, jumlah }))
     .filter(x=>x.jumlah>0).sort((a,b)=>b.jumlah-a.jumlah).slice(0,10);
@@ -6961,13 +6972,6 @@ function renderAnalisis() {
     `<div class="list-item"><div class="list-item-title">${esc(x.nama)}</div><div class="list-item-val" style="color:var(--red)">${fmt(x.jumlah)}</div></div>`
   ).join('') || '<div class="empty"><div class="empty-text">Tiada kedai berhutang</div></div>';
 
-  // Kedai consignment tertinggi — asingan penuh drpd hutang biasa di atas (bukan lagi
-  // pecahan), jumlah SEMUA transaksi consignment status='hutang' (t.jumlah dah cerminkan
-  // produk terjual/pulang setakat ini, lihat kiraKonsainanPecahan) ikut kedai.
-  const consignIkutKedai = {};
-  DATA.transaksi.filter(t=>t.kaedah_bayaran==='consignment' && t.status==='hutang' && t.kedai_id).forEach(t=>{
-    consignIkutKedai[t.kedai_id] = (consignIkutKedai[t.kedai_id]||0) + t.jumlah;
-  });
   const consignTertinggi = Object.entries(consignIkutKedai)
     .map(([kedaiId, jumlah])=>({ nama: DATA.kedai.find(k=>k.id===kedaiId)?.nama || kedaiId, jumlah }))
     .filter(x=>x.jumlah>0).sort((a,b)=>b.jumlah-a.jumlah).slice(0,10);
