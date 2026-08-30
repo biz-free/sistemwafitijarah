@@ -1684,9 +1684,20 @@ mula drpd 0) supaya sentiasa padan realiti walaupun ada jurang sejarah lampau. -
 <div class="modal-overlay" id="modal-route">
   <div class="modal-box">
     <div class="modal-title">🗺️ Urus Route Kedai<button class="modal-close" onclick="closeModal('modal-route')">✕ Tutup</button></div>
-    <div id="route-cipta-row" class="map-search-row" style="margin-bottom:14px">
+    <div id="route-cipta-row" class="map-search-row" style="margin-bottom:8px">
       <input type="text" class="form-input" id="route-nama-baru" placeholder="cth: Route A" onkeydown="if(event.key==='Enter')ciptaRoute()" />
       <button class="btn btn-primary btn-sm" style="flex-shrink:0;width:auto" onclick="ciptaRoute()">+ Cipta</button>
+    </div>
+    <!-- Mod paparan route (pilih SEBELUM cipta) — kawal kedai dlm route ni kelihatan
+    kpd SEMUA pekerja di "📍 Perlu Servis", atau HANYA kpd pekerja yg mendaftarkan
+    kedai berkenaan. Boleh ditukar lagi selepas cipta guna butang sama di senarai route. -->
+    <div id="route-mod-paparan-baru-row" class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Mod Paparan Route Baharu</label>
+      <div style="display:flex;gap:6px">
+        <button type="button" class="btn btn-sm" id="rmp-btn-pendaftar" onclick="pilihModPaparanBaru('pendaftar')" style="flex:1">👤 Ikut Pendaftar</button>
+        <button type="button" class="btn btn-sm" id="rmp-btn-semua" onclick="pilihModPaparanBaru('semua')" style="flex:1">🌐 Semua Kedai</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px" id="rmp-hint"></div>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px" id="route-hint-pekerja"></div>
     <div class="form-row">
@@ -2902,15 +2913,25 @@ function susunRouteIkutJarak(kedaiList) {
 async function renderServisKedai() {
   document.getElementById('btn-urus-route').style.display = '';
   const el = document.getElementById('servis-list');
-  // Pekerja hanya nampak kedai yang PERNAH mereka hantar sendiri
-  let kedaiSkop = DATA.kedai;
-  if (currentRole==='pekerja') {
-    const idSaya = new Set(DATA.transaksi.filter(t=>t.created_by===DATA.currentUser.id||t.created_by===DATA.currentUser.email).map(t=>t.kedai_id));
-    kedaiSkop = DATA.kedai.filter(k=>idSaya.has(k.id));
-  }
-  const perluServis = kedaiSkop.filter(k=>daysSince(k.last_visit)>=7);
 
   const { data: routes } = useCloud ? await sb.from('route_kedai').select('*').order('nama') : { data: [] };
+
+  // Skop kedai ikut PEKERJA: setiap route ada "mod paparan" ditetapkan pemilik semasa
+  // cipta/urus route — 🌐 'semua' bermakna SEMUA kedai dlm route tu kelihatan kpd
+  // sesiapa sahaja pekerja; 👤 'pendaftar' (default) hadkan kpd kedai yg pekerja tu
+  // SENDIRI daftarkan (kedai.didaftarkan_oleh). Kedai TANPA route (Belum Ada Route)
+  // jatuh balik ke mod 'pendaftar' — sebelum ni ditapis ikut sejarah TRANSAKSI
+  // (pernah jual), kini konsisten ikut PENDAFTAR spt diminta pemilik.
+  const modPaparanRoute = {};
+  (routes||[]).forEach(r => modPaparanRoute[r.id] = r.mod_paparan || 'pendaftar');
+  let kedaiSkop = DATA.kedai;
+  if (currentRole==='pekerja') {
+    kedaiSkop = DATA.kedai.filter(k => {
+      const mod = k.route_id ? modPaparanRoute[k.route_id] : 'pendaftar';
+      return mod === 'semua' || k.didaftarkan_oleh === DATA.currentUser.id;
+    });
+  }
+  const perluServis = kedaiSkop.filter(k=>daysSince(k.last_visit)>=7);
 
   const kedaiCardHtml = k => {
     const status = followupStatusAktif(k);
@@ -3039,8 +3060,10 @@ function bukaModalRoute() {
   showModal('modal-route');
   const isPemilik = currentRole === 'pemilik';
   document.getElementById('route-cipta-row').style.display = isPemilik ? '' : 'none';
+  document.getElementById('route-mod-paparan-baru-row').style.display = isPemilik ? '' : 'none';
   document.getElementById('route-filter-pendaftar-wrap').style.display = isPemilik ? '' : 'none';
   document.getElementById('route-hint-pekerja').textContent = isPemilik ? '' : '📌 Anda hanya boleh urus route untuk kedai yang anda daftarkan sendiri.';
+  if (isPemilik) pilihModPaparanBaru(MOD_PAPARAN_ROUTE_BAHARU);
   renderSenaraiRoute();
   document.getElementById('penugasan-harian-wrap').style.display = isPemilik ? '' : 'none';
   if (isPemilik) renderPenugasanHarian();
@@ -3141,6 +3164,7 @@ async function renderSenaraiRoute() {
 
   el.innerHTML = (routes||[]).map(r => {
     const modAuto = r.mod_susunan === 'auto';
+    const modSemua = r.mod_paparan === 'semua';
     // Kedai SUDAH dlm route ni — mod "manual" susun ikut route_urutan (▲▼ pemilik
     // susun sendiri); mod "auto" kira semula setiap kali ikut nearest-neighbour
     // jarak GPS (susunRouteIkutJarak(), sama pattern spt Tab Kedai > Servis) — senang
@@ -3152,6 +3176,7 @@ async function renderSenaraiRoute() {
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div class="list-item-title">${esc(r.nama)}</div>
         <div style="display:flex;gap:6px">
+          ${isPemilik?`<button class="btn btn-secondary btn-sm" style="background:${modSemua?'var(--teal)':'transparent'};color:${modSemua?'#fff':'var(--navy)'}" onclick="tukarModPaparanRoute('${r.id}','${modSemua?'pendaftar':'semua'}')" title="Klik utk tukar mod paparan pekerja">${modSemua?'🌐 Semua':'👤 Pendaftar'}</button>`:''}
           ${isPemilik?`<button class="btn btn-secondary btn-sm" style="background:${modAuto?'var(--teal)':'transparent'};color:${modAuto?'#fff':'var(--navy)'}" onclick="tukarModSusunanRoute('${r.id}','${modAuto?'manual':'auto'}')" title="Klik utk tukar mod susunan">${modAuto?'🔀 Auto':'✋ Manual'}</button>`:''}
           <button class="btn btn-secondary btn-sm" onclick="toggleRouteKedaiList('${r.id}')">🏪 ${kedaiDalamRoute.length} kedai</button>
           ${isPemilik?`<button class="btn-delete-icon" style="position:static" onclick="padamRoute('${r.id}')" title="Padam route">✕</button>`:''}
@@ -3199,16 +3224,43 @@ function toggleRouteKedaiList(routeId) {
   el.style.display = el.style.display==='none' ? '' : 'none';
 }
 
+// Mod paparan route baharu (pilihan SEBELUM tekan "+ Cipta") — 👤 'pendaftar'
+// (default, lebih ketat) hadkan kedai dlm route ni kelihatan kpd pekerja yg
+// mendaftarkan kedai berkenaan sahaja; 🌐 'semua' bagi SEMUA pekerja nampak.
+let MOD_PAPARAN_ROUTE_BAHARU = 'pendaftar';
+const MOD_PAPARAN_HINT = {
+  pendaftar: '👤 Kedai dlm route ni hanya kelihatan di "Perlu Servis" pekerja yg mendaftarkan kedai berkenaan.',
+  semua: '🌐 Kedai dlm route ni kelihatan di "Perlu Servis" SEMUA pekerja, tanpa kira siapa mendaftarkannya.',
+};
+function pilihModPaparanBaru(mod) {
+  MOD_PAPARAN_ROUTE_BAHARU = mod;
+  document.getElementById('rmp-btn-pendaftar').style.background = mod==='pendaftar' ? 'var(--navy)' : 'transparent';
+  document.getElementById('rmp-btn-pendaftar').style.color = mod==='pendaftar' ? '#fff' : 'var(--navy)';
+  document.getElementById('rmp-btn-semua').style.background = mod==='semua' ? 'var(--teal)' : 'transparent';
+  document.getElementById('rmp-btn-semua').style.color = mod==='semua' ? '#fff' : 'var(--navy)';
+  document.getElementById('rmp-hint').textContent = MOD_PAPARAN_HINT[mod];
+}
+
 async function ciptaRoute() {
   const nama = document.getElementById('route-nama-baru').value.trim();
   if (!nama) return toast('Sila isi nama route','err');
   const { data: sediaAda } = await sb.from('route_kedai').select('id').ilike('nama', nama);
   if (sediaAda && sediaAda.length) return toast(`Route "${nama}" sudah wujud`,'err');
-  const { error } = await sb.from('route_kedai').insert({ nama });
+  const { error } = await sb.from('route_kedai').insert({ nama, mod_paparan: MOD_PAPARAN_ROUTE_BAHARU });
   if (error) return toast('Gagal cipta route: '+error.message,'err');
   document.getElementById('route-nama-baru').value = '';
-  toast('Route dicipta');
+  toast(`Route dicipta (${MOD_PAPARAN_ROUTE_BAHARU==='semua'?'🌐 Semua Kedai':'👤 Ikut Pendaftar'})`);
   renderSenaraiRoute();
+}
+
+// Tukar mod paparan route SEDIA ADA (butang sama di senarai route, lepas dicipta).
+async function tukarModPaparanRoute(routeId, modBaharu) {
+  const { error } = await sb.rpc('tukar_mod_paparan_route', { p_route_id: routeId, p_mod: modBaharu });
+  if (error) return toast('Gagal tukar mod paparan: '+error.message,'err');
+  toast(modBaharu==='semua' ? '🌐 Route ni kini kedai kelihatan kpd SEMUA pekerja' : '👤 Route ni kini kedai kelihatan ikut pendaftar sahaja');
+  await renderSenaraiRoute();
+  const kedaiWrap = document.getElementById('route-kedai-'+routeId);
+  if (kedaiWrap) kedaiWrap.style.display = '';
 }
 
 async function tetapkanRouteKedai(kedaiId, routeId) {
