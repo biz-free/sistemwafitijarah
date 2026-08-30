@@ -460,6 +460,15 @@
       <div id="preorder-saya-stok-list"></div>
     </div>
 
+    <!-- Filter bulanan utk stat "Hasil Diterima" & "Hutang" — default bulan terkini.
+    "Kedai Aktif"/"Produk"/"Cash Dipegang" ialah nombor SEMASA (snapshot), bukan
+    jumlah tempoh, jadi tidak terjejas oleh filter ini. -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <input type="month" class="form-input" id="dash-bulan" style="width:auto;flex:1;min-width:140px" onchange="renderDashboard()" />
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap">
+        <input type="checkbox" id="dash-semua-bulan" onchange="renderDashboard()" /> 📊 Semua
+      </label>
+    </div>
     <div class="stat-grid" id="stat-grid">
       <div class="stat-box"><div class="stat-icon">🏪</div><div class="stat-label">Kedai Aktif</div><div class="stat-val" id="s-kedai" style="color:var(--teal)">—</div></div>
       <div class="stat-box"><div class="stat-icon">💰</div><div class="stat-label" id="s-hasil-label">Hasil Diterima</div><div class="stat-val" id="s-hasil" style="color:var(--green)">—</div></div>
@@ -1963,6 +1972,11 @@ function saveData() {
 //  HELPERS
 // ════════════════════════════════════════════════════
 const fmt = n => 'RM ' + Number(n).toFixed(2);
+// "2026-08" -> "Ogos 2026" — label bulan mesra utk skop filter (dashboard, dll).
+const fmtBulanMY = bulanYYYYMM => {
+  const [y,m] = bulanYYYYMM.split('-').map(Number);
+  return new Date(y, m-1, 1).toLocaleDateString('ms-MY', { month:'long', year:'numeric' });
+};
 // Tarikh TEMPATAN (Malaysia, UTC+8) dalam format YYYY-MM-DD.
 // PENTING: JANGAN guna tarikhTempatan() untuk "hari ini" —
 // itu tarikh UTC. Perniagaan beroperasi waktu Malaysia (UTC+8), jadi apa-apa
@@ -2326,6 +2340,7 @@ function initAll() {
   document.getElementById('dash-date').textContent = new Date().toLocaleDateString('ms-MY',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
   // Month picker default
   document.getElementById('lap-bulan').value = bulanTempatan();
+  document.getElementById('dash-bulan').value = bulanTempatan();
   document.getElementById('lap-harian-tarikh').value = tarikhTempatan();
   document.getElementById('baucar-bulan').value = bulanTempatan();
   const bhTarikhEl = document.getElementById('bh-tarikh');
@@ -2352,12 +2367,24 @@ function renderDashboard() {
   const aktif = DATA.kedai.filter(k=>k.status==='aktif').length;
   // Hasil Diterima & Hutang — pekerja nampak jumlah PENGHANTARAN SENDIRI sahaja
   // (bukan jumlah keseluruhan syarikat), pemilik kekal nampak jumlah semua.
+  // Filter bulanan (default bulan terkini, boleh tukar ke "Semua") — bila "Semua"
+  // dipilih, Hutang pemilik kekal guna kedai.hutang (baki tertunggak SEMASA sebenar,
+  // sepadan dgn tab Kedai) sbg legacy; bila bulan spesifik dipilih, tiada pecahan
+  // ikut bulan utk kedai.hutang (ia baki hidup, bukan rekod bertarikh) jadi jatuh
+  // balik guna jumlah transaksi berstatus 'hutang' pada bulan tu (konsisten dgn
+  // cara pekerja dikira) — anggaran munasabah "hutang yang tercipta bulan ini".
   const isPemilik = currentRole==='pemilik';
-  const filSaya = isPemilik ? DATA.transaksi : DATA.transaksi.filter(t=>t.created_by===DATA.currentUser?.id);
-  const hutang = isPemilik ? DATA.kedai.reduce((a,k)=>a+k.hutang,0) : filSaya.filter(t=>t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
+  const papatSemuaBulan = document.getElementById('dash-semua-bulan')?.checked;
+  const bulanDipilih = document.getElementById('dash-bulan')?.value || bulanTempatan();
+  const filSayaSemua = isPemilik ? DATA.transaksi : DATA.transaksi.filter(t=>t.created_by===DATA.currentUser?.id);
+  const filSaya = papatSemuaBulan ? filSayaSemua : filSayaSemua.filter(t=>t.tarikh_masa && tarikhTempatan(t.tarikh_masa).slice(0,7)===bulanDipilih);
+  const hutang = (isPemilik && papatSemuaBulan)
+    ? DATA.kedai.reduce((a,k)=>a+k.hutang,0)
+    : filSaya.filter(t=>t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
   const hasil  = filSaya.filter(t=>t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
-  document.getElementById('s-hasil-label').textContent = isPemilik ? 'Hasil Diterima' : 'Hasil Diterima (Saya)';
-  document.getElementById('s-hutang-label').textContent = isPemilik ? 'Hutang' : 'Hutang (Saya)';
+  const skopLabel = papatSemuaBulan ? '' : ` (${fmtBulanMY(bulanDipilih)})`;
+  document.getElementById('s-hasil-label').textContent = (isPemilik ? 'Hasil Diterima' : 'Hasil Diterima (Saya)') + skopLabel;
+  document.getElementById('s-hutang-label').textContent = (isPemilik ? 'Hutang' : 'Hutang (Saya)') + skopLabel;
 
   document.getElementById('s-kedai').textContent = aktif;
   document.getElementById('s-hasil').textContent = fmt(hasil);
