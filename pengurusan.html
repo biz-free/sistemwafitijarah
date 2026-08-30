@@ -9297,10 +9297,12 @@ async function kiraJarakKehadiranJulat(dariISO, hinggaISO, pekerjaId=null) {
 
 // Duit makan hanya layak jika (a) jumlah tempoh thumb-in→thumb-out pekerja pada hari
 // tersebut sekurang-kurangnya 5 jam, DAN (b) ada sekurang-kurangnya 1 transaksi jualan
-// kedai pada hari sama berkaedah hutang/online transfer/consignment — bukan sekadar
-// thumb-in tanpa kerja benar, dan bukan sekadar jualan tunai kecil tanpa kehadiran cukup.
+// kedai pada hari sama (apa-apa kaedah bayaran) — bukan sekadar thumb-in tanpa kerja
+// benar. Sebelum ni syarat (b) dihadkan cuma hutang/transfer/consignment sahaja —
+// pekerja yang genuinely kerja penuh hari tapi kebetulan SEMUA jualannya tunai
+// (cth Nadia 27 Ogos 2026, 11j13m kerja, 6 jualan tunai) tersalah anggap tak layak
+// walaupun kerja sebenar dibuktikan. Kini apa-apa jualan (termasuk tunai) dikira sah.
 // Pulangkan Set kunci `${pekerja_id}|${tarikh}` yang layak.
-const KAEDAH_LAYAK_MAKAN = new Set(['hutang','transfer','consignment']);
 async function kiraHariLayakMakan(dariISO, hinggaISO, pekerjaId=null) {
   if (!useCloud) return new Set();
   const keUTC = s => /[Z+]|-\d{2}:\d{2}$/.test(s) ? s : new Date(s + '+08:00').toISOString();
@@ -9319,7 +9321,7 @@ async function kiraHariLayakMakan(dariISO, hinggaISO, pekerjaId=null) {
   Object.keys(minitIkutHari).forEach(key => {
     if (minitIkutHari[key] < 300) return; // < 5 jam
     const [pid, tarikh] = key.split('|');
-    const adaTransaksiLayak = DATA.transaksi.some(t => t.created_by===pid && tarikhTempatan(t.tarikh_masa)===tarikh && KAEDAH_LAYAK_MAKAN.has(t.kaedah_bayaran));
+    const adaTransaksiLayak = DATA.transaksi.some(t => t.created_by===pid && tarikhTempatan(t.tarikh_masa)===tarikh);
     if (adaTransaksiLayak) hariLayak.add(key);
   });
   return hariLayak;
