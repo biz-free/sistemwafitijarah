@@ -960,6 +960,13 @@
     </div>
 
     <div class="card">
+      <div class="card-title">🔍 Semak Percanggahan Stok Pekerja</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Bandingkan baki stok bawaan SEBENAR (sistem) setiap pekerja × produk dengan jangkaan dikira drpd SEMUA sejarah (ambil/pulang/pindah/jualan/lupus) — kesan percanggahan awal sebelum jadi aduan "stok tak tally". Beza tak semestinya ralat sistem — mungkin pertukaran stok terus antara pekerja tanpa rekod; sila sahkan dgn kiraan fizikal.</div>
+      <button class="btn btn-secondary" style="width:100%;margin-bottom:10px" onclick="semakPercanggahanStok()">🔍 Jalankan Semakan</button>
+      <div id="percanggahan-stok-list"><div class="empty"><div class="empty-text">Tekan "Jalankan Semakan" utk mula</div></div></div>
+    </div>
+
+    <div class="card">
       <div class="card-title">🗓️ Pecahan Ikut Bulan</div>
       <div id="an-bulanan-list"></div>
     </div>
@@ -1562,6 +1569,17 @@
     </div>
     <div class="form-group"><label class="form-label">Kuantiti</label><input type="number" class="form-input" id="pulang-qty" placeholder="0" min="1" /></div>
     <button class="btn btn-primary" style="background:var(--gold)" onclick="pulangStok()">📤 Pulangkan Stok</button>
+  </div>
+</div>
+
+<!-- Sejarah Pergerakan Stok per-produk (pekerja) — jawab "ke mana barang saya pergi"
+tanpa perlu tanya pemilik. Baki dikira ANCHOR pada baki SEBENAR semasa (bukan andaian
+mula drpd 0) supaya sentiasa padan realiti walaupun ada jurang sejarah lampau. -->
+<div class="modal-overlay" id="modal-sejarah-stok">
+  <div class="modal-box">
+    <div class="modal-title" id="sejarah-stok-title">📜 Sejarah Pergerakan<button class="modal-close" onclick="closeModal('modal-sejarah-stok')">✕ Tutup</button></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Senarai keluar-masuk terkini produk ini di beg anda, tersusun terbaru dahulu. "Baki" ialah baki SELEPAS pergerakan tersebut berlaku.</div>
+    <div id="sejarah-stok-content"><div class="empty"><div class="empty-text">Memuatkan...</div></div></div>
   </div>
 </div>
 
@@ -4019,7 +4037,7 @@ function renderStokBawaanList() {
   const entries = Object.entries(DATA.stokPekerja||{}).filter(([id,qty])=>qty>0);
   el.innerHTML = entries.map(([id,qty])=>{
     const s = DATA.stok.find(s=>s.id===id);
-    return `<div class="list-item"><div class="list-item-title">${esc(s?.nama||id)}</div><div class="list-item-val">${qty} ${esc(s?.unit||'')}</div></div>`;
+    return `<div class="list-item" style="cursor:pointer" onclick="bukaSejarahStokProduk('${id}')"><div class="list-item-title">${esc(s?.nama||id)}</div><div class="list-item-right" style="display:flex;align-items:center;gap:6px"><div class="list-item-val">${qty} ${esc(s?.unit||'')}</div><span style="color:var(--muted);font-size:11px">📜</span></div></div>`;
   }).join('') || '<div class="empty"><div class="empty-text">Tiada stok dibawa lagi — tekan "Ambil Stok"</div></div>';
 
   if (ringkasanEl) {
@@ -4040,6 +4058,86 @@ function renderStokBawaanList() {
   if (ambilSel) ambilSel.innerHTML = DATA.stok.filter(s=>s.aktif!==false).map(s=>`<option value="${s.id}">${esc(s.nama)} (gudang: ${s.stok} ${esc(s.unit)})</option>`).join('');
   const pulangSel = document.getElementById('pulang-produk');
   if (pulangSel) pulangSel.innerHTML = entries.map(([id,qty])=>{ const s=DATA.stok.find(s=>s.id===id); return `<option value="${id}">${esc(s?.nama||id)} (bawaan: ${qty} ${esc(s?.unit||'')})</option>`; }).join('') || '<option value="">-- Tiada stok dibawa --</option>';
+}
+
+// Sejarah Pergerakan Stok per-produk — gabung 4 sumber (ambil/baik/padam_pulang/
+// pindah drpd serahan_produk, jualan drpd transaksi, pulang-consignment drpd
+// transaksi.items_pulang, dilupuskan drpd pelupusan_stok), susun kronologi, kira
+// baki ANCHOR pada baki SEBENAR semasa (stok_pekerja.kuantiti) — bukan andaian
+// mula drpd 0 — supaya senarai ni SENTIASA padan realiti walaupun ada jurang
+// sejarah yang tak dapat dijejak (cth pertukaran terus antara pekerja tanpa
+// rekod). Lihat siasatan aduan Nadia (Tamar Cocoa Papan, Ogos 2026).
+async function bukaSejarahStokProduk(stokId) {
+  const s = DATA.stok.find(x=>x.id===stokId);
+  document.getElementById('sejarah-stok-title').innerHTML = `📜 Sejarah — ${esc(s?.nama||stokId)}<button class="modal-close" onclick="closeModal('modal-sejarah-stok')">✕ Tutup</button>`;
+  showModal('modal-sejarah-stok');
+  const contentEl = document.getElementById('sejarah-stok-content');
+  contentEl.innerHTML = '<div class="empty"><div class="empty-text">Memuatkan...</div></div>';
+  if (!useCloud) { contentEl.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+
+  const meId = DATA.currentUser.id;
+  const baleiSemasa = DATA.stokPekerja?.[stokId] || 0;
+  if (!Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
+
+  const { data: gerakan } = await sb.from('serahan_produk')
+    .select('kuantiti,jenis,created_at,rujuk_pekerja_id')
+    .eq('stok_id', stokId).eq('pekerja_id', meId).eq('status','disahkan')
+    .order('created_at', { ascending:false }).limit(80);
+
+  const SIGN = { ambil:1, baik:-1, padam_pulang:1, pindah_masuk:1, pindah_keluar:-1 };
+  const LABEL = {
+    ambil:'📥 Ambil dari Gudang', baik:'📤 Pulang ke Gudang (Baik)',
+    padam_pulang:'↩️ Pulang (Transaksi Dipadam)',
+    pindah_masuk:'🔀 Terima dari', pindah_keluar:'🔀 Beri kepada',
+  };
+  let peristiwa = (gerakan||[]).map(g => ({
+    tarikh: g.created_at,
+    delta: (SIGN[g.jenis]||0) * g.kuantiti,
+    teks: (g.jenis==='pindah_masuk'||g.jenis==='pindah_keluar')
+      ? `${LABEL[g.jenis]} ${esc(PROFIL_NAMA_CACHE[g.rujuk_pekerja_id]||'pekerja lain')}`
+      : (LABEL[g.jenis] || g.jenis),
+  }));
+
+  // Jualan (drpd transaksi sendiri, tapi hadkan ke julat masa yg munasabah supaya
+  // konsisten dgn 80 rekod serahan_produk di atas — guna 90 hari terkini).
+  const dariISO = new Date(Date.now() - 90*24*60*60*1000).toISOString();
+  DATA.transaksi.filter(t => t.created_by===meId && t.tarikh_masa >= dariISO).forEach(t => {
+    (t.items||[]).forEach(it => {
+      if (it.stokId !== stokId) return;
+      const k = DATA.kedai.find(k=>k.id===t.kedai_id);
+      peristiwa.push({ tarikh: t.tarikh_masa, delta: -(+it.qty||0), teks: `🏪 Jual — ${esc(k?.nama||'Tanpa Kedai')}` });
+    });
+    // Consignment yg dipulangkan (tak laku) — dikreditkan balik (lihat SQL_TAMBAHAN_128).
+    (t.items_pulang||[]).forEach(it => {
+      if (it.stokId !== stokId) return;
+      const k = DATA.kedai.find(k=>k.id===t.kedai_id);
+      peristiwa.push({ tarikh: t.disahkan_pada||t.tarikh_masa, delta: +(+it.qty||0), teks: `↩️ Pulang Consignment — ${esc(k?.nama||'?')}` });
+    });
+  });
+
+  const { data: lupus } = await sb.from('pelupusan_stok')
+    .select('kuantiti,created_at,sebab').eq('stok_id', stokId).eq('pekerja_id', meId)
+    .gte('created_at', dariISO);
+  (lupus||[]).forEach(l => peristiwa.push({ tarikh: l.created_at, delta: -l.kuantiti, teks: `🗑️ Dilupuskan${l.sebab?' — '+esc(l.sebab):''}` }));
+
+  peristiwa.sort((a,b) => new Date(b.tarikh) - new Date(a.tarikh)); // terbaru dahulu
+
+  let bakiSelepas = baleiSemasa;
+  const baris = peristiwa.map(p => {
+    const html = `<div class="list-item"><div><div class="list-item-title">${p.teks}</div><div class="list-item-sub">${fmtDT(p.tarikh)}</div></div><div class="list-item-right"><div class="list-item-val" style="color:${p.delta>0?'var(--green)':'var(--red)'}">${p.delta>0?'+':''}${p.delta}</div><div style="font-size:10px;color:var(--muted)">Baki: ${bakiSelepas}</div></div></div>`;
+    bakiSelepas -= p.delta;
+    return html;
+  });
+
+  contentEl.innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:9px;color:var(--muted)">BAKI SEKARANG</div>
+        <div style="font-weight:800;font-size:16px">${baleiSemasa} ${esc(s?.unit||'')}</div>
+      </div>
+    </div>
+    ${baris.join('') || '<div class="empty"><div class="empty-text">Tiada pergerakan 90 hari kebelakangan</div></div>'}
+    <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:8px">Menunjukkan 90 hari terkini · Baki dikira anchor pada baki sebenar semasa</div>`;
 }
 
 function setStokTab(t) {
@@ -6996,6 +7094,73 @@ function renderAnalisis() {
   renderRumusanStokKeluar();
 }
 
+// Semak Percanggahan Stok Pekerja — bandingkan baki SEBENAR (stok_pekerja) setiap
+// pekerja x produk dgn jangkaan dikira drpd SEMUA sejarah (ambil/baik/padam_pulang/
+// pindah/jualan/pulang-consignment/lupus), sama logik spt siasatan manual aduan
+// Nadia (Tamar Cocoa Papan). Kesan percanggahan AWAL (senarai keutamaan utk kiraan
+// fizikal) — beza TAK semestinya ralat sistem, mungkin pertukaran stok terus antara
+// pekerja tanpa rekod (lihat SQL_TAMBAHAN_128 utk satu punca sebenar yg dah dibaiki).
+async function semakPercanggahanStok() {
+  const el = document.getElementById('percanggahan-stok-list');
+  el.innerHTML = '<div class="empty"><div class="empty-text">Mengira... mungkin ambil masa seketika</div></div>';
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+
+  const [{ data: stokPekerjaSemua, error }, { data: serahanSemua }, { data: pelupusanSemua }] = await Promise.all([
+    sb.from('stok_pekerja').select('pekerja_id,stok_id,kuantiti'),
+    sb.from('serahan_produk').select('pekerja_id,stok_id,kuantiti,jenis').eq('status','disahkan'),
+    sb.from('pelupusan_stok').select('pekerja_id,stok_id,kuantiti'),
+  ]);
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  if (!Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
+
+  const SIGN = { ambil:1, baik:-1, padam_pulang:1, pindah_masuk:1, pindah_keluar:-1 };
+  const bersih = {}; // key `${pekerja_id}|${stok_id}` -> jumlah bersih dijangka
+  (serahanSemua||[]).forEach(r => {
+    const key = `${r.pekerja_id}|${r.stok_id}`;
+    bersih[key] = (bersih[key]||0) + (SIGN[r.jenis]||0) * r.kuantiti;
+  });
+  DATA.transaksi.forEach(t => {
+    if (!t.created_by) return;
+    (t.items||[]).forEach(it => {
+      const key = `${t.created_by}|${it.stokId}`;
+      bersih[key] = (bersih[key]||0) - (+it.qty||0);
+    });
+    (t.items_pulang||[]).forEach(it => {
+      const key = `${t.created_by}|${it.stokId}`;
+      bersih[key] = (bersih[key]||0) + (+it.qty||0);
+    });
+  });
+  (pelupusanSemua||[]).forEach(r => {
+    const key = `${r.pekerja_id}|${r.stok_id}`;
+    bersih[key] = (bersih[key]||0) - r.kuantiti;
+  });
+
+  const percanggahan = [];
+  (stokPekerjaSemua||[]).forEach(sp => {
+    const key = `${sp.pekerja_id}|${sp.stok_id}`;
+    const dijangka = bersih[key] || 0;
+    const beza = sp.kuantiti - dijangka;
+    if (Math.abs(beza) > 0.001) {
+      const s = DATA.stok.find(x=>x.id===sp.stok_id);
+      percanggahan.push({
+        pekerja: PROFIL_NAMA_CACHE[sp.pekerja_id] || sp.pekerja_id,
+        produk: s?.nama || sp.stok_id, unit: s?.unit || '',
+        actual: sp.kuantiti, dijangka, beza,
+      });
+    }
+  });
+  percanggahan.sort((a,b) => Math.abs(b.beza) - Math.abs(a.beza));
+
+  el.innerHTML = percanggahan.length
+    ? `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${percanggahan.length} percanggahan dikesan (disusun ikut saiz beza terbesar dahulu):</div>` +
+      percanggahan.map(p => `
+      <div class="list-item">
+        <div><div class="list-item-title">${esc(p.pekerja)} — ${esc(p.produk)}</div><div class="list-item-sub">Sistem: ${p.actual} ${esc(p.unit)} · Jangkaan drpd sejarah: ${p.dijangka} ${esc(p.unit)}</div></div>
+        <span class="badge ${Math.abs(p.beza)>=10?'badge-red':'badge-gold'}">${p.beza>0?'+':''}${p.beza}</span>
+      </div>`).join('')
+    : '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Tiada percanggahan dikesan!</div></div>';
+}
+
 // Rumusan stok keluar syarikat — gabung transaksi kedai (SEMUA status, termasuk
 // hutang belum selesai — stok dah keluar gudang tak kira status bayaran) dengan
 // pesanan e-dagang berstatus "selesai" sahaja, ditapis ikut bulan/status/pekerja.
@@ -9094,6 +9259,10 @@ async function thumbIn() {
   startGpsWatch();
   toast('Thumb In berjaya — kerja bermula, GPS aktif');
   renderKehadiranStatus();
+  // Peringatan kecil kiraan fizikal stok — bantu tangkap percanggahan awal
+  // (lihat siasatan "stok tak tally") sebelum ia bertimbun jadi besar. Dilewatkan
+  // supaya tak bertindih dgn toast "Thumb In berjaya" (toast() cuma satu paparan).
+  setTimeout(() => toast('📦 Sebelum mula bergerak, sempatkan semak stok bawaan anda sekejap ya — pastikan semuanya sepadan dengan sistem 😊'), 4000);
 }
 
 async function thumbOut() {
