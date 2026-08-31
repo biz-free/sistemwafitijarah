@@ -6705,7 +6705,18 @@ async function janaBaucarBulanIni() {
     toast(bilangan ? `${bilangan} baucar bayaran berjaya dijana` : 'Tiada baucar dijana — semua jumlah pekerja bulan ini ialah 0');
   }
   document.getElementById('baucar-bulan').value = LAPORAN_BULAN_TERKINI;
+  // Baucar BULANAN (petrol/upah/makan) tiada lajur `tarikh` (cuma `bulan`) — kalau
+  // "Tapis Tarikh" masih aktif drpd tapisan sebelum ni (cth semak baucar harian hari
+  // tertentu), semua baucar bulanan baharu ni akan TERSEMBUNYI (v.tarikh=null tak
+  // sepadan tarikhPilih), nampak macam "tiada apa dijana" walhal dah berjaya. Kosongkan
+  // supaya hasil terus kelihatan.
+  const tarikhFilterEl = document.getElementById('baucar-filter-tarikh');
+  if (tarikhFilterEl) tarikhFilterEl.value = '';
   await renderBaucarList();
+  // Baucar dijana muncul di kad "🧾 Baucar Bayaran" — jauh DI BAWAH kad Laporan
+  // Bulanan tempat butang ni ditekan, jadi mudah nampak "tiada apa berlaku" kalau
+  // tak scroll turun. Scroll terus ke situ supaya hasil terus kelihatan.
+  document.getElementById('baucar-card')?.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 // Baucar Harian — upah 1 hari untuk seorang pekerja, netto terus dengan cash tunai
