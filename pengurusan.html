@@ -409,6 +409,18 @@
       <div style="font-size:10px;color:var(--muted);margin-top:8px">📍 GPS aktif berterusan bermula Thumb In sehingga Thumb Out untuk claim minyak. Sila kekalkan apps terbuka semasa bekerja & benarkan akses lokasi.</div>
     </div>
 
+    <!-- Pemaklumam Untung/Rugi Harian — dipapar SEBELUM Thumb Out disahkan, kiraan
+    sama spt Laporan Harian (pemilik) tapi khusus utk pekerja+hari tu sahaja.
+    Pekerja WAJIB tekan salah satu butang sebelum thumb out benar-benar diproses. -->
+    <div class="modal-overlay" id="modal-untung-rugi-harian">
+      <div class="modal-box">
+        <div class="modal-title">📊 Ringkasan Hari Ini</div>
+        <div id="untung-rugi-content" style="text-align:center;padding:10px 0"></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="konfirmThumbOut()">✅ Faham, Teruskan Thumb Out</button>
+        <button class="btn btn-secondary" style="width:100%;margin-top:8px" onclick="batalThumbOut()">↩️ Batal, Kembali Bekerja</button>
+      </div>
+    </div>
+
     <!-- Papan Jualan Pekerja Hari Ini — semua akaun pekerja boleh lihat -->
     <div class="card" id="jualan-pekerja-card" style="border-left:4px solid var(--gold)">
       <div class="card-title" style="color:var(--gold)">🏆 Jualan Pekerja Hari Ini</div>
@@ -9354,12 +9366,104 @@ async function thumbIn() {
   setTimeout(() => toast('📦 Sebelum mula bergerak, sempatkan semak stok bawaan anda sekejap ya — pastikan semuanya sepadan dengan sistem 😊'), 4000);
 }
 
+// Kira Untung/Rugi Bersih SYARIKAT utk SATU pekerja pada SATU hari — sama formula
+// spt renderLaporanHarian() (pemilik, mod tapis 1 pekerja), diasingkan ke fungsi
+// tersendiri supaya pekerja SENDIRI boleh panggil terus (renderLaporanHarian()
+// dikunci pemilik sahaja + terikat elemen DOM khusus pemilik). Untung Kasar
+// (margin jualan hari tu) ditolak SEMUA kos operasi hari tu (upah, minyak, makan,
+// bonus kedai baru, upah e-dagang) yg berkaitan pekerja ni sahaja.
+async function kiraUntungBersihHarianPekerja(pekerjaId, tarikh) {
+  const fil = DATA.transaksi.filter(t=>t.created_by===pekerjaId && t.tarikh_masa && tarikhTempatan(t.tarikh_masa)===tarikh);
+  const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
+  const untung = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0),0) - diskaunKedai;
+
+  const { kmIkutHari } = await kiraJarakKehadiranJulat(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaId);
+  const kmPekerja = kmIkutHari[`${pekerjaId}|${tarikh}`] || 0;
+  const hariLayakMakan = await kiraHariLayakMakan(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaId);
+  const layakMakan = hariLayakMakan.has(`${pekerjaId}|${tarikh}`);
+
+  const kosUpah = fil.reduce((a,t)=>a+jumlahUpahTransaksi(t),0);
+  const kosMinyak = kmPekerja*SETTINGS.minyak;
+  const kosMakan = layakMakan ? SETTINGS.makan : 0;
+
+  const kedaiBonusList = DATA.kedai.filter(k=>k.didaftarkan_oleh===pekerjaId)
+    .flatMap(k => bonusKedaiEvents(k.id).map(ev => ({ kedai:k, ...ev })))
+    .filter(x => x.tarikh_masa && tarikhTempatan(x.tarikh_masa)===tarikh);
+  const kosKedaiBaru = kedaiBonusList.reduce((a,x)=>a+x.jumlah,0);
+
+  let kosUpahEdagang = 0;
+  if (useCloud) {
+    const { data } = await sb.from('pesanan_edagang').select('jumlah,jumlah_asal,items,updated_at,created_at,status_pesanan').eq('assigned_pekerja_id', pekerjaId);
+    const edagangLayak = (data||[]).filter(o=>{
+      const tkh = o.updated_at||o.created_at;
+      return tkh && tarikhTempatan(tkh)===tarikh && ['dihantar','selesai'].includes(o.status_pesanan);
+    });
+    kosUpahEdagang = edagangLayak.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
+  }
+
+  const kosOperasi = kosUpah+kosMinyak+kosMakan+kosKedaiBaru+kosUpahEdagang;
+  return { untung, kosUpah, kosMinyak, kosMakan, kosKedaiBaru, kosUpahEdagang, kosOperasi, untungBersih: untung-kosOperasi };
+}
+
+function untungRugiHarianHtml(h) {
+  const rugi = h.untungBersih < 0;
+  const warna = rugi ? 'var(--red)' : 'var(--green)';
+  const baris = (label,nilai) => nilai ? `<div style="display:flex;justify-content:space-between;padding:2px 0"><span>${label}</span><span>-${fmt(nilai)}</span></div>` : '';
+  return `
+    <div style="font-size:40px;margin-bottom:6px">${rugi?'😔':'🙏'}</div>
+    <div style="font-weight:800;font-size:16px;color:${warna}">${rugi?'Maaf, Syarikat Rugi Hari Ini':'Terima Kasih, Syarikat Untung Hari Ini!'}</div>
+    <div style="font-weight:800;font-size:26px;margin:8px 0;color:${warna}">${rugi?'-':'+'}${fmt(Math.abs(h.untungBersih))}</div>
+    <div style="font-size:11px;color:var(--muted);text-align:left;background:var(--bg);border-radius:8px;padding:10px">
+      <div style="display:flex;justify-content:space-between;padding:2px 0;font-weight:700"><span>Untung Kasar Jualan</span><span>${fmt(h.untung)}</span></div>
+      ${baris('Kos Upah', h.kosUpah)}
+      ${baris('Kos Minyak', h.kosMinyak)}
+      ${baris('Kos Makan', h.kosMakan)}
+      ${baris('Bonus Kedai Baru', h.kosKedaiBaru)}
+      ${baris('Upah E-Dagang', h.kosUpahEdagang)}
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px">${rugi?'Jangan risau — teruskan usaha esok! 💪':'Tahniah atas kerja keras hari ini! 🎉'}</div>`;
+}
+
+let PENDING_THUMB_OUT = null;
+
 async function thumbOut() {
   if (!kehadiranAktif) return;
   const ok = await sahkanWebAuthn();
   if (!ok) return;
   const pos = await getGpsPosition();
   const { data: sesiSemasa } = await sb.from('kehadiran').select('thumb_in_masa').eq('id', kehadiranAktif.id).single();
+  PENDING_THUMB_OUT = { pos, sesiSemasa };
+
+  // Pemaklumam untung/rugi syarikat hari ini SEBELUM thumb out disahkan — pekerja
+  // wajib tekan salah satu butang di modal dulu baru rekod thumb out diproses
+  // (lihat konfirmThumbOut()/batalThumbOut()). Gagal senyap (terus proses thumb
+  // out spt biasa) kalau pengiraan gagal — bukan sekatan kritikal thumb-out itu
+  // sendiri, sekadar pemakluman tambahan.
+  try {
+    const tarikh = sesiSemasa?.thumb_in_masa ? tarikhTempatan(sesiSemasa.thumb_in_masa) : tarikhTempatan();
+    const hasil = await kiraUntungBersihHarianPekerja(DATA.currentUser.id, tarikh);
+    document.getElementById('untung-rugi-content').innerHTML = untungRugiHarianHtml(hasil);
+    showModal('modal-untung-rugi-harian');
+  } catch (e) {
+    console.log('Pengiraan untung/rugi harian gagal (senyap):', e);
+    await prosesThumbOutSelepasKonfirmasi();
+  }
+}
+
+function batalThumbOut() {
+  closeModal('modal-untung-rugi-harian');
+  PENDING_THUMB_OUT = null;
+}
+
+async function konfirmThumbOut() {
+  closeModal('modal-untung-rugi-harian');
+  await prosesThumbOutSelepasKonfirmasi();
+}
+
+async function prosesThumbOutSelepasKonfirmasi() {
+  if (!PENDING_THUMB_OUT || !kehadiranAktif) return;
+  const { pos, sesiSemasa } = PENDING_THUMB_OUT;
+  PENDING_THUMB_OUT = null;
   const { error } = await sb.from('kehadiran').update({
     thumb_out_masa: new Date().toISOString(), thumb_out_lat: pos?.lat, thumb_out_lng: pos?.lng, status: 'selesai',
   }).eq('id', kehadiranAktif.id);
