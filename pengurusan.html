@@ -9405,22 +9405,15 @@ async function kiraUntungBersihHarianPekerja(pekerjaId, tarikh) {
   return { untung, kosUpah, kosMinyak, kosMakan, kosKedaiBaru, kosUpahEdagang, kosOperasi, untungBersih: untung-kosOperasi };
 }
 
+// Sengaja TAK papar jumlah RM & pecahan kos — pekerja cuma nampak mesej
+// ringkas (untung/rugi), bukan angka tepat (nombor sensitif dikekalkan
+// utk pemilik sahaja di Laporan Harian).
 function untungRugiHarianHtml(h) {
   const rugi = h.untungBersih < 0;
   const warna = rugi ? 'var(--red)' : 'var(--green)';
-  const baris = (label,nilai) => nilai ? `<div style="display:flex;justify-content:space-between;padding:2px 0"><span>${label}</span><span>-${fmt(nilai)}</span></div>` : '';
   return `
     <div style="font-size:40px;margin-bottom:6px">${rugi?'😔':'🙏'}</div>
     <div style="font-weight:800;font-size:16px;color:${warna}">${rugi?'Maaf, Syarikat Rugi Hari Ini':'Terima Kasih, Syarikat Untung Hari Ini!'}</div>
-    <div style="font-weight:800;font-size:26px;margin:8px 0;color:${warna}">${rugi?'-':'+'}${fmt(Math.abs(h.untungBersih))}</div>
-    <div style="font-size:11px;color:var(--muted);text-align:left;background:var(--bg);border-radius:8px;padding:10px">
-      <div style="display:flex;justify-content:space-between;padding:2px 0;font-weight:700"><span>Untung Kasar Jualan</span><span>${fmt(h.untung)}</span></div>
-      ${baris('Kos Upah', h.kosUpah)}
-      ${baris('Kos Minyak', h.kosMinyak)}
-      ${baris('Kos Makan', h.kosMakan)}
-      ${baris('Bonus Kedai Baru', h.kosKedaiBaru)}
-      ${baris('Upah E-Dagang', h.kosUpahEdagang)}
-    </div>
     <div style="font-size:11px;color:var(--muted);margin-top:10px">${rugi?'Jangan risau — teruskan usaha esok! 💪':'Tahniah atas kerja keras hari ini! 🎉'}</div>`;
 }
 
