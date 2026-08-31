@@ -6493,7 +6493,16 @@ async function renderLaporan() {
   let edagangLayakUpah = [];
   if (useCloud) {
     const { data } = await sb.from('pesanan_edagang').select('*');
-    edagangLayakUpah = (data||[]).filter(o=>o.created_at && bulanTempatan(o.created_at)===bulan && o.assigned_pekerja_id && ['dihantar','selesai'].includes(o.status_pesanan));
+    // Guna updated_at||created_at (tarikh SEBENAR dihantar/selesai), BUKAN created_at
+    // semata-mata (tarikh order di-key-in) — konsisten dgn renderLaporanHarian()/
+    // kiraUpahPenuhHari()/kiraUntungBersihHarianPekerja(). Sebelum ni pesanan yang
+    // di-key-in 1 bulan tapi baru dihantar/selesai bulan BERIKUTNYA disalah-anggap
+    // masuk bulan asal (created_at), punca "Jana Baucar Bulan Ini" tak sepadan dgn
+    // apa pekerja nampak sendiri di dashboard harian.
+    edagangLayakUpah = (data||[]).filter(o=>{
+      const tkh = o.updated_at||o.created_at;
+      return tkh && bulanTempatan(tkh)===bulan && o.assigned_pekerja_id && ['dihantar','selesai'].includes(o.status_pesanan);
+    });
   }
   const kosUpahEdagang = edagangLayakUpah.reduce((a,o)=>a+jumlahUpahTransaksi(o),0);
   const kosOperasi = kosUpah+kosMinyak+kosMakan+kosKedaiBaru+kosUpahEdagang;
@@ -6668,13 +6677,14 @@ async function janaBaucarBulanIni() {
   if (!LAPORAN_PEKERJA_TERKINI.length) return toast('Tiada data pekerja untuk bulan ini','err');
   const tujuanTeks = { petrol:'Elaun minyak/petrol', upah:'Upah penghantaran & e-dagang', makan:'Elaun duit makan' };
   let bilangan = 0, ralat = 0;
+  const ralatSenarai = []; // dulu error DIBUANG terus (ralat++ sahaja) — pemilik tak nampak SEBAB gagal langsung
   for (const p of LAPORAN_PEKERJA_TERKINI) {
     const kategoriJumlah = { petrol: p.petrolJumlah, upah: p.upahJumlah, makan: p.makanJumlah };
     for (const [kategori, jumlah] of Object.entries(kategoriJumlah)) {
       if (jumlah <= 0) continue;
       const tujuan = `${tujuanTeks[kategori]} — ${p.nama} — ${LAPORAN_BULAN_TERKINI}`;
       const { data: voucherId, error } = await sb.rpc('cipta_baucar_bayaran', { p_pekerja_id: p.pid, p_kategori: kategori, p_bulan: LAPORAN_BULAN_TERKINI, p_jumlah: jumlah, p_tujuan: tujuan });
-      if (error) { ralat++; continue; }
+      if (error) { ralat++; ralatSenarai.push(`${p.nama} (${tujuanTeks[kategori]}): ${error.message}`); continue; }
       bilangan++;
       // Petrol — sertakan log perjalanan harian (tarikh + jarak GPS) sebagai bukti sokongan
       // automatik, menggantikan keperluan resit manual (jarak GPS ialah rekod objektif).
@@ -6688,7 +6698,12 @@ async function janaBaucarBulanIni() {
       }
     }
   }
-  toast(ralat ? `${bilangan} baucar dijana, ${ralat} gagal` : `${bilangan} baucar bayaran berjaya dijana`, ralat?'err':'ok');
+  if (ralat) {
+    console.log('Ralat jana baucar bulan ini:', ralatSenarai);
+    toast(`${bilangan} baucar dijana, ${ralat} gagal — ${ralatSenarai[0]}${ralat>1?` (+${ralat-1} lagi, lihat console)`:''}`,'err');
+  } else {
+    toast(bilangan ? `${bilangan} baucar bayaran berjaya dijana` : 'Tiada baucar dijana — semua jumlah pekerja bulan ini ialah 0');
+  }
   document.getElementById('baucar-bulan').value = LAPORAN_BULAN_TERKINI;
   await renderBaucarList();
 }
@@ -6762,9 +6777,11 @@ async function renderBaucarSaya() {
   if (!el) return;
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
   const bulan = document.getElementById('baucar-saya-bulan').value;
-  const { data, error } = await sb.from('baucar_bayaran').select('*').eq('pekerja_id', DATA.currentUser.id).eq('bulan', bulan).not('status','in','(draf,dibatalkan)').order('no_siri');
+  const { data, error } = await sb.from('baucar_bayaran').select('*').eq('pekerja_id', DATA.currentUser.id).eq('bulan', bulan).not('status','in','(draf,dibatalkan)');
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
-  BAUCAR_CACHE = data || [];
+  // Susun ikut tarikh TERKINI di atas sekali (bukan no_siri, yg tak semestinya
+  // sepadan urutan tarikh — baucar bulanan tiada `tarikh`, jatuh balik ke awal bulan).
+  BAUCAR_CACHE = (data||[]).sort((a,b) => (b.tarikh||b.bulan+'-01').localeCompare(a.tarikh||a.bulan+'-01') || b.no_siri.localeCompare(a.no_siri));
   if (!PROFIL_NAMA_CACHE[DATA.currentUser.id]) PROFIL_NAMA_CACHE[DATA.currentUser.id] = DATA.currentUser.nama;
   el.innerHTML = BAUCAR_CACHE.map(v => `
     <div class="list-item" style="display:block">
@@ -6803,9 +6820,11 @@ async function renderBaucarList() {
     if (filterPekerjaSel) filterPekerjaSel.innerHTML = '<option value="">Semua Pekerja</option>' + ((pekerjaList||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join(''));
   }
   const bulan = document.getElementById('baucar-bulan').value;
-  const { data, error } = await sb.from('baucar_bayaran').select('*').eq('bulan', bulan).order('no_siri');
+  const { data, error } = await sb.from('baucar_bayaran').select('*').eq('bulan', bulan);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
-  BAUCAR_CACHE = data || [];
+  // Susun ikut tarikh TERKINI di atas sekali (bukan no_siri, yg tak semestinya
+  // sepadan urutan tarikh — baucar bulanan tiada `tarikh`, jatuh balik ke awal bulan).
+  BAUCAR_CACHE = (data||[]).sort((a,b) => (b.tarikh||b.bulan+'-01').localeCompare(a.tarikh||a.bulan+'-01') || b.no_siri.localeCompare(a.no_siri));
   if (BAUCAR_CACHE.length && !Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
 
   // Tapis ikut pekerja & tarikh — elak senarai jadi terlalu panjang bila banyak
@@ -8676,7 +8695,14 @@ async function renderUpahSaya() {
   const kedaiSayaBonusUnik = new Set(kedaiSayaBonus.map(x=>x.kedai.id)).size;
   // RLS hadkan query ni kepada pesanan yang ditugaskan kepada saya sahaja.
   const { data: edagangData } = await sb.from('pesanan_edagang').select('*');
-  const edagangSaya = (edagangData||[]).filter(o=>o.created_at && bulanTempatan(o.created_at)===bulan && ['dihantar','selesai'].includes(o.status_pesanan));
+  // Guna updated_at||created_at (tarikh sebenar dihantar/selesai) — konsisten dgn
+  // pengelompokan hariList di bawah (yg dah guna updated_at) & renderLaporan()/
+  // renderLaporanHarian(). Elak pesanan tercicir/tersalah bulan bila di-key-in 1
+  // bulan tapi baru selesai bulan berikutnya.
+  const edagangSaya = (edagangData||[]).filter(o=>{
+    const tkh = o.updated_at||o.created_at;
+    return tkh && bulanTempatan(tkh)===bulan && ['dihantar','selesai'].includes(o.status_pesanan);
+  });
   // Sertakan hari kedai baru bertransaksi & hari pesanan e-dagang diselesaikan juga —
   // walaupun tiada penghantaran hari tu, supaya bonus/upah dia tak hilang dari pecahan harian.
   const hariList = [...new Set([...fil.map(t=>tarikhTempatan(t.tarikh_masa)), ...kedaiSayaBonus.map(x=>tarikhTempatan(x.tarikh_masa)), ...edagangSaya.map(o=>tarikhTempatan(o.updated_at||o.created_at))])].sort();
