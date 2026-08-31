@@ -656,6 +656,14 @@
           <button class="btn btn-secondary btn-sm" id="btn-urus-route" style="flex-shrink:0;display:none" onclick="bukaModalRoute()">🗺️ Urus Route</button>
         </div>
         <div id="servis-map" style="height:220px;border-radius:12px;border:1.5px solid var(--border);margin-bottom:10px"></div>
+        <select class="form-input" id="servis-filter-status" style="margin-bottom:10px" onchange="renderServisKedai()">
+          <option value="">☑️ Semua Status</option>
+          <option value="belum">⬜ Belum Ditandakan</option>
+          <option value="xreply">⏳ Tidak Reply — Follow-up Lagi</option>
+          <option value="ada_stok">✅ Masih Ada Produk</option>
+          <option value="nak_tambah">🛒 Nak Tambah Produk</option>
+          <option value="xberminat">❌ Tidak Berminat</option>
+        </select>
         <div id="servis-list"></div>
       </div>
     </div>
@@ -2931,7 +2939,13 @@ async function renderServisKedai() {
       return mod === 'semua' || k.didaftarkan_oleh === DATA.currentUser.id;
     });
   }
-  const perluServis = kedaiSkop.filter(k=>daysSince(k.last_visit)>=7);
+  let perluServis = kedaiSkop.filter(k=>daysSince(k.last_visit)>=7);
+
+  // Filter ikut status senarai semak (di bawah peta) — "" = semua, "belum" = kedai
+  // belum ditanda lagi, atau salah satu status follow-up spesifik.
+  const filterStatus = document.getElementById('servis-filter-status')?.value || '';
+  if (filterStatus === 'belum') perluServis = perluServis.filter(k=>!followupStatusAktif(k));
+  else if (filterStatus) perluServis = perluServis.filter(k=>followupStatusAktif(k)===filterStatus);
 
   const kedaiCardHtml = k => {
     const status = followupStatusAktif(k);
@@ -2957,12 +2971,12 @@ async function renderServisKedai() {
 
   let html = '';
   (routes||[]).forEach(r => {
-    const kedaiRoute = susunSenaraiFollowUp(susunRouteIkutJarak(perluServis.filter(k=>k.route_id===r.id)));
+    const kedaiRoute = susunPerluServisIkutKeutamaan(perluServis.filter(k=>k.route_id===r.id));
     if (!kedaiRoute.length) return;
     html += `<div style="font-weight:800;font-size:13px;color:var(--teal);margin:14px 0 8px">🗺️ ${esc(r.nama)} (${kedaiRoute.length} kedai)</div>`;
     html += kedaiRoute.map(kedaiCardHtml).join('');
   });
-  const takBerRoute = susunSenaraiFollowUp(perluServis.filter(k=>!k.route_id).sort((a,b)=>daysSince(b.last_visit)-daysSince(a.last_visit)));
+  const takBerRoute = susunPerluServisIkutKeutamaan(perluServis.filter(k=>!k.route_id));
   if (takBerRoute.length) {
     if (html) html += `<div style="font-weight:800;font-size:13px;color:var(--muted);margin:14px 0 8px">📍 Belum Ada Route</div>`;
     html += takBerRoute.map(kedaiCardHtml).join('');
@@ -3023,26 +3037,49 @@ Ada nak tanya produk, tambah stok atau buat repeat order? Boleh terus WhatsApp k
 
 // Senarai Semak Follow-up (Tab "📍 Perlu Servis") — pekerja tandakan status
 // lepas WhatsApp follow-up. Kedai yang sudah ditandakan automatik "turun ke
-// bawah" senarai (susunSenaraiFollowUp) supaya kedai yang belum diproses
-// kekal di atas untuk perhatian. Tanda jadi STALE (dianggap tiada tanda lagi)
-// automatik bila kedai tu betul-betul dilawati semula (last_visit lebih baru
-// drpd tanda) — elak status lama "Tak Berminat"/"Belum Reply" tersekat
-// selama-lamanya walaupun kedai dah repeat order.
+// bawah" senarai (susunPerluServisIkutKeutamaan) supaya kedai yang belum
+// diproses kekal di atas untuk perhatian. Tanda jadi STALE (dianggap tiada
+// tanda lagi, kembali ke "Tandakan status follow-up…") automatik bila (a)
+// kedai tu betul-betul dilawati semula (last_visit lebih baru drpd tanda),
+// ATAU (b) tempoh tamat tempoh sendiri tercapai (FOLLOWUP_EXPIRY_HARI) —
+// elak status lama tersekat selama-lamanya, kedai kembali dinilai semula
+// secara berkala tanpa perlu tindakan manual.
 const FOLLOWUP_STATUS_LABEL = {
   ada_stok:   { label:'✅ Masih Ada Produk',       warna:'var(--green,#1a7a4c)' },
   nak_tambah: { label:'🛒 Nak Tambah Produk',       warna:'var(--teal)' },
   xreply:     { label:'⏳ Tidak Reply — Follow-up Lagi', warna:'var(--gold,#b8860b)' },
   xberminat:  { label:'❌ Tidak Berminat',          warna:'var(--red)' },
 };
+// Tempoh (hari) sebelum tanda status kembali ke default automatik — 'xberminat'
+// sengaja TIADA had (kekal sehingga diubah manual, dianggap keputusan muktamad).
+const FOLLOWUP_EXPIRY_HARI = { xreply:2, ada_stok:14, nak_tambah:30 };
 function followupStatusAktif(k) {
   if (!k.followup_status || !k.followup_status_pada) return null;
   if (k.last_visit && new Date(k.followup_status_pada) < new Date(k.last_visit)) return null; // dah dilawati semula — tanda lama tak relevan lagi
+  const hadHari = FOLLOWUP_EXPIRY_HARI[k.followup_status];
+  if (hadHari && daysSince(k.followup_status_pada) >= hadHari) return null; // tamat tempoh — kembali default
   return k.followup_status;
 }
-function susunSenaraiFollowUp(list) {
-  const belum = list.filter(k=>!followupStatusAktif(k));
-  const sudah = list.filter(k=>followupStatusAktif(k));
-  return [...belum, ...sudah];
+// Susunan keutamaan "Perlu Servis": (1) kedai BELUM ditanda, tempoh paling
+// lama sejak penghantaran TERAKHIR di atas sekali; (2) kedai SUDAH ditanda,
+// tersusun ikut keutamaan status (⏳ Tidak Reply > ✅ Masih Ada Produk >
+// 🛒 Nak Tambah > ❌ Tidak Berminat — makin tinggi keutamaan makin perlu
+// tindakan susulan segera); (3) kedai yang LANGSUNG TAK PERNAH ada
+// penghantaran diletak dibawah SEKALI (kurang mendesak drpd kedai sedia ada
+// yg dah lama tak dilayan — bukan pelanggan terbukti lagi).
+const FOLLOWUP_STATUS_KEUTAMAAN = { xreply:1, ada_stok:2, nak_tambah:3, xberminat:4 };
+function susunPerluServisIkutKeutamaan(list) {
+  const takPernah = list.filter(k=>!k.last_visit);
+  const pernah = list.filter(k=>k.last_visit);
+  const belumTanda = pernah.filter(k=>!followupStatusAktif(k))
+    .sort((a,b)=>daysSince(b.last_visit)-daysSince(a.last_visit));
+  const sudahTanda = pernah.filter(k=>followupStatusAktif(k))
+    .sort((a,b)=>{
+      const pa = FOLLOWUP_STATUS_KEUTAMAAN[followupStatusAktif(a)]||99;
+      const pb = FOLLOWUP_STATUS_KEUTAMAAN[followupStatusAktif(b)]||99;
+      return pa!==pb ? pa-pb : daysSince(b.last_visit)-daysSince(a.last_visit);
+    });
+  return [...belumTanda, ...sudahTanda, ...takPernah];
 }
 async function tandaFollowUpServis(kedaiId, status, ev) {
   if (ev) ev.stopPropagation();
