@@ -1508,6 +1508,9 @@
     <div class="modal-title">📦 <span id="stok-modal-title">Tambah Produk Baru</span><button class="modal-close" onclick="closeModal('modal-tambah-stok')">✕ Tutup</button></div>
     <input type="hidden" id="edit-stok-id" />
     <div class="form-group"><label class="form-label">Nama Produk</label><input type="text" class="form-input" id="f-stok-nama" placeholder="cth: Tamar Cocoa 900g" /></div>
+    <div class="form-group"><label class="form-label">Deskripsi Produk (pilihan — utk SEO & pelanggan di kedai online)</label><textarea class="form-input" id="f-stok-deskripsi" rows="3" placeholder="cth: Tamar kualiti premium, kaya nutrien, sesuai juadah harian atau hadiah. Diproses higienis & disahkan halal."></textarea>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">Tulis penerangan sebenar (bukan cuma nama+harga) — bantu produk muncul dlm lebih banyak carian Google & yakinkan pelanggan.</div>
+    </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Kategori <button type="button" class="btn-link" style="font-size:11px" onclick="bukaModalKategori()">✏️ Urus Kategori</button></label>
         <select class="form-input" id="f-stok-kat"></select>
@@ -2678,6 +2681,7 @@ async function bukaModalStokBaru() {
   document.getElementById('stok-modal-title').textContent='Tambah Produk Baru';
   document.getElementById('edit-stok-id').value='';
   document.getElementById('f-stok-nama').value='';
+  document.getElementById('f-stok-deskripsi').value='';
   await renderPilihanKategori();
   document.getElementById('f-stok-unit').value='unit';
   document.getElementById('f-stok-beli').value='';
@@ -2730,6 +2734,7 @@ async function editStok(id) {
   document.getElementById('stok-modal-title').textContent='Edit Produk';
   document.getElementById('edit-stok-id').value=id;
   document.getElementById('f-stok-nama').value=s.nama;
+  document.getElementById('f-stok-deskripsi').value=s.deskripsi||'';
   await renderPilihanKategori(s.kategori);
   document.getElementById('f-stok-unit').value=s.unit;
   document.getElementById('f-stok-beli').value=s.harga_beli;
@@ -2834,7 +2839,7 @@ async function saveStok() {
   }
   gambarUrls = [...gambarUrls, ...stokGambarUrlManual];
 
-  const obj={id:stokId,nama,unit:document.getElementById('f-stok-unit').value,harga_beli:beli,harga_jual:jual,stok:qty,kategori:document.getElementById('f-stok-kat').value,tarikh_luput:document.getElementById('f-stok-luput').value||null,upah_pekerja:+document.getElementById('f-stok-upah').value||0,berat:+document.getElementById('f-stok-berat').value||0.5,gambar_url:gambarUrls[0]||null,gambar_urls:gambarUrls};
+  const obj={id:stokId,nama,unit:document.getElementById('f-stok-unit').value,harga_beli:beli,harga_jual:jual,stok:qty,kategori:document.getElementById('f-stok-kat').value,deskripsi:document.getElementById('f-stok-deskripsi').value.trim()||null,tarikh_luput:document.getElementById('f-stok-luput').value||null,upah_pekerja:+document.getElementById('f-stok-upah').value||0,berat:+document.getElementById('f-stok-berat').value||0.5,gambar_url:gambarUrls[0]||null,gambar_urls:gambarUrls};
   if (useCloud) {
     const { error } = await sb.from('stok').upsert(obj);
     if (error) return toast('Gagal simpan produk: '+error.message,'err');

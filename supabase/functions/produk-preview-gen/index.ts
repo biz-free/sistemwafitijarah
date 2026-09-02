@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
 
     const { data: produk, error: produkErr } = await adminClient
       .from("stok")
-      .select("id, nama, kategori, unit, harga_jual, gambar_url")
+      .select("id, nama, kategori, unit, harga_jual, gambar_url, deskripsi")
       .eq("id", produkId)
       .single();
     if (produkErr || !produk) {
@@ -66,7 +66,10 @@ Deno.serve(async (req) => {
 
     const tujuanUrl = `${SITE_URL}?produk=${encodeURIComponent(produk.id)}`;
     const tajuk = `${produk.nama} — RM${Number(produk.harga_jual).toFixed(2)} | Wafi Tijarah Trading`;
-    const huraian = `${produk.nama} (${produk.kategori || "Produk Halal"}) — RM${Number(produk.harga_jual).toFixed(2)}/${produk.unit}. Produk halal berkualiti, penghantaran ke seluruh Malaysia.`;
+    // Guna deskripsi SEBENAR (Stok > Deskripsi Produk) jika pemilik dah tulis — templat
+    // generik lama diulang sama merentasi semua produk = kandungan nyaris serupa antara
+    // fail pratonton, kurang membantu SEO/preview kongsi (lihat SQL_TAMBAHAN_132).
+    const huraian = produk.deskripsi || `${produk.nama} (${produk.kategori || "Produk Halal"}) — RM${Number(produk.harga_jual).toFixed(2)}/${produk.unit}. Produk halal berkualiti, penghantaran ke seluruh Malaysia.`;
     const gambarUrl = produk.gambar_url || `${SITE_URL}logo.png`;
 
     const html = `<!DOCTYPE html>

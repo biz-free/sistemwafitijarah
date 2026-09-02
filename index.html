@@ -168,6 +168,10 @@
     .produk-info { padding:9px 11px; }
     .produk-kategori { font-size:9px;font-weight:800;color:var(--teal);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px; }
     .produk-nama { font-size:12px;font-weight:700;line-height:1.3;height:31px;overflow:hidden; }
+    /* Deskripsi produk (pilihan, ditulis pemilik) — dipangkas 2 baris di kad supaya
+       reka bentuk grid kekal padat, tapi teks penuh tetap wujud dlm DOM utk SEO
+       (Google baca kandungan walaupun dipangkas visual). */
+    .produk-deskripsi { font-size:10.5px;color:var(--muted);line-height:1.3;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden; }
     .produk-harga { font-size:13px;font-weight:800;color:var(--teal);margin-top:4px; }
     .produk-unit { font-size:10px;color:var(--muted); }
     .qty-stepper { display:flex;align-items:center;gap:6px;margin-top:8px; }
@@ -765,7 +769,10 @@ function kemaskiniSEOProduk(produkId) {
   const gambar = gambarProduk(p);
   const gambarUrl = gambar[0] || (location.origin + '/logo.png');
   const tajuk = `${p.nama} — ${fmt(p.harga_jual)} | Wafi Tijarah Trading`;
-  const huraian = `${p.nama} (${p.kategori||'Produk Halal'}) — ${fmt(p.harga_jual)}/${p.unit}. Produk halal berkualiti dari Wafi Tijarah Trading, penghantaran ke seluruh Malaysia.`;
+  // Guna deskripsi SEBENAR yg pemilik tulis (Stok > Deskripsi Produk) jika ada — templat
+  // generik lama (nama+kategori+harga sahaja) diulang SAMA merentasi semua produk =
+  // "thin/duplicate content" yg menyukarkan Google beza & ranking halaman produk individu.
+  const huraian = p.deskripsi || `${p.nama} (${p.kategori||'Produk Halal'}) — ${fmt(p.harga_jual)}/${p.unit}. Produk halal berkualiti dari Wafi Tijarah Trading, penghantaran ke seluruh Malaysia.`;
   document.title = tajuk;
   tetapkanMeta('description', huraian);
   tetapkanMeta('og:title', tajuk);
@@ -777,6 +784,7 @@ function kemaskiniSEOProduk(produkId) {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: p.nama,
+    description: huraian,
     image: gambar.length ? gambar : [gambarUrl],
     sku: p.id,
     category: p.kategori || 'Produk Halal',
@@ -1232,6 +1240,7 @@ function renderProdukGrid() {
       <div class="produk-info">
         ${p.kategori ? `<div class="produk-kategori">${esc(p.kategori)}</div>` : ''}
         <div class="produk-nama">${esc(p.nama)}</div>
+        ${p.deskripsi ? `<div class="produk-deskripsi">${esc(p.deskripsi)}</div>` : ''}
         <div class="produk-harga">${fmt(p.harga_jual)} <span class="produk-unit">/${esc(p.unit)}</span></div>
         <div class="qty-stepper">
           <button class="qty-btn" onclick="ubahQty('${p.id}',-1)">−</button>
