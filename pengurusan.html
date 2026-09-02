@@ -3920,7 +3920,7 @@ async function putuskanBayaranHutang(id, status) {
 // ════════════════════════════════════════════════════
 //  HANTAR
 // ════════════════════════════════════════════════════
-let hItems=[{stokId:'',qty:1}];
+let hItems=[{stokId:'',qty:1,tarikhLuput:''}];
 let hBayar='terus';
 // Pilihan diskaun pekerja (Tab Hantar, jumlah >= minima_transfer) — WAJIB dipilih
 // eksplisit, tak auto ikut kaedah bayaran lagi. null = belum pilih (sekat submit).
@@ -4070,7 +4070,11 @@ function renderHItems() {
       <input type="number" class="form-input" min="1" value="${it.qty}" onchange="updHItem(${i},'qty',this.value)" />
       <span class="item-price">${sub}</span>
       ${hItems.length>1?`<button class="btn-remove" onclick="remHItem(${i})">✕</button>`:''}
-    </div>`;
+    </div>
+    ${it.stokId?`<div style="display:flex;align-items:center;gap:6px;margin:-4px 0 10px 2px">
+      <span style="font-size:10px;color:var(--muted);white-space:nowrap">📅 Tarikh Luput (Optional)</span>
+      <input type="date" class="form-input" style="font-size:11px;padding:4px 6px;width:auto;flex:0 0 150px" value="${it.tarikhLuput||''}" onchange="updHItem(${i},'tarikhLuput',this.value)" />
+    </div>`:''}`;
   }).join('');
   calcTotal();
 }
@@ -4748,8 +4752,19 @@ async function renderSejarahStokGudang() {
     </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada sejarah pergerakan gudang lagi</div></div>';
 }
 
-function updHItem(i,f,v) { hItems[i][f]=v; renderHItems(); }
-function addHItem() { hItems.push({stokId:'',qty:1}); renderHItems(); }
+// Tarikh Luput per-item (optional) — bila produk ditukar, auto-isi lalai drpd
+// tarikh luput produk (Stok, kalau pemilik dah tetapkan) supaya pekerja tak perlu
+// taip dari kosong, tapi kekal BOLEH DIEDIT/dikosongkan ikut batch sebenar
+// dihantar (batch berlainan boleh ada tarikh luput berlainan drpd rekod produk).
+function updHItem(i,f,v) {
+  hItems[i][f]=v;
+  if (f==='stokId') {
+    const s = DATA.stok.find(s=>s.id===v);
+    hItems[i].tarikhLuput = s?.tarikh_luput || '';
+  }
+  renderHItems();
+}
+function addHItem() { hItems.push({stokId:'',qty:1,tarikhLuput:''}); renderHItems(); }
 function remHItem(i) { hItems.splice(i,1); renderHItems(); }
 function calcTotal() {
   if (hJenis==='rosak') {
@@ -4970,7 +4985,7 @@ async function submitHantarSebenar() {
   const tarikhAkhirBayaran = (hBayar==='hutang' && document.getElementById('h-tarikh-akhir-bayaran')?.value) || null;
   const trx={
     id:genId('T'), tarikh_masa: tarikhMasaOverride || new Date().toISOString(), kedai_id:kedaiId, nama_pembeli:namaPembeli||null,
-    items:hItems.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return{stokId:it.stokId,qty:+it.qty,harga:s.harga_jual}; }),
+    items:hItems.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return{stokId:it.stokId,qty:+it.qty,harga:s.harga_jual,tarikhLuput:it.tarikhLuput||null}; }),
     jumlah, jumlah_asal: jumlahAsal, diskaun_peratus: peratusDiskaun,
     kaedah_bayaran: hBayar==='terus'?'tunai':hBayar, status:statusBayar,
     nota:document.getElementById('h-nota').value, resit:genResit(),
@@ -5015,7 +5030,7 @@ async function submitHantarSebenar() {
     saveData();
   }
   toast(`✅ ${trx.resit} · ${fmt(jumlah)}${peratusDiskaun>0?` (−${peratusDiskaun}%)`:''} · ${LABEL_KAEDAH[hBayar]}`);
-  hItems=[{stokId:'',qty:1}]; hBayar='terus'; setBayar('terus'); setHJenis('kedai');
+  hItems=[{stokId:'',qty:1,tarikhLuput:''}]; hBayar='terus'; setBayar('terus'); setHJenis('kedai');
   document.getElementById('h-kedai').value='';
   document.getElementById('h-nama-pembeli').value='';
   document.getElementById('h-nota').value='';
@@ -6191,7 +6206,11 @@ async function renderResit(id) {
             if(bakiQ>0) bahagian.push(`⏳ ${bakiQ} baki (belum pasti)`);
           }
           const sub=bahagian.length?`<div style="font-size:14px;color:var(--muted);margin-top:2px">${bahagian.join(' · ')}</div>`:'';
-          return `<tr class="resit-item-row"><td style="text-align:left">${esc(s.nama)}${sub}</td><td style="text-align:center">${owedQty}</td><td style="text-align:right">RM${it.harga.toFixed(2)}</td><td style="text-align:right;font-weight:700">RM${(it.harga*owedQty).toFixed(2)}</td></tr>`;
+          // Tarikh luput per-item — OPTIONAL, ditetapkan pekerja di Tab Hantar semasa
+          // rekod jualan (boleh beza drpd tarikh luput produk sedia ada, ikut batch
+          // sebenar dihantar). Papar hanya jika diisi.
+          const luputSub = it.tarikhLuput?`<div style="font-size:12px;color:var(--red);margin-top:2px">⏳ Luput: ${fmtD(it.tarikhLuput)}</div>`:'';
+          return `<tr class="resit-item-row"><td style="text-align:left">${esc(s.nama)}${sub}${luputSub}</td><td style="text-align:center">${owedQty}</td><td style="text-align:right">RM${it.harga.toFixed(2)}</td><td style="text-align:right;font-weight:700">RM${(it.harga*owedQty).toFixed(2)}</td></tr>`;
         }).join('')}
       </table>
     </div>
