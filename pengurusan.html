@@ -6995,24 +6995,43 @@ async function renderBonusKedaiSemua() {
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer">
           <input type="checkbox" id="bk-gabung-${pid}" style="width:14px;height:14px" /> Sekalikan dgn baucar harian hari ini
         </label>
-        <button class="btn btn-primary btn-sm" onclick="bayarBonusKedai('${pid}')">💰 Bayar Sekarang (${fmt(d.matang)})</button>
+        <button class="btn btn-primary btn-sm" onclick="bayarBonusKedai('${pid}', ${d.matang})">💰 Bayar Sekarang (${fmt(d.matang)})</button>
       </div>`:d.belumMatang>0?'<div style="font-size:11px;color:var(--muted)">Belum matang lagi — belum boleh dibayar</div>':'<div style="font-size:11px;color:var(--muted)">Tiada bonus terkumpul</div>'}
     </div>`).join('');
 }
 
-async function bayarBonusKedai(pekerjaId) {
+async function bayarBonusKedai(pekerjaId, jumlahMatang) {
   const gabung = document.getElementById(`bk-gabung-${pekerjaId}`)?.checked || false;
-  if (!confirm(`Sahkan bayar SEMUA bonus kedai baru yang matang untuk pekerja ini?${gabung?' (akan disekalikan dengan baucar upah harian hari ini)':' (baucar berasingan akan dijana)'}\n\nNota: cash yang masih dipegang pekerja (belum diserah) akan ditolak DAHULU drpd bonus ini sebelum baki dibayar.`)) return;
+  // Papar jumlah SEKALI LAGI di dialog konfirmasi ni sendiri (bukan cuma di label
+  // butang sblm ditekan) — pemilik perlu nampak angka tepat SEMASA membuat
+  // keputusan akhir mengesahkan bayaran, bukan cuma sebelum tu.
+  if (!confirm(`Sahkan bayar bonus kedai baru yang matang: ${fmt(jumlahMatang)}?${gabung?' (akan disekalikan dengan baucar upah harian hari ini)':' (baucar berasingan akan dijana)'}\n\nNota: cash yang masih dipegang pekerja (belum diserah) akan ditolak DAHULU drpd bonus ini sebelum baki dibayar — baki sebenar dibayar mungkin lebih rendah drpd ${fmt(jumlahMatang)}.`)) return;
   const { data, error } = await sb.rpc('bayar_bonus_kedai_terkumpul', { p_pekerja_id: pekerjaId, p_gabung_baucar: gabung });
   if (error) return toast('Gagal proses bayaran: '+error.message,'err');
   const hasil = Array.isArray(data) ? data[0] : data;
   const notaCash = hasil.cash_ditolak > 0
-    ? ` — ${fmt(hasil.cash_ditolak)} ditolak drpd cash dipegang, baki ${fmt(hasil.jumlah_dibayar)} dibayar`
+    ? (hasil.jumlah_dibayar > 0
+        ? ` — ${fmt(hasil.cash_ditolak)} ditolak drpd cash dipegang, baki ${fmt(hasil.jumlah_dibayar)} dibayar`
+        : ` — SEPENUHNYA ditolak drpd cash dipegang (tiada baucar dijana, terekod sbg Serahan Cash)`)
     : '';
   toast(`✅ Bonus kedai baru ${fmt(hasil.jumlah_asal)} diproses${notaCash}`);
   await renderBonusKedaiSemua();
   await renderBaucarList();
   if (currentRole === 'pemilik') await renderSerahanCashSemua();
+  // Baucar (bonus_kedai ATAU digabung upah_harian) baharu terus dipaparkan di kad
+  // "🧾 Baucar Bayaran" di bawah — tapis terus ke bulan+pekerja ni & scroll turun
+  // supaya butang 📄 PDF/📱 WhatsApp Pekerja utk kongsi terus kelihatan, tanpa
+  // pemilik perlu cari sendiri (sama isu "tekan tapi tiada apa keluar" yg dibaiki
+  // utk Jana Baucar Bulan Ini). Jika bonus SEPENUHNYA ditolak cash (jumlah_dibayar=0),
+  // tiada baucar baharu dicipta — kekal di kad Laporan tanpa scroll.
+  if (hasil.jumlah_dibayar > 0) {
+    const bulanIni = tarikhTempatan().slice(0,7);
+    document.getElementById('baucar-bulan').value = bulanIni;
+    if (document.getElementById('baucar-filter-pekerja')) document.getElementById('baucar-filter-pekerja').value = pekerjaId;
+    document.getElementById('baucar-filter-tarikh').value = '';
+    await renderBaucarList();
+    document.getElementById('baucar-card')?.scrollIntoView({behavior:'smooth', block:'start'});
+  }
 }
 
 function bangunkanBaucarPrintBox(v, nama) {
