@@ -1167,6 +1167,12 @@
         <button class="btn btn-primary btn-sm" onclick="janaBaucarHarian()">🧮 Jana Baucar Harian</button>
       </div>
 
+      <div id="pelarasan-tertunda-box" style="display:none;background:#FFF3F0;border:1px dashed var(--red);border-radius:10px;padding:12px;margin-bottom:14px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--red)">🔻 Pelarasan Kos Tertunggak</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Kos upah/minyak drpd transaksi yang dipadam SELEPAS baucar harian hari tu dah diluluskan/dibayar (kedai pulangkan/batal) — akan ditolak automatik drpd baucar harian SETERUSNYA pekerja berkenaan.</div>
+        <div id="pelarasan-tertunda-list"></div>
+      </div>
+
       <div class="form-row">
         <div class="form-group"><label class="form-label">Tapis Pekerja</label>
           <select class="form-input" id="baucar-filter-pekerja" onchange="renderBaucarList()">
@@ -5824,11 +5830,52 @@ async function editJumlahTransaksi(id, jumlahAsalSemasa) {
 
 async function padamTransaksiKedai(id) {
   if (!confirm('Padam rekod transaksi ini secara kekal? Stok akan dipulangkan ke stok bawaan pekerja yang menghantar. Tindakan ini tidak boleh diundur.')) return;
-  const { error } = await sb.rpc('padam_transaksi_kedai', { p_id: id });
+  const t = DATA.transaksi.find(x=>x.id===id);
+  const kosMinyakPulih = t ? await kiraMinyakPulihTransaksi(t) : 0;
+  const { data: hasil, error } = await sb.rpc('padam_transaksi_kedai', { p_id: id, p_kos_minyak_pulih: kosMinyakPulih });
   if (error) return toast('Gagal padam: '+error.message,'err');
   await loadData();
   renderTransaksiKedaiList();
-  toast('Transaksi dipadam & stok dipulangkan ke bawaan pekerja');
+  // padam_transaksi_kedai() pulangkan pelarasan_dicipta=true bila baucar harian
+  // pekerja tu utk tarikh transaksi ni dah DILULUSKAN/DIBAYAR (dikunci) — kos upah+
+  // minyak transaksi ni dah terlanjur dibayar/diluluskan, jadi direkod utk DITOLAK
+  // drpd baucar HARIAN SETERUSNYA pekerja sama (lihat cipta_baucar_harian). Baucar
+  // lama TAK disentuh/dibatalkan — audit trail duit yg dah dibayar kekal utuh.
+  if (hasil?.pelarasan_dicipta) {
+    toast(`Transaksi dipadam & stok dipulangkan. Baucar hari tu dah diluluskan/dibayar — kos ${fmt(hasil.jumlah_pelarasan)} (upah ${fmt(hasil.jumlah_upah)} + minyak ${fmt(hasil.jumlah_minyak)}) akan DITOLAK drpd baucar harian SETERUSNYA pekerja tu.`);
+  } else {
+    toast('Transaksi dipadam & stok dipulangkan ke bawaan pekerja');
+  }
+}
+
+// Anggaran kos minyak (RM) yang boleh "dipulihkan" jika SATU transaksi tertentu
+// dipadam — bandingkan jarak sesi kehadiran (thumb in → kedai² → thumb out) DENGAN
+// vs TANPA transaksi ni disertakan dlm laluan. Dipanggil oleh padamTransaksiKedai()
+// SEBELUM padam (transaksi masih wujud utk dicari sesi/laluannya) supaya kos minyak
+// yg dah terlanjur dituntut/dibayar boleh dikesan utk pelarasan baucar seterusnya
+// (lihat SQL_TAMBAHAN_134 — jadual pelarasan_kos_pekerja).
+async function kiraMinyakPulihTransaksi(t) {
+  if (!t?.created_by || !t?.tarikh_masa) return 0;
+  const tarikh = tarikhTempatan(t.tarikh_masa);
+  const keUTC = s => /[Z+]|-\d{2}:\d{2}$/.test(s) ? s : new Date(s + '+08:00').toISOString();
+  const { data: sesiSemua } = await sb.from('kehadiran').select('*')
+    .eq('pekerja_id', t.created_by)
+    .gte('thumb_in_masa', keUTC(tarikh+'T00:00:00'))
+    .lte('thumb_in_masa', keUTC(tarikh+'T23:59:59'));
+  const sesi = (sesiSemua||[]).find(s => {
+    if (tarikhTempatan(s.thumb_in_masa) !== tarikh) return false;
+    return t.tarikh_masa >= s.thumb_in_masa && (!s.thumb_out_masa || t.tarikh_masa <= s.thumb_out_masa);
+  });
+  if (!sesi) return 0;
+  const penghantaranSesi = DATA.transaksi.filter(x => {
+    if (x.created_by !== sesi.pekerja_id) return false;
+    if (tarikhTempatan(x.tarikh_masa) !== tarikh) return false;
+    return x.tarikh_masa >= sesi.thumb_in_masa && (!sesi.thumb_out_masa || x.tarikh_masa <= sesi.thumb_out_masa);
+  });
+  const kmDengan = jarakSesiKehadiran(sesi, penghantaranSesi);
+  const kmTanpa = jarakSesiKehadiran(sesi, penghantaranSesi.filter(x => x.id !== t.id));
+  const kmPulih = Math.max(0, kmDengan - kmTanpa);
+  return kmPulih * SETTINGS.minyak;
 }
 
 // ════════════════════════════════════════════════════
@@ -6844,7 +6891,8 @@ async function renderBaucarSaya() {
       ${v.kategori==='upah_harian'?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;background:var(--bg);border-radius:6px;padding:6px 8px">
         ${v.butiran?`<div style="margin-bottom:4px">Upah ${fmt(v.butiran.upah)} + Minyak ${fmt(v.butiran.minyak)} (${(v.butiran.km||0).toFixed(1)}km) + Makan ${fmt(v.butiran.makan)}${v.butiran.upahEdagang?` + E-dagang ${fmt(v.butiran.upahEdagang)}`:''}</div>
         ${v.butiran.bonus>0?`<div style="margin-bottom:4px;color:var(--gold)">🏪 Bonus Kedai Baru hari ini: ${fmt(v.butiran.bonus)} (dikumpul berasingan, tiada dlm jumlah di atas)</div>`:''}
-        ${(v.butiran.bonusTerkumpulMatang||v.butiran.bonusTerkumpulBelumMatang)?`<div style="margin-bottom:4px">📦 Bonus Kedai Terkumpul — Matang: <strong style="color:var(--green)">${fmt(v.butiran.bonusTerkumpulMatang||0)}</strong> · Belum Matang: ${fmt(v.butiran.bonusTerkumpulBelumMatang||0)}</div>`:''}`:''}
+        ${(v.butiran.bonusTerkumpulMatang||v.butiran.bonusTerkumpulBelumMatang)?`<div style="margin-bottom:4px">📦 Bonus Kedai Terkumpul — Matang: <strong style="color:var(--green)">${fmt(v.butiran.bonusTerkumpulMatang||0)}</strong> · Belum Matang: ${fmt(v.butiran.bonusTerkumpulBelumMatang||0)}</div>`:''}
+        ${v.butiran.pelarasan>0?`<div style="margin-bottom:4px;color:var(--red)">🔻 Pelarasan Kos Dipulangkan (transaksi dipadam — pulangan/batal kedai sebelum ini): −${fmt(v.butiran.pelarasan)}</div>`:''}`:''}
         Jumlah Upah ${fmt(v.jumlah)} − Cash ditangan ${fmt(v.cash_ditangan)} = <strong style="color:${v.baki>=0?'var(--green)':'var(--red)'}">${v.baki>=0?'Baki pemilik transfer':'Anda perlu serah lebihan'} ${fmt(Math.abs(v.baki))}</strong>
         ${v.baki<0?`<div style="margin-top:4px;font-size:10px;color:var(--muted)">ℹ️ Snapshot hari ini sahaja — kalau sudah serah cash (hari ini/hari lain) yang menutup jumlah ni, semak "Cash Saya Dipegang" di Dashboard utk status TERKINI sebenar.</div>`:''}
       </div>`:''}
@@ -6853,6 +6901,23 @@ async function renderBaucarSaya() {
         <button class="btn btn-gold btn-sm" onclick="muatTurunBaucarPDF('${v.id}')">📄 PDF</button>
       </div>
     </div>`).join('') || '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Tiada baucar diluluskan untuk bulan ini lagi</div></div>';
+}
+
+// Pelarasan Kos Pekerja yang masih TERTUNGGAK (belum ditolak drpd mana-mana baucar
+// lagi) — telus kpd pemilik supaya nampak jelas apa akan ditolak drpd baucar harian
+// SETERUSNYA setiap pekerja (lihat padam_transaksi_kedai/cipta_baucar_harian).
+async function renderPelarasanTertunda() {
+  const box = document.getElementById('pelarasan-tertunda-box');
+  if (!box || currentRole!=='pemilik') return;
+  const { data, error } = await sb.from('pelarasan_kos_pekerja').select('*').eq('status','belum_diselaraskan').order('created_at',{ascending:false});
+  if (error || !data?.length) { box.style.display = 'none'; return; }
+  if (!Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
+  box.style.display = '';
+  document.getElementById('pelarasan-tertunda-list').innerHTML = data.map(p=>`
+    <div class="list-item" style="background:#fff;border-radius:6px;padding:6px 8px;margin-bottom:4px">
+      <div class="list-item-title" style="font-size:12px">${esc(PROFIL_NAMA_CACHE[p.pekerja_id]||p.pekerja_id)} · ${esc(p.kedai_nama||'')} (${fmtD(p.tarikh_asal)})</div>
+      <div class="list-item-val" style="font-size:12px;color:var(--red)">−${fmt(p.jumlah_total)}</div>
+    </div>`).join('');
 }
 
 async function renderBaucarList() {
@@ -6865,6 +6930,7 @@ async function renderBaucarList() {
     pekerjaSel.innerHTML = (pekerjaList||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('') || '<option value="">-- Tiada pekerja --</option>';
     if (filterPekerjaSel) filterPekerjaSel.innerHTML = '<option value="">Semua Pekerja</option>' + ((pekerjaList||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join(''));
   }
+  renderPelarasanTertunda();
   const bulan = document.getElementById('baucar-bulan').value;
   const { data, error } = await sb.from('baucar_bayaran').select('*').eq('bulan', bulan);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
@@ -6898,7 +6964,8 @@ async function renderBaucarList() {
       ${v.kategori==='upah_harian'?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;background:var(--bg);border-radius:6px;padding:6px 8px">
         ${v.butiran?`<div style="margin-bottom:4px">Upah ${fmt(v.butiran.upah)} + Minyak ${fmt(v.butiran.minyak)} (${(v.butiran.km||0).toFixed(1)}km) + Makan ${fmt(v.butiran.makan)}${v.butiran.upahEdagang?` + E-dagang ${fmt(v.butiran.upahEdagang)}`:''}</div>
         ${v.butiran.bonus>0?`<div style="margin-bottom:4px;color:var(--gold)">🏪 Bonus Kedai Baru hari ini: ${fmt(v.butiran.bonus)} (dikumpul berasingan, tiada dlm jumlah di atas)</div>`:''}
-        ${(v.butiran.bonusTerkumpulMatang||v.butiran.bonusTerkumpulBelumMatang)?`<div style="margin-bottom:4px">📦 Bonus Kedai Terkumpul — Matang: <strong style="color:var(--green)">${fmt(v.butiran.bonusTerkumpulMatang||0)}</strong> · Belum Matang: ${fmt(v.butiran.bonusTerkumpulBelumMatang||0)}</div>`:''}`:''}
+        ${(v.butiran.bonusTerkumpulMatang||v.butiran.bonusTerkumpulBelumMatang)?`<div style="margin-bottom:4px">📦 Bonus Kedai Terkumpul — Matang: <strong style="color:var(--green)">${fmt(v.butiran.bonusTerkumpulMatang||0)}</strong> · Belum Matang: ${fmt(v.butiran.bonusTerkumpulBelumMatang||0)}</div>`:''}
+        ${v.butiran.pelarasan>0?`<div style="margin-bottom:4px;color:var(--red)">🔻 Pelarasan Kos Dipulangkan (transaksi dipadam — pulangan/batal kedai sebelum ini): −${fmt(v.butiran.pelarasan)}</div>`:''}`:''}
         Jumlah Upah ${fmt(v.jumlah)} − Cash ditangan ${fmt(v.cash_ditangan)} = <strong style="color:${v.baki>=0?'var(--green)':'var(--red)'}">${v.baki>=0?'Baki pemilik transfer':'Pekerja perlu serah lebihan'} ${fmt(Math.abs(v.baki))}</strong>
         ${v.baki<0?`<div style="margin-top:4px;font-size:10px;color:var(--muted)">ℹ️ Snapshot hari ini sahaja — kalau pekerja sudah serah cash (hari ini/hari lain) yang menutup jumlah ni, semak "Cash Dipegang Semua Pekerja" utk status TERKINI sebenar.</div>`:''}
       </div>`:''}
@@ -7061,6 +7128,7 @@ function bangunkanBaucarPrintBox(v, nama) {
     <div class="baucar-row"><span>Duit Makan</span><span>${fmt(v.butiran.makan)}</span></div>
     <div class="baucar-row"><span>Bonus Kedai Baru</span><span>${fmt(v.butiran.bonus)}</span></div>
     ${v.butiran.upahEdagang?`<div class="baucar-row"><span>Upah E-Dagang</span><span>${fmt(v.butiran.upahEdagang)}</span></div>`:''}
+    ${v.butiran.pelarasan>0?`<div class="baucar-row" style="color:#c0392b"><span>Pelarasan Kos Dipulangkan (transaksi dipadam)</span><span>−${fmt(v.butiran.pelarasan)}</span></div>`:''}
     `:''}
     <div class="baucar-row" style="font-weight:700"><span>JUMLAH UPAH HARIAN</span><span>${fmt(v.jumlah)}</span></div>
     <div class="baucar-row"><span>CASH DITANGAN (TOLAK)</span><span>−${fmt(v.cash_ditangan)}</span></div>
