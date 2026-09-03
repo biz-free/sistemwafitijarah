@@ -9956,9 +9956,14 @@ async function renderLaporanKehadiran() {
   const tarikh = document.getElementById('kh-tarikh').value;
   if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
 
+  // Julat mesti ditandakan +08:00 (waktu Malaysia) sebelum ditapis — thumb_in_masa
+  // disimpan UTC, jadi sesi yg bermula sebelum 8 pagi tempatan (cth 7:52 pagi MYT =
+  // 23:52 UTC HARI SEBELUM) tercicir drpd carian "hari ini" tanpa penukaran ni (sama
+  // isu yg dibaiki di kiraJarakKehadiranJulat() — lihat nota di situ).
+  const keUTC = s => /[Z+]|-\d{2}:\d{2}$/.test(s) ? s : new Date(s + '+08:00').toISOString();
   const [{ data: sesi, error }, { data: profil }] = await Promise.all([
     sb.from('kehadiran').select('*')
-      .gte('thumb_in_masa', tarikh+'T00:00:00').lte('thumb_in_masa', tarikh+'T23:59:59')
+      .gte('thumb_in_masa', keUTC(tarikh+'T00:00:00')).lte('thumb_in_masa', keUTC(tarikh+'T23:59:59'))
       .order('thumb_in_masa'),
     sb.from('profiles').select('id,nama'),
   ]);
