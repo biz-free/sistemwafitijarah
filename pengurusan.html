@@ -1837,6 +1837,7 @@ mula drpd 0) supaya sentiasa padan realiti walaupun ada jurang sejarah lampau. -
         <button type="button" class="btn btn-secondary btn-sm" onclick="gunakanLokasiSemasa()" style="flex-shrink:0" title="Guna lokasi GPS semasa saya">📍 Lokasi Saya</button>
       </div>
       <div id="kedai-map"></div>
+      <div id="kedai-lokasi-indikator"></div>
       <div class="map-hint">Pin akan letak di lokasi carian, atau klik/seret terus di peta.</div>
       <input type="hidden" id="f-kedai-lat" value="6.1248" />
       <input type="hidden" id="f-kedai-lng" value="100.3678" />
@@ -3494,6 +3495,39 @@ function isiDaerahSelect(daerahTerpilih) {
 let kedaiMap=null, kedaiMarker=null, googleGeocoder=null;
 const PETA_PUSAT_DEFAULT={lat:5.15,lng:100.85}; // pusat kasar Kedah/Perlis/P.Pinang/Perak
 
+// ── Indikator Sah Lokasi Kedai — bandingkan pin dgn GPS semasa PEKERJA (biasanya
+// dia berada DI kedai semasa daftar) supaya kesilapan pin (jauh tersasar, punca
+// km/minyak salah kira — lihat siasatan Agrobazaar Seri Indah Bakery, Sep 2026)
+// ditangkap SEBELUM disimpan, bukan lepas jadi masalah dlm laporan/baucar.
+let kedaiGpsSemasa=null, kedaiJarakGpsKm=null;
+
+function mulaKesanGpsKedai() {
+  kedaiGpsSemasa=null; kedaiJarakGpsKm=null;
+  kemaskiniIndikatorLokasiKedai();
+  // Hanya pekerja (yg secara semula jadi berada di kedai semasa daftar) — pemilik
+  // selalunya daftar/edit jauh dari kedai (pejabat), jadi jangan amaran palsu.
+  if (currentRole!=='pekerja' || !navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    pos => { kedaiGpsSemasa={ lat:pos.coords.latitude, lng:pos.coords.longitude }; kemaskiniIndikatorLokasiKedai(); },
+    () => {}, // gagal/ditolak — senyap sahaja, elak ganggu alur kerja pekerja
+    { enableHighAccuracy:true, timeout:8000 }
+  );
+}
+
+function kemaskiniIndikatorLokasiKedai() {
+  const badge = document.getElementById('kedai-lokasi-indikator');
+  if (!badge) return;
+  if (!kedaiGpsSemasa) { badge.innerHTML=''; kedaiJarakGpsKm=null; return; }
+  const lat=+document.getElementById('f-kedai-lat').value, lng=+document.getElementById('f-kedai-lng').value;
+  kedaiJarakGpsKm = haversineKm(kedaiGpsSemasa, {lat,lng});
+  const j = kedaiJarakGpsKm;
+  let warna, ikon, teks;
+  if (j<=2) { warna='var(--green)'; ikon='🟢'; teks='Lokasi sah — sepadan GPS semasa anda'; }
+  else if (j<=5) { warna='var(--gold)'; ikon='🟡'; teks=`Perlu semak — ${j.toFixed(1)}km dari GPS semasa anda`; }
+  else { warna='var(--red)'; ikon='🔴'; teks=`Lokasi jauh! ${j.toFixed(1)}km dari GPS semasa anda — sila sahkan pin betul`; }
+  badge.innerHTML = `<div style="font-size:11px;font-weight:700;color:${warna};margin-top:4px">${ikon} ${teks}</div>`;
+}
+
 async function initKedaiMap() {
   if (kedaiMap) return;
   const el = document.getElementById('kedai-map');
@@ -3509,6 +3543,7 @@ async function initKedaiMap() {
     const p = kedaiMarker.getPosition();
     document.getElementById('f-kedai-lat').value = p.lat().toFixed(6);
     document.getElementById('f-kedai-lng').value = p.lng().toFixed(6);
+    kemaskiniIndikatorLokasiKedai();
   });
   kedaiMap.addListener('click', e => setKedaiMarker(e.latLng.lat(), e.latLng.lng(), true));
 }
@@ -3522,6 +3557,7 @@ async function setKedaiMarker(lat, lng, panTo) {
   kedaiMarker.setPosition(pos);
   if (panTo) { kedaiMap.setCenter(pos); kedaiMap.setZoom(15); }
   google.maps.event.trigger(kedaiMap, 'resize');
+  kemaskiniIndikatorLokasiKedai();
 }
 
 async function carianAlamatPeta() {
@@ -3647,6 +3683,7 @@ async function bukaModalKedaiBaru() {
   showModal('modal-tambah-kedai');
   await setKedaiMarker(PETA_PUSAT_DEFAULT.lat, PETA_PUSAT_DEFAULT.lng, false);
   if (kedaiMap) { kedaiMap.setCenter(PETA_PUSAT_DEFAULT); kedaiMap.setZoom(8); }
+  mulaKesanGpsKedai();
 }
 
 async function padamKedai(id, nama) {
@@ -3688,6 +3725,7 @@ function editKedai(id) {
   renderKedaiGambarPreview();
   showModal('modal-tambah-kedai');
   setKedaiMarker(k.lat||6.1248, k.lng||100.3678, true);
+  mulaKesanGpsKedai();
 }
 
 // ── Galeri gambar kedai (snap gambar depan kedai semasa daftar/lawatan) ──
@@ -3745,6 +3783,13 @@ async function saveKedai() {
   const adalahBaru = !id;
   const kedaiId = id||genId('K');
 
+  // Amaran Sah Lokasi (pekerja sahaja) — pin jauh drpd GPS semasa mungkin tersalah
+  // letak, punca km/minyak salah kira dlm laporan. Tak block terus (GPS boleh tak
+  // tepat/isyarat lemah) — cuma minta pengesahan SEDAR sebelum teruskan.
+  if (currentRole==='pekerja' && kedaiJarakGpsKm!==null && kedaiJarakGpsKm>5) {
+    if (!confirm(`⚠️ Pin kedai ini ~${kedaiJarakGpsKm.toFixed(1)}km dari lokasi GPS anda sekarang.\n\nYakin ini lokasi kedai yang BETUL? (Pin tersalah letak boleh jejaskan kiraan minyak/upah anda kemudian)`)) return;
+  }
+
   let gambarUrls = kedaiGambarUrlsSedia;
   if (useCloud && kedaiGambarFilesPilihan.length) {
     toast('Memproses & memuat naik gambar kedai...');
@@ -3780,6 +3825,10 @@ async function saveKedai() {
     // Bila EDIT (bukan daftar baru), kekalkan rekod asal, jangan tulis ganti.
     didaftarkan_oleh: adalahBaru ? DATA.currentUser.id : DATA.kedai.find(k=>k.id===id)?.didaftarkan_oleh||null,
     gambar_urls: gambarUrls,
+    // Jarak pin↔GPS semasa (Indikator Sah Lokasi) — simpan bacaan BAHARU kalau ada
+    // (pin digerakkan/GPS berjaya sesi ni), jika tidak kekalkan nilai sedia ada
+    // (cth pemilik edit medan lain je, tak sentuh pin — jangan padam rekod lama).
+    jarak_pin_gps_km: kedaiJarakGpsKm!==null ? kedaiJarakGpsKm : (id?DATA.kedai.find(k=>k.id===id)?.jarak_pin_gps_km??null:null),
   };
   if (useCloud) {
     const { error } = await sb.from('kedai').upsert(obj);
@@ -6949,7 +6998,11 @@ async function renderBaucarList() {
   const subTapisEl = document.getElementById('baucar-sub-tapis');
   if (subTapisEl) subTapisEl.textContent = (pekerjaPilih||tarikhPilih) ? `Menapis: ${list.length} daripada ${BAUCAR_CACHE.length} baucar` : '';
 
-  el.innerHTML = list.map(v => `
+  el.innerHTML = list.map(v => {
+    // Amaran Sah Lokasi Kedai (pemilik) — kesan SEBELUM diluluskan, sebab kos
+    // minyak baucar harian ni dikira drpd jarak kedai yg mungkin pin tersasar.
+    const amaranLokasi = v.kategori==='upah_harian' ? kesanKedaiMencurigakanHariIni(v.pekerja_id, v.tarikh) : [];
+    return `
     <div class="list-item" style="display:block">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <div>
@@ -6961,6 +7014,7 @@ async function renderBaucarList() {
           <span class="badge ${v.status==='dibayar'?'badge-green':v.status==='diluluskan'?'badge-teal':v.status==='dibatalkan'?'badge-red':'badge-gold'}">${BAUCAR_STATUS_LABEL[v.status]}</span>
         </div>
       </div>
+      ${amaranLokasi.length?`<div style="font-size:11px;color:var(--red);background:#FFF0F0;border:1px solid #FFD0D0;border-radius:6px;padding:6px 8px;margin-bottom:6px">⚠️ <strong>Semak lokasi kedai sebelum luluskan</strong> (jejaskan kiraan minyak):<br/>${amaranLokasi.map(a=>'• '+esc(a)).join('<br/>')}</div>`:''}
       ${v.kategori==='upah_harian'?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;background:var(--bg);border-radius:6px;padding:6px 8px">
         ${v.butiran?`<div style="margin-bottom:4px">Upah ${fmt(v.butiran.upah)} + Minyak ${fmt(v.butiran.minyak)} (${(v.butiran.km||0).toFixed(1)}km) + Makan ${fmt(v.butiran.makan)}${v.butiran.upahEdagang?` + E-dagang ${fmt(v.butiran.upahEdagang)}`:''}</div>
         ${v.butiran.bonus>0?`<div style="margin-bottom:4px;color:var(--gold)">🏪 Bonus Kedai Baru hari ini: ${fmt(v.butiran.bonus)} (dikumpul berasingan, tiada dlm jumlah di atas)</div>`:''}
@@ -6986,7 +7040,8 @@ async function renderBaucarList() {
         <button class="btn btn-whatsapp btn-sm" onclick="hantarBaucarWhatsapp('${v.id}')">📱 WhatsApp Pekerja</button>
         ${ikonPadam(`padamBaucarBayaran('${v.id}','${esc(v.no_siri)}')`, 'baucar_bayaran', v.id, `Baucar ${v.no_siri}`, 'Padam baucar', 'position:static')}
       </div>
-    </div>`).join('') || (pekerjaPilih||tarikhPilih
+    </div>`;
+  }).join('') || (pekerjaPilih||tarikhPilih
       ? '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Tiada baucar sepadan dengan tapisan ini</div></div>'
       : '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Tiada baucar untuk bulan ini — tekan "Jana Baucar Bulan Ini" dalam Laporan</div></div>');
 }
@@ -9813,6 +9868,30 @@ function haversineKm(a, b) {
   const dLat = (b.lat-a.lat)*Math.PI/180, dLng = (b.lng-a.lng)*Math.PI/180;
   const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+
+// Kesan kedai lokasi mencurigakan bagi hari+pekerja tertentu — amaran kpd pemilik
+// SEBELUM luluskan baucar harian (kos minyak baucar tu dikira drpd jarak kedai ni).
+// 2 isyarat: (1) kedai didaftar dgn pin jauh drpd GPS pekerja masa tu (rekod baharu
+// sahaja, lihat SQL_TAMBAHAN_136); (2) kedai jauh BERASINGAN drpd kedai lain yg
+// dilawati hari sama (isyarat sejagat, berfungsi utk kedai lama jugak — lihat
+// siasatan Agrobazaar Seri Indah Bakery, Sep 2026, kedai tu ~22km terasing).
+function kesanKedaiMencurigakanHariIni(pekerjaId, tarikh) {
+  if (!pekerjaId || !tarikh) return [];
+  const kedaiIds = [...new Set(DATA.transaksi
+    .filter(t=>t.created_by===pekerjaId && t.tarikh_masa && tarikhTempatan(t.tarikh_masa)===tarikh && t.kedai_id)
+    .map(t=>t.kedai_id))];
+  const titik = kedaiIds.map(id=>DATA.kedai.find(k=>k.id===id)).filter(k=>k && k.lat && k.lng);
+  const amaran = [];
+  titik.forEach(k => {
+    if (k.jarak_pin_gps_km>5) {
+      amaran.push(`${k.nama} — pin didaftar ${k.jarak_pin_gps_km.toFixed(1)}km dari GPS pekerja masa tu`);
+    } else if (titik.length>=2) {
+      const jarakTerdekat = Math.min(...titik.filter(x=>x.id!==k.id).map(x=>haversineKm(k,x)));
+      if (jarakTerdekat>15) amaran.push(`${k.nama} — ~${jarakTerdekat.toFixed(0)}km terasing drpd kedai lain hari sama, sila sahkan bukan silap pin`);
+    }
+  });
+  return amaran;
 }
 
 // Jarak 1 sesi kehadiran: titik GPS Thumb In -> GPS kedai-kedai yang dihantar (ikut
