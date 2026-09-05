@@ -9971,6 +9971,18 @@ async function kiraJarakKehadiranJulat(dariISO, hinggaISO, pekerjaId=null) {
   if (pekerjaId) q = q.eq('pekerja_id', pekerjaId);
   const { data: sesiSemua } = await q;
 
+  // Servis Tukar Barang Rosak/Expired (tukar_stok_expired_kedai RPC) TIDAK cipta
+  // rekod `transaksi` langsung — cuma kemaskini stok_pekerja + pelupusan_stok. Tanpa
+  // ni, perjalanan sebenar pekerja ke kedai SEMATA-MATA utk servis tukar (tiada
+  // jualan lain) langsung tak dikira minyak — pekerja rugi kos bahan api sebenar.
+  // Sertakan lokasi kedai drpd pelupusan_stok (jenis tukar_ambil/tukar_beri) sbg
+  // "destinasi sah" jugak, sama taraf dgn transaksi jualan biasa.
+  let qTukar = sb.from('pelupusan_stok').select('pekerja_id,kedai_id,created_at,resit,id')
+    .in('jenis', ['tukar_ambil','tukar_beri']).not('kedai_id','is',null)
+    .gte('created_at', keUTC(dariISO)).lte('created_at', keUTC(hinggaISO));
+  if (pekerjaId) qTukar = qTukar.eq('pekerja_id', pekerjaId);
+  const { data: tukarSemua } = await qTukar;
+
   // created_by pada transaksi = auth.uid() pekerja (ditetapkan server-side oleh RPC
   // submit_penghantaran), jadi ia sepadan terus dengan kehadiran.pekerja_id.
   let totalKm = 0;
@@ -9983,12 +9995,25 @@ async function kiraJarakKehadiranJulat(dariISO, hinggaISO, pekerjaId=null) {
     // padanan tarikh di bawah — menjadikan laluan cuma thumb-in → thumb-out dan
     // tuntutan minyak pekerja terkurang kira.
     const tarikhSesi = tarikhTempatan(sesi.thumb_in_masa);
-    const penghantaranSesi = DATA.transaksi.filter(t=>{
+    const jualanSesi = DATA.transaksi.filter(t=>{
       if (t.created_by !== sesi.pekerja_id) return false;
       if (tarikhTempatan(t.tarikh_masa) !== tarikhSesi) return false;
       return t.tarikh_masa >= sesi.thumb_in_masa && (!sesi.thumb_out_masa || t.tarikh_masa <= sesi.thumb_out_masa);
     });
-    if (!penghantaranSesi.length) return; // wajib ada transaksi baru layak kira mileage — elak thumb in/out "kosong" tetap dituntut minyak
+    // Dedupe ikut no. resit — 1 kunjungan tukar-expired jana BEBERAPA baris
+    // pelupusan_stok (1 per jenis produk expired/gantian), tapi cuma 1 destinasi.
+    const seenResit = new Set();
+    const servisSesi = (tukarSemua||[]).filter(r=>{
+      if (r.pekerja_id !== sesi.pekerja_id) return false;
+      if (tarikhTempatan(r.created_at) !== tarikhSesi) return false;
+      if (!(r.created_at >= sesi.thumb_in_masa && (!sesi.thumb_out_masa || r.created_at <= sesi.thumb_out_masa))) return false;
+      const kunci = r.resit || r.id;
+      if (seenResit.has(kunci)) return false;
+      seenResit.add(kunci);
+      return true;
+    }).map(r=>({ kedai_id: r.kedai_id }));
+    const penghantaranSesi = [...jualanSesi, ...servisSesi];
+    if (!penghantaranSesi.length) return; // wajib ada transaksi/servis baru layak kira mileage — elak thumb in/out "kosong" tetap dituntut minyak
     const km = jarakSesiKehadiran(sesi, penghantaranSesi);
     totalKm += km;
     kmIkutPekerja[sesi.pekerja_id] = (kmIkutPekerja[sesi.pekerja_id]||0) + km;
