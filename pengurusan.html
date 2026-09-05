@@ -9417,15 +9417,34 @@ async function putuskanPermohonanPadam(id, tindakan) {
   if (!peta) return toast('Jenis rekod tidak dikenali: '+p.jenis,'err');
   if (!confirm(`Padam KEKAL "${p.rekod_label||p.rekod_id}"?\n\nJenis: ${peta.label}\nTindakan ini TIDAK boleh diundur.`)) return;
 
-  const { error: ePadam } = await sb.from(peta.jadual).delete().eq('id', p.rekod_id);
-  if (ePadam) return toast('Gagal padam rekod: '+ePadam.message,'err');
+  let mesejTambahan = '';
+  if (p.jenis === 'transaksi') {
+    // Transaksi kedai WAJIB guna RPC padam_transaksi_kedai() (bukan delete() terus
+    // spt jenis lain) — ia pulangkan stok ke bawaan pekerja, tolak hutang kedai, DAN
+    // cipta rekod pelarasan_kos_pekerja kalau baucar harian hari tu dah diluluskan/
+    // dibayar (lihat SQL_TAMBAHAN_134/#106). Sebelum fix ni, kelulusan permohonan
+    // padam pekerja terus delete() jadual transaksi — SENYAP-SENYAP LANGKAU semua
+    // logik tu (stok tak pulih, kos terlanjur dibayar tak direkod utk pelarasan).
+    const t = DATA.transaksi.find(x=>x.id===p.rekod_id);
+    const kosMinyakPulih = t ? await kiraMinyakPulihTransaksi(t) : 0;
+    const { data: hasil, error: ePadam } = await sb.rpc('padam_transaksi_kedai', { p_id: p.rekod_id, p_kos_minyak_pulih: kosMinyakPulih });
+    if (ePadam) return toast('Gagal padam rekod: '+ePadam.message,'err');
+    if (hasil?.pelarasan_dicipta) {
+      mesejTambahan = ` Baucar hari tu dah diluluskan/dibayar — kos ${fmt(hasil.jumlah_pelarasan)} (upah ${fmt(hasil.jumlah_upah)} + minyak ${fmt(hasil.jumlah_minyak)}) akan DITOLAK drpd baucar harian SETERUSNYA pekerja tu.`;
+    } else {
+      mesejTambahan = ' Stok dipulangkan ke bawaan pekerja.';
+    }
+  } else {
+    const { error: ePadam } = await sb.from(peta.jadual).delete().eq('id', p.rekod_id);
+    if (ePadam) return toast('Gagal padam rekod: '+ePadam.message,'err');
+  }
 
   const { error: eUpd } = await sb.from('permohonan_padam').update({
     status:'diluluskan', diputuskan_oleh: DATA.currentUser.id, diputuskan_pada: new Date().toISOString(),
   }).eq('id', id);
   if (eUpd) return toast('Rekod dipadam tapi gagal kemaskini permohonan: '+eUpd.message,'err');
 
-  toast(`✅ "${p.rekod_label||p.rekod_id}" telah dipadam`);
+  toast(`✅ "${p.rekod_label||p.rekod_id}" telah dipadam.${mesejTambahan}`);
   await loadData();
   renderPermohonanPadam();
   kemaskiniNotifikasi();
