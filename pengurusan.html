@@ -2092,6 +2092,7 @@ const PADAM_JADUAL = {
   baucar_bayaran:  { jadual:'baucar_bayaran',  label:'Baucar Bayaran' },
   serahan_cash:    { jadual:'serahan_cash',    label:'Serahan Cash' },
   serahan_produk:  { jadual:'serahan_produk',  label:'Serahan Produk' },
+  pelupusan_stok:  { jadual:'pelupusan_stok',  label:'Pelupusan/Tukar Expired' },
 };
 
 function ikonPadam(onclickPemilik, jenis, rekodId, label, tajuk='Padam', gaya='') {
@@ -5268,37 +5269,65 @@ function formKonsainanHTML(t) {
 
 const LABEL_SEBAB_LUPUS = { rosak:'💔 Rosak', expired:'⏰ Expired', hilang:'❓ Hilang', lain:'📝 Lain-lain', gantian_tukar:'🔄 Gantian (Tukar Expired)' };
 
+// Kad pelupusan_stok/tukar-expired — dikongsi renderSejarah() & renderTransaksiKedaiList()
+// supaya papar & padam KONSISTEN di kedua-dua tempat (elak drift/pincang macam bug
+// #106-108). 1 kad per BARIS item, tapi ikon padam kendalikan SELURUH resit (semua
+// baris item 1 hantaran borang) sekaligus — lihat padamResitPelupusan().
+function kadPelupusanHTML(t) {
+  const s = DATA.stok.find(s=>s.id===t.stok_id);
+  const namaPekerja = currentRole==='pemilik' ? (PROFIL_NAMA_CACHE[t.pekerja_id]||'?') : null;
+  const kedaiNama = t.kedai_id ? (DATA.kedai.find(k=>k.id===t.kedai_id)?.nama || t.kedai_id) : null;
+  const tajuk = t.jenis==='tukar_ambil' ? '🔄 Ambil Balik (Tukar Expired)' : t.jenis==='tukar_beri' ? '🔄 Gantian Diberi (Tukar Expired)' : '🗑️ Pelupusan Stok';
+  // Pertukaran barang-dengan-barang — papar kuantiti, bukan nilai kerugian RM.
+  const isTukar = t.jenis==='tukar_ambil' || t.jenis==='tukar_beri';
+  const nilaiKanan = isTukar
+    ? `<div style="font-weight:800;font-size:14px">${t.kuantiti} ${esc(s?.unit||'unit')}</div>`
+    : `<div style="font-weight:800;font-size:14px;color:var(--red)">−${fmt(t.kos||0)}</div>`;
+  const labelPadam = `${tajuk}${kedaiNama?' · '+kedaiNama:''}${t.resit?' ('+t.resit+')':''}`;
+  return `<div class="trx-card" style="border-left:4px solid ${isTukar?'var(--gold)':'var(--red)'}">
+    ${t.resit ? ikonPadam(`padamResitPelupusan('${esc(t.resit)}','${esc(labelPadam).replace(/'/g,"&#39;")}')`, 'pelupusan_stok', t.resit, labelPadam, 'Padam resit') : ''}
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+      <div><div style="font-weight:800;font-size:13px">${tajuk}${namaPekerja?` · ${esc(namaPekerja)}`:''}</div><div style="font-size:10px;color:var(--muted)">${fmtDT(t.created_at)}${kedaiNama?` · 🏪 ${esc(kedaiNama)}`:''}</div></div>
+      <div style="text-align:right">${nilaiKanan}<span class="badge ${isTukar?'badge-gold':'badge-red'}">${LABEL_SEBAB_LUPUS[t.sebab]||esc(t.sebab)}</span></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted)">${esc(s?.nama||t.stok_id)} ×${t.kuantiti}</div>
+    ${t.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(t.nota)}</div>`:''}
+  </div>`;
+}
+
+// Pemilik: padam resit pelupusan/tukar-expired kekal + pulihkan stok bawaan pekerja
+// (RPC padam_resit_pelupusan — lihat SQL_TAMBAHAN_138). Pekerja: ikonPadam() route
+// ke mintaPadam() sebaliknya (kelulusan pemilik diperlukan dahulu).
+async function padamResitPelupusan(resit, label) {
+  if (!confirm(`Padam resit "${label}" secara kekal?\n\nStok yang ditolak drpd bawaan pekerja (pelupusan biasa/gantian) akan DIPULANGKAN semula. Tindakan ini tidak boleh diundur.`)) return;
+  const { data: hasil, error } = await sb.rpc('padam_resit_pelupusan', { p_resit: resit });
+  if (error) return toast('Gagal padam resit: '+error.message,'err');
+  await loadData();
+  await loadStokBawaan();
+  toast(`🗑️ Resit dipadam · ${hasil?.stok_dipulihkan?.length||0} jenis produk dipulangkan ke bawaan pekerja`);
+  if (document.getElementById('sejarah-list')) renderSejarah(document.getElementById('filter-kedai-trx')?.value||'');
+  if (document.getElementById('transaksi-kedai-list')) renderTransaksiKedaiList();
+}
+
 async function renderSejarah(kedaiId='') {
   const listTrx = [...DATA.transaksi].filter(t=>kedaiId?t.kedai_id===kedaiId:true).map(t=>({ ...t, _jenis:'trx', _masa:t.tarikh_masa }));
 
+  // Pelupusan/tukar-expired tapis ikut kedai sama macam transaksi bila kedaiId
+  // diisi (dulu SENGAJA di-skip terus bila kedai dipilih — kedai_id.eq langsung
+  // di query, bukan .limit(100) global — servis kedai tu jadi "hilang" dari sejarah
+  // kedai berkenaan walaupun betul2 berlaku di situ, lihat siasatan JHF Food Mart).
   let listLupus = [];
-  if (useCloud && !kedaiId) {
-    const { data } = await sb.from('pelupusan_stok').select('*').order('created_at',{ascending:false}).limit(100);
+  if (useCloud) {
+    let q = sb.from('pelupusan_stok').select('*').order('created_at',{ascending:false});
+    q = kedaiId ? q.eq('kedai_id', kedaiId) : q.limit(100);
+    const { data } = await q;
     listLupus = (data||[]).map(p=>({ ...p, _jenis:'lupus', _masa:p.created_at }));
   }
 
   const gabungan = [...listTrx, ...listLupus].sort((a,b)=>new Date(b._masa)-new Date(a._masa));
 
   document.getElementById('sejarah-list').innerHTML = gabungan.map(t=>{
-    if (t._jenis==='lupus') {
-      const s = DATA.stok.find(s=>s.id===t.stok_id);
-      const namaPekerja = currentRole==='pemilik' ? (PROFIL_NAMA_CACHE[t.pekerja_id]||'?') : null;
-      const kedaiNama = t.kedai_id ? (DATA.kedai.find(k=>k.id===t.kedai_id)?.nama || t.kedai_id) : null;
-      const tajuk = t.jenis==='tukar_ambil' ? '🔄 Ambil Balik (Tukar Expired)' : t.jenis==='tukar_beri' ? '🔄 Gantian Diberi (Tukar Expired)' : '🗑️ Pelupusan Stok';
-      // Pertukaran barang-dengan-barang — papar kuantiti, bukan nilai kerugian RM.
-      const isTukar = t.jenis==='tukar_ambil' || t.jenis==='tukar_beri';
-      const nilaiKanan = isTukar
-        ? `<div style="font-weight:800;font-size:14px">${t.kuantiti} ${esc(s?.unit||'unit')}</div>`
-        : `<div style="font-weight:800;font-size:14px;color:var(--red)">−${fmt(t.kos||0)}</div>`;
-      return `<div class="trx-card" style="border-left:4px solid ${isTukar?'var(--gold)':'var(--red)'}">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <div><div style="font-weight:800;font-size:13px">${tajuk}${namaPekerja?` · ${esc(namaPekerja)}`:''}</div><div style="font-size:10px;color:var(--muted)">${fmtDT(t.created_at)}${kedaiNama?` · 🏪 ${esc(kedaiNama)}`:''}</div></div>
-          <div style="text-align:right">${nilaiKanan}<span class="badge ${isTukar?'badge-gold':'badge-red'}">${LABEL_SEBAB_LUPUS[t.sebab]||esc(t.sebab)}</span></div>
-        </div>
-        <div style="font-size:11px;color:var(--muted)">${esc(s?.nama||t.stok_id)} ×${t.kuantiti}</div>
-        ${t.nota?`<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 ${esc(t.nota)}</div>`:''}
-      </div>`;
-    }
+    if (t._jenis==='lupus') return kadPelupusanHTML(t);
     const namaDestinasi = namaDestinasiTrx(t);
     const itemsStr=t.items.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `${s.nama} ×${it.qty}`; }).join(' · ');
     const belumSahkan = t.kaedah_bayaran==='consignment' && !t.jualan_disahkan;
@@ -5798,15 +5827,34 @@ async function renderTransaksiKedaiList() {
   // "consignment_belum" ialah tapisan KHAS (bukan lajur status sebenar) — consignment
   // guna status='hutang' yg sama dgn hutang biasa di belakang tabir, jadi kena tapis
   // ikut jualan_disahkan supaya pekerja boleh follow-up kedai consignment SAHAJA.
-  const list = [...DATA.transaksi]
+  const listTrx = [...DATA.transaksi]
     .filter(t=>currentRole==='pemilik' || t.created_by===DATA.currentUser?.id)
     .filter(t=>!bulan || (t.tarikh_masa && bulanTempatan(t.tarikh_masa)===bulan))
     .filter(t=>!statusPilih || (statusPilih==='consignment_belum' ? (t.kaedah_bayaran==='consignment' && !t.jualan_disahkan) : t.status===statusPilih))
     .filter(t=>!pekerjaPilih || t.created_by===pekerjaPilih)
-    .sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
+    .map(t=>({ ...t, _jenis:'trx', _masa:t.tarikh_masa }));
+
+  // Servis Tukar Barang Rosak/Expired di kedai (pelupusan_stok jenis tukar_ambil/
+  // tukar_beri) — sebelum ni langsung tak muncul dlm senarai Transaksi Kedai (fungsi
+  // ni hanya baca `transaksi`), walhal servis ni aktiviti sah kedai berkenaan &
+  // kini turut dikira dlm km/minyak (SQL_TAMBAHAN_137-ish, lihat kiraJarakKehadiranJulat).
+  // Tapisan status transaksi (selesai/hutang/consignment) tak relevan utk servis ni.
+  let listLupus = [];
+  if (useCloud && !statusPilih) {
+    let q = sb.from('pelupusan_stok').select('*').in('jenis',['tukar_ambil','tukar_beri']).not('kedai_id','is',null);
+    if (currentRole!=='pemilik') q = q.eq('pekerja_id', DATA.currentUser?.id);
+    const { data } = await q;
+    listLupus = (data||[])
+      .filter(p=>!bulan || (p.created_at && bulanTempatan(p.created_at)===bulan))
+      .filter(p=>!pekerjaPilih || p.pekerja_id===pekerjaPilih)
+      .map(p=>({ ...p, _jenis:'lupus', _masa:p.created_at }));
+  }
+
+  const list = [...listTrx, ...listLupus].sort((a,b)=>new Date(b._masa)-new Date(a._masa));
   document.getElementById('tp-jumlah').textContent = `${list.length} transaksi${bulan?' pada '+bulan:' (semua)'}${statusPilih?' · '+statusTxtTrx[statusPilih]:''}`;
 
   el.innerHTML = list.map(t=>{
+    if (t._jenis==='lupus') return kadPelupusanHTML(t);
     const k = t.kedai_id ? DATA.kedai.find(k=>k.id===t.kedai_id) : null;
     const itemsStr = t.items.map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `${s.nama} ×${it.qty}`; }).join(' · ');
     const statusBadge = labelStatusTrx(t);
@@ -9443,6 +9491,16 @@ async function putuskanPermohonanPadam(id, tindakan) {
     } else {
       mesejTambahan = ' Stok dipulangkan ke bawaan pekerja.';
     }
+  } else if (p.jenis === 'pelupusan_stok') {
+    // Resit Pelupusan/Tukar Expired WAJIB guna RPC padam_resit_pelupusan() (bukan
+    // delete() terus) — p.rekod_id di sini ialah NO. RESIT (kongsi byk baris item
+    // dlm 1 hantaran borang), bukan 1 baris tunggal, dan RPC ni PULIHKAN stok bawaan
+    // pekerja bagi baris yg asalnya tolak stok (pelupusan biasa/gantian) — lihat
+    // SQL_TAMBAHAN_138. delete() generik akan padam 1 baris SAHAJA (baki baris lain
+    // dlm resit sama tercicir) DAN tak pulih stok bawaan langsung.
+    const { data: hasil, error: ePadam } = await sb.rpc('padam_resit_pelupusan', { p_resit: p.rekod_id });
+    if (ePadam) return toast('Gagal padam rekod: '+ePadam.message,'err');
+    mesejTambahan = ` ${hasil?.stok_dipulihkan?.length||0} jenis produk dipulangkan ke bawaan pekerja.`;
   } else {
     const { error: ePadam } = await sb.from(peta.jadual).delete().eq('id', p.rekod_id);
     if (ePadam) return toast('Gagal padam rekod: '+ePadam.message,'err');
