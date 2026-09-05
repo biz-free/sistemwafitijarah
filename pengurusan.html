@@ -6359,6 +6359,15 @@ async function renderResitPelupusan(resitNo) {
   const isTukar = data.some(r=>r.jenis==='tukar_ambil'||r.jenis==='tukar_beri');
   const diambil = data.filter(r=>r.jenis!=='tukar_beri'); // pelupusan biasa ATAU barang expired diambil balik
   const gantian = data.filter(r=>r.jenis==='tukar_beri'); // barang gantian diberi percuma (tukar sahaja)
+  // Sebab SEBENAR (rosak/expired/dll) mesti drpd baris "diambil" — baris "gantian"
+  // (tukar_beri) SENTIASA sebab='gantian_tukar' tetap, bukan sebab pilihan pekerja.
+  // TAK boleh guna data[0].sebab terus: semua baris 1 resit ni dicipta dlm SATU
+  // transaksi RPC (tukar_stok_expired_kedai), dan now() BEKU/sama sepanjang satu
+  // transaksi Postgres — jadi created_at semua baris SAMA 100%, order by created_at
+  // tak boleh dipercayai bila timestamp seri (Postgres tak jamin urutan bila seri).
+  // Tanpa fix ni, resit kadang papar SEBAB "Gantian (Tukar Expired)" bukan sebab
+  // sebenar (Rosak/Expired) yg pekerja pilih.
+  const sebabSebenar = diambil[0]?.sebab ?? data[0].sebab;
   const kedaiId = data[0].kedai_id;
   const kedai = kedaiId ? DATA.kedai.find(k=>k.id===kedaiId) : null;
 
@@ -6401,7 +6410,7 @@ async function renderResitPelupusan(resitNo) {
     </div>`:''}
     <div class="resit-total" style="display:flex;justify-content:space-between"><span>${isTukar?'NILAI EXPIRED:':'JUMLAH KERUGIAN:'}</span><span>RM ${jumlahDiambil.toFixed(2)}</span></div>
     ${gantian.length?`<div class="resit-row" style="margin-top:6px"><span style="font-weight:700">NILAI GANTIAN</span><span>RM ${jumlahGantian.toFixed(2)}</span></div>`:''}
-    <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">SEBAB</span><span>${LABEL_SEBAB_LUPUS[data[0].sebab]||esc(data[0].sebab)}</span></div>
+    <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">SEBAB</span><span>${LABEL_SEBAB_LUPUS[sebabSebenar]||esc(sebabSebenar)}</span></div>
     ${data[0].nota?`<div style="margin-top:8px;font-size:15px;color:var(--muted)">Nota: ${esc(data[0].nota)}</div>`:''}
     <div class="resit-footer">Terima kasih atas kepercayaan anda!<br/>Produk Halal · Berkualiti · Amanah<br/><strong>— WAFI TIJARAH TRADING —</strong></div>
   </div>`;
