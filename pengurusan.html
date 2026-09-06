@@ -6063,7 +6063,11 @@ async function simpanTukarProdukTrx() {
   const namaLama = DATA.stok.find(s=>s.id===stokLama)?.nama || stokLama;
   const namaBaru = DATA.stok.find(s=>s.id===stokBaru)?.nama || stokBaru;
   const namaPekerja = PROFIL_NAMA_CACHE[pekerjaId] || document.getElementById('tukar-produk-pekerja').selectedOptions[0]?.textContent || pekerjaId;
-  if (!confirm(`Tukar "${namaLama}" kepada "${namaBaru}" (${qty} unit) dalam transaksi ini?\n\nStok gantian ditolak drpd bawaan ${namaPekerja}. Jumlah transaksi & hutang kedai (jika berkenaan) akan dikira semula automatik.`)) return;
+  const t = DATA.transaksi.find(x=>x.id===id);
+  const notaConsignment = t?.kaedah_bayaran==='consignment'
+    ? '\n\n🤝 Transaksi ini Consignment — status pengesahan (terjual/pulang) akan DIRESET, perlu sahkan semula guna Follow-up selepas tukar.'
+    : '';
+  if (!confirm(`Tukar "${namaLama}" kepada "${namaBaru}" (${qty} unit) dalam transaksi ini?\n\nStok gantian ditolak drpd bawaan ${namaPekerja}. Jumlah transaksi & hutang kedai (jika berkenaan) akan dikira semula automatik.${notaConsignment}`)) return;
   const { data: hasil, error } = await sb.rpc('tukar_produk_transaksi', {
     p_transaksi_id: id, p_stok_id_lama: stokLama, p_stok_id_baru: stokBaru,
     p_qty_baru: qty, p_pekerja_id_baru: pekerjaId||null,
@@ -6073,7 +6077,7 @@ async function simpanTukarProdukTrx() {
   closeModal('modal-tukar-produk-trx');
   renderTransaksiKedaiList();
   if (document.getElementById('sejarah-list')) renderSejarah(document.getElementById('filter-kedai-trx')?.value||'');
-  toast(`🔄 Produk ditukar: ${namaLama} → ${namaBaru} (${hasil.qty_baru} unit) · Jumlah: ${fmt(hasil.jumlah_lama)} → ${fmt(hasil.jumlah_baru)}`);
+  toast(`🔄 Produk ditukar: ${namaLama} → ${namaBaru} (${hasil.qty_baru} unit) · Jumlah: ${fmt(hasil.jumlah_lama)} → ${fmt(hasil.jumlah_baru)}${hasil.pengesahan_direset?' · Consignment: perlu Follow-up sahkan semula terjual/pulang':''}`);
 }
 
 async function padamTransaksiKedai(id) {
