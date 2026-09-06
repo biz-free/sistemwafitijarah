@@ -1894,7 +1894,17 @@ semula transaksi penuh. Lihat tukar_produk_transaksi() RPC — SQL_TAMBAHAN_139.
       <label class="form-label">Produk Betul (gantian)</label>
       <select class="form-input" id="tukar-produk-baru"></select>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Kuantiti kekal sama. Stok bawaan pekerja, jumlah transaksi & hutang kedai (jika berkenaan) dikira semula automatik.</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Kuantiti</label>
+        <input type="number" class="form-input" id="tukar-produk-qty" min="1" step="1" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Pekerja (Stok Diambil Dari)</label>
+        <select class="form-input" id="tukar-produk-pekerja"></select>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Produk lama dipulangkan ke pekerja ASAL transaksi ni. Upah/laporan kekal milik pekerja asal — cuma sumber stok gantian boleh dipilih pekerja lain jika perlu. Jumlah transaksi & hutang kedai (jika berkenaan) dikira semula automatik.</div>
     <button class="btn btn-primary" onclick="simpanTukarProdukTrx()">💾 Tukar Produk</button>
   </div>
 </div>
@@ -6009,35 +6019,61 @@ async function editJumlahTransaksi(id, jumlahAsalSemasa) {
 // semasa hantar/consignment) tanpa perlu padam & minta pekerja hantar semula.
 // Kuantiti kekal, kesan stok bawaan/jumlah/hutang dikira semula server-side —
 // lihat tukar_produk_transaksi() RPC (SQL_TAMBAHAN_139).
-function bukaModalTukarProdukTrx(id) {
+async function bukaModalTukarProdukTrx(id) {
   const t = DATA.transaksi.find(x=>x.id===id);
   if (!t) return;
   document.getElementById('tukar-produk-trx-id').value = id;
   document.getElementById('tukar-produk-lama').innerHTML = t.items.map(it=>{
     const s = DATA.stok.find(s=>s.id===it.stokId);
-    return `<option value="${it.stokId}">${esc(s?.nama||it.stokId)} ×${it.qty}</option>`;
+    return `<option value="${it.stokId}" data-qty="${it.qty}">${esc(s?.nama||it.stokId)} ×${it.qty}</option>`;
   }).join('');
   document.getElementById('tukar-produk-baru').innerHTML = '<option value="">-- Pilih produk betul --</option>' +
     DATA.stok.filter(s=>s.aktif!==false).map(s=>`<option value="${s.id}">${esc(s.nama)} (${fmt(s.harga_jual)})</option>`).join('');
+  document.getElementById('tukar-produk-qty').value = t.items[0]?.qty || 1;
+
+  // Pekerja (sumber stok gantian) — lalai pekerja ASAL transaksi ni, tapi pemilik
+  // boleh pilih pekerja lain (cth produk betul cuma ada dlm bawaan pekerja lain).
+  const pekerjaSel = document.getElementById('tukar-produk-pekerja');
+  if (!pekerjaSel.dataset.loaded) {
+    pekerjaSel.dataset.loaded = '1';
+    const { data: pekerjaList } = await sb.from('profiles').select('id,nama').eq('role','pekerja').order('nama');
+    pekerjaSel.innerHTML = (pekerjaList||[]).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('');
+  }
+  pekerjaSel.value = t.created_by;
+
   showModal('modal-tukar-produk-trx');
 }
+
+// Kuantiti default ikut produk yg dipilih di dropdown "Produk Tersalah" — dikemaskini
+// bila pilihan berubah (transaksi boleh ada byk produk, qty berbeza per produk).
+document.getElementById('tukar-produk-lama')?.addEventListener('change', e=>{
+  const qty = e.target.selectedOptions[0]?.dataset.qty;
+  if (qty) document.getElementById('tukar-produk-qty').value = qty;
+});
 
 async function simpanTukarProdukTrx() {
   const id = document.getElementById('tukar-produk-trx-id').value;
   const stokLama = document.getElementById('tukar-produk-lama').value;
   const stokBaru = document.getElementById('tukar-produk-baru').value;
+  const qty = +document.getElementById('tukar-produk-qty').value;
+  const pekerjaId = document.getElementById('tukar-produk-pekerja').value;
   if (!stokBaru) return toast('Sila pilih produk gantian','err');
   if (stokLama === stokBaru) return toast('Produk gantian mesti berbeza drpd produk asal','err');
+  if (!Number.isFinite(qty) || qty < 1) return toast('Kuantiti tidak sah','err');
   const namaLama = DATA.stok.find(s=>s.id===stokLama)?.nama || stokLama;
   const namaBaru = DATA.stok.find(s=>s.id===stokBaru)?.nama || stokBaru;
-  if (!confirm(`Tukar "${namaLama}" kepada "${namaBaru}" dalam transaksi ini?\n\nStok bawaan pekerja, jumlah transaksi & hutang kedai (jika berkenaan) akan dikira semula automatik.`)) return;
-  const { data: hasil, error } = await sb.rpc('tukar_produk_transaksi', { p_transaksi_id: id, p_stok_id_lama: stokLama, p_stok_id_baru: stokBaru });
+  const namaPekerja = PROFIL_NAMA_CACHE[pekerjaId] || document.getElementById('tukar-produk-pekerja').selectedOptions[0]?.textContent || pekerjaId;
+  if (!confirm(`Tukar "${namaLama}" kepada "${namaBaru}" (${qty} unit) dalam transaksi ini?\n\nStok gantian ditolak drpd bawaan ${namaPekerja}. Jumlah transaksi & hutang kedai (jika berkenaan) akan dikira semula automatik.`)) return;
+  const { data: hasil, error } = await sb.rpc('tukar_produk_transaksi', {
+    p_transaksi_id: id, p_stok_id_lama: stokLama, p_stok_id_baru: stokBaru,
+    p_qty_baru: qty, p_pekerja_id_baru: pekerjaId||null,
+  });
   if (error) return toast('Gagal tukar produk: '+error.message,'err');
   await loadData();
   closeModal('modal-tukar-produk-trx');
   renderTransaksiKedaiList();
   if (document.getElementById('sejarah-list')) renderSejarah(document.getElementById('filter-kedai-trx')?.value||'');
-  toast(`🔄 Produk ditukar: ${namaLama} → ${namaBaru} (${hasil.qty} unit) · Jumlah: ${fmt(hasil.jumlah_lama)} → ${fmt(hasil.jumlah_baru)}`);
+  toast(`🔄 Produk ditukar: ${namaLama} → ${namaBaru} (${hasil.qty_baru} unit) · Jumlah: ${fmt(hasil.jumlah_lama)} → ${fmt(hasil.jumlah_baru)}`);
 }
 
 async function padamTransaksiKedai(id) {
