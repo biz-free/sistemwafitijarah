@@ -1875,6 +1875,26 @@ mula drpd 0) supaya sentiasa padan realiti walaupun ada jurang sejarah lampau. -
   </div>
 </div>
 
+<!-- Tukar Produk Transaksi (pemilik SAHAJA) — betulkan produk tersalah rekod (cth
+pekerja pilih produk salah semasa hantar/consignment) tanpa perlu padam & hantar
+semula transaksi penuh. Lihat tukar_produk_transaksi() RPC — SQL_TAMBAHAN_139. -->
+<div class="modal-overlay" id="modal-tukar-produk-trx">
+  <div class="modal-box">
+    <div class="modal-title">🔄 Tukar Produk Transaksi<button class="modal-close" onclick="closeModal('modal-tukar-produk-trx')">✕ Tutup</button></div>
+    <input type="hidden" id="tukar-produk-trx-id" />
+    <div class="form-group">
+      <label class="form-label">Produk Tersalah (asal dihantar)</label>
+      <select class="form-input" id="tukar-produk-lama"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Produk Betul (gantian)</label>
+      <select class="form-input" id="tukar-produk-baru"></select>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Kuantiti kekal sama. Stok bawaan pekerja, jumlah transaksi & hutang kedai (jika berkenaan) dikira semula automatik.</div>
+    <button class="btn btn-primary" onclick="simpanTukarProdukTrx()">💾 Tukar Produk</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-lupa-katalaluan">
   <div class="modal-box">
     <div class="modal-title">🔑 Lupa Kata Laluan<button class="modal-close" onclick="closeModal('modal-lupa-katalaluan')">✕ Tutup</button></div>
@@ -5912,6 +5932,7 @@ async function renderTransaksiKedaiList() {
       <div style="font-size:12px;font-weight:700;margin-top:6px;display:flex;align-items:center;gap:6px">
         <span>${fmt(t.jumlah)}</span>
         ${currentRole==='pemilik' && t.kaedah_bayaran!=='consignment' ? `<button class="btn-link" style="font-size:10px;font-weight:400" onclick="editJumlahTransaksi('${t.id}',${t.jumlah_asal??t.jumlah})">✏️ Edit Jumlah</button>`:''}
+        ${currentRole==='pemilik' ? `<button class="btn-link" style="font-size:10px;font-weight:400" onclick="bukaModalTukarProdukTrx('${t.id}')">🔄 Tukar Produk</button>`:''}
       </div>
       ${currentRole==='pemilik' ? `<div style="margin-top:6px;display:flex;align-items:center;gap:6px">
         <label style="font-size:10px;color:var(--muted)">Kaedah Bayar:</label>
@@ -5962,6 +5983,41 @@ async function editJumlahTransaksi(id, jumlahAsalSemasa) {
   await loadData();
   renderTransaksiKedaiList();
   toast(`✅ Jumlah dibetulkan — jumlah asal kini ${fmt(jumlahBaru)}`);
+}
+
+// Pemilik SAHAJA — tukar 1 produk dlm transaksi (cth pekerja tersalah pilih produk
+// semasa hantar/consignment) tanpa perlu padam & minta pekerja hantar semula.
+// Kuantiti kekal, kesan stok bawaan/jumlah/hutang dikira semula server-side —
+// lihat tukar_produk_transaksi() RPC (SQL_TAMBAHAN_139).
+function bukaModalTukarProdukTrx(id) {
+  const t = DATA.transaksi.find(x=>x.id===id);
+  if (!t) return;
+  document.getElementById('tukar-produk-trx-id').value = id;
+  document.getElementById('tukar-produk-lama').innerHTML = t.items.map(it=>{
+    const s = DATA.stok.find(s=>s.id===it.stokId);
+    return `<option value="${it.stokId}">${esc(s?.nama||it.stokId)} ×${it.qty}</option>`;
+  }).join('');
+  document.getElementById('tukar-produk-baru').innerHTML = '<option value="">-- Pilih produk betul --</option>' +
+    DATA.stok.filter(s=>s.aktif!==false).map(s=>`<option value="${s.id}">${esc(s.nama)} (${fmt(s.harga_jual)})</option>`).join('');
+  showModal('modal-tukar-produk-trx');
+}
+
+async function simpanTukarProdukTrx() {
+  const id = document.getElementById('tukar-produk-trx-id').value;
+  const stokLama = document.getElementById('tukar-produk-lama').value;
+  const stokBaru = document.getElementById('tukar-produk-baru').value;
+  if (!stokBaru) return toast('Sila pilih produk gantian','err');
+  if (stokLama === stokBaru) return toast('Produk gantian mesti berbeza drpd produk asal','err');
+  const namaLama = DATA.stok.find(s=>s.id===stokLama)?.nama || stokLama;
+  const namaBaru = DATA.stok.find(s=>s.id===stokBaru)?.nama || stokBaru;
+  if (!confirm(`Tukar "${namaLama}" kepada "${namaBaru}" dalam transaksi ini?\n\nStok bawaan pekerja, jumlah transaksi & hutang kedai (jika berkenaan) akan dikira semula automatik.`)) return;
+  const { data: hasil, error } = await sb.rpc('tukar_produk_transaksi', { p_transaksi_id: id, p_stok_id_lama: stokLama, p_stok_id_baru: stokBaru });
+  if (error) return toast('Gagal tukar produk: '+error.message,'err');
+  await loadData();
+  closeModal('modal-tukar-produk-trx');
+  renderTransaksiKedaiList();
+  if (document.getElementById('sejarah-list')) renderSejarah(document.getElementById('filter-kedai-trx')?.value||'');
+  toast(`🔄 Produk ditukar: ${namaLama} → ${namaBaru} (${hasil.qty} unit) · Jumlah: ${fmt(hasil.jumlah_lama)} → ${fmt(hasil.jumlah_baru)}`);
 }
 
 async function padamTransaksiKedai(id) {
