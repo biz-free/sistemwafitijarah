@@ -871,6 +871,10 @@
           <option value="consignment_belum">🤝 Consignment Belum Sahkan</option>
         </select>
       </div>
+      <div class="form-group" id="tp-cari-transaksi-wrap" style="margin-top:10px;display:none">
+        <label class="form-label">🔍 Cari Transaksi</label>
+        <input type="text" class="form-input" id="tp-cari-transaksi" placeholder="Nama kedai, produk, atau no. rujukan..." oninput="renderTempahanAktif()" />
+      </div>
       <div class="form-group" id="tp-filter-pekerja-wrap" style="margin-top:10px;display:none">
         <label class="form-label">Tapis Ikut Pekerja</label>
         <select class="form-input" id="tp-filter-pekerja" onchange="renderTempahanAktif()">
@@ -5855,6 +5859,7 @@ function setTempahanTab(t) {
   document.getElementById('tp-edagang-wrap').style.display = t==='edagang'?'':'none';
   document.getElementById('tp-filter-tempahan-wrap').style.display = t==='tempahan'?'':'none';
   document.getElementById('tp-filter-transaksi-wrap').style.display = t==='transaksi'?'':'none';
+  document.getElementById('tp-cari-transaksi-wrap').style.display = t==='transaksi'?'':'none';
   document.getElementById('tp-filter-edagang-wrap').style.display = t==='edagang'?'':'none';
   // Tapis ikut pekerja hanya berguna utk pemilik (pekerja sendiri dah auto-tapis dlm renderTransaksiKedaiList()).
   document.getElementById('tp-filter-pekerja-wrap').style.display = (t==='transaksi' && currentRole==='pemilik')?'':'none';
@@ -5909,8 +5914,23 @@ async function renderTransaksiKedaiList() {
       .map(p=>({ ...p, _jenis:'lupus', _masa:p.created_at }));
   }
 
-  const list = [...listTrx, ...listLupus].sort((a,b)=>new Date(b._masa)-new Date(a._masa));
-  document.getElementById('tp-jumlah').textContent = `${list.length} transaksi${bulan?' pada '+bulan:' (semua)'}${statusPilih?' · '+statusTxtTrx[statusPilih]:''}`;
+  // Carian bebas — nama kedai/peribadi, nama produk, no. rujukan/resit, atau nota.
+  // Bantu pemilik cari CEPAT 1 transaksi tertentu (cth nak "Tukar Produk") dlm
+  // senarai panjang, tanpa perlu scroll manual ikut bulan/status je.
+  const carian = (document.getElementById('tp-cari-transaksi')?.value || '').trim().toLowerCase();
+  const cocokCarian = t => {
+    if (!carian) return true;
+    const kedaiNama = t.kedai_id ? (DATA.kedai.find(k=>k.id===t.kedai_id)?.nama||'') : (t.nama_pembeli||'');
+    const produkNama = t._jenis==='lupus'
+      ? (DATA.stok.find(s=>s.id===t.stok_id)?.nama||'')
+      : (t.items||[]).map(it=>DATA.stok.find(s=>s.id===it.stokId)?.nama||'').join(' ');
+    const rujukan = t._jenis==='lupus' ? (t.resit||'') : (noRujukanTrx(t)||t.id||'');
+    const gabung = `${kedaiNama} ${produkNama} ${rujukan} ${t.nota||''}`.toLowerCase();
+    return gabung.includes(carian);
+  };
+
+  const list = [...listTrx, ...listLupus].filter(cocokCarian).sort((a,b)=>new Date(b._masa)-new Date(a._masa));
+  document.getElementById('tp-jumlah').textContent = `${list.length} transaksi${bulan?' pada '+bulan:' (semua)'}${statusPilih?' · '+statusTxtTrx[statusPilih]:''}${carian?` · carian: "${carian}"`:''}`;
 
   el.innerHTML = list.map(t=>{
     if (t._jenis==='lupus') return kadPelupusanHTML(t);
