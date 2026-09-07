@@ -1225,11 +1225,11 @@
     </div>
 
     <!-- Arkib Bukti Bayaran Lama (pemilik sahaja) — hantar fail bukti-bayaran yg
-    rekod dah SELESAI/disahkan & >2 bulan ke URL webhook luaran (editable), pulih
+    rekod dah SELESAI/disahkan & >1 bulan ke URL webhook luaran (editable), pulih
     ruang storan Supabase. Lihat arkib_bukti_bayaran edge function. -->
     <div class="card" id="arkib-bukti-card">
       <div class="card-title">🗄️ Arkib Bukti Bayaran Lama</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Fail bukti bayaran (resit/transfer) yang rekod dah SELESAI/disahkan & lebih 2 bulan boleh dihantar ke storan awan luaran (webhook — cth Zapier/Make/n8n/server sendiri), lepas tu dipadam drpd Supabase utk jimat ruang. Fail yang dihantar berjaya akan digantikan pautan ke lokasi baharu.</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Fail bukti bayaran (resit/transfer) yang rekod dah SELESAI/disahkan & lebih 1 bulan boleh dihantar ke storan awan luaran (webhook — cth Zapier/Make/n8n/server sendiri), lepas tu dipadam drpd Supabase utk jimat ruang. Fail yang dihantar berjaya akan digantikan pautan ke lokasi baharu.</div>
       <div class="form-group">
         <label class="form-label">URL Webhook Arkib (editable)</label>
         <input type="url" class="form-input" id="set-arkib-webhook-url" placeholder="https://hook.contoh.com/arkib-bukti-bayaran" />
@@ -2324,7 +2324,7 @@ async function showApp() {
   document.getElementById('role-display').textContent = currentRole==='pemilik'?'👑 Pemilik':'🚚 Penghantar';
 
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
-  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','bonus-kedai-semua-card','status-sistem-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','affiliate-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card','mesej-followup-card'];
+  const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','bonus-kedai-semua-card','status-sistem-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','affiliate-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card','mesej-followup-card','storan-sistem-card','arkib-bukti-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
@@ -2429,6 +2429,8 @@ async function setPage(p) {
 //  SHORTCUT TAJUK (tab Profile) — klik terus dibawa ke bahagian dipilih
 // ════════════════════════════════════════════════════
 const LEBIH_SHORTCUTS = [
+  { id: 'storan-sistem-card', icon: '📊', label: 'Storan Sistem' },
+  { id: 'arkib-bukti-card', icon: '🗄️', label: 'Arkib Bukti Bayaran' },
   { id: 'profil-saya-card', icon: '👤', label: 'Profil' },
   { id: 'upah-saya-card', icon: '💰', label: 'Upah Saya' },
   { id: 'serahan-cash-card', icon: '💵', label: 'Serah Cash' },
@@ -2456,13 +2458,63 @@ const LEBIH_SHORTCUTS = [
   { id: 'kehadiran-report-card', icon: '📍', label: 'Kehadiran' },
 ];
 
+// Susunan Akses Pantas — pemilik/pekerja boleh susun ikut keutamaan sendiri (cth
+// letak "Storan Sistem"/"Arkib Bukti Bayaran" di paling atas). Disimpan localStorage
+// (per-peranti) — bukan tetapan kongsi, sebab keutamaan tiap pengguna berbeza.
+const KUNCI_SUSUNAN_LEBIH_SHORTCUTS = 'wafi_lebih_shortcuts_order';
+let lebihShortcutsSusunMod = false;
+
+function senaraiLebihShortcutsTersusun() {
+  let tersimpan = [];
+  try { tersimpan = JSON.parse(localStorage.getItem(KUNCI_SUSUNAN_LEBIH_SHORTCUTS)||'[]'); } catch { tersimpan = []; }
+  const peta = Object.fromEntries(LEBIH_SHORTCUTS.map(s=>[s.id,s]));
+  const tersusun = tersimpan.map(id=>peta[id]).filter(Boolean);
+  LEBIH_SHORTCUTS.forEach(s=>{ if(!tersusun.includes(s)) tersusun.push(s); }); // ciri baharu (belum pernah disimpan) — letak di hujung
+  return tersusun;
+}
+
+function simpanSusunanLebihShortcuts(senarai) {
+  try { localStorage.setItem(KUNCI_SUSUNAN_LEBIH_SHORTCUTS, JSON.stringify(senarai.map(s=>s.id))); } catch {}
+}
+
 function renderLebihShortcuts() {
   const el = document.getElementById('lebih-shortcuts');
   if (!el) return;
-  el.innerHTML = LEBIH_SHORTCUTS
-    .filter(s => { const card = document.getElementById(s.id); return card && card.style.display !== 'none'; })
-    .map(s => `<button onclick="lebihScrollTo('${s.id}')" class="btn btn-sm" style="width:auto;flex-shrink:0;white-space:nowrap;background:transparent;color:var(--navy);border:1.5px solid var(--border);padding:6px 12px">${s.icon} ${esc(s.label)}</button>`)
-    .join('');
+  const nampak = senaraiLebihShortcutsTersusun()
+    .filter(s => { const card = document.getElementById(s.id); return card && card.style.display !== 'none'; });
+
+  if (lebihShortcutsSusunMod) {
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px">Susun ikut keutamaan guna anak panah, lepas tu tekan Selesai.</div>
+      ${nampak.map((s,i)=>`
+        <div style="display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 8px;margin-bottom:4px">
+          <span style="flex:1;font-size:12px">${s.icon} ${esc(s.label)}</span>
+          <button class="btn-link" style="font-size:14px;padding:2px 6px${i===0?';opacity:0.3;pointer-events:none':''}" onclick="gerakSusunanLebihShortcuts('${s.id}',-1)">⬆️</button>
+          <button class="btn-link" style="font-size:14px;padding:2px 6px${i===nampak.length-1?';opacity:0.3;pointer-events:none':''}" onclick="gerakSusunanLebihShortcuts('${s.id}',1)">⬇️</button>
+        </div>`).join('')}
+      <button class="btn btn-secondary btn-sm" style="margin-top:4px" onclick="tutupSusunLebihShortcuts()">✅ Selesai Susun</button>`;
+  } else {
+    el.style.display = 'flex';
+    el.innerHTML = nampak
+      .map(s => `<button onclick="lebihScrollTo('${s.id}')" class="btn btn-sm" style="width:auto;flex-shrink:0;white-space:nowrap;background:transparent;color:var(--navy);border:1.5px solid var(--border);padding:6px 12px">${s.icon} ${esc(s.label)}</button>`)
+      .join('') + `<button onclick="bukaSusunLebihShortcuts()" class="btn btn-sm" style="width:auto;flex-shrink:0;background:var(--bg);color:var(--muted);border:1.5px dashed var(--border);padding:6px 10px" title="Susun semula">✏️ Susun</button>`;
+  }
+}
+
+function bukaSusunLebihShortcuts() { lebihShortcutsSusunMod = true; renderLebihShortcuts(); }
+function tutupSusunLebihShortcuts() { lebihShortcutsSusunMod = false; renderLebihShortcuts(); }
+
+function gerakSusunanLebihShortcuts(id, arah) {
+  const penuh = senaraiLebihShortcutsTersusun();
+  const nampak = penuh.filter(s => { const card = document.getElementById(s.id); return card && card.style.display !== 'none'; });
+  const idx = nampak.findIndex(s=>s.id===id);
+  const baru = idx + arah;
+  if (baru<0 || baru>=nampak.length) return;
+  [nampak[idx], nampak[baru]] = [nampak[baru], nampak[idx]];
+  const tersembunyi = penuh.filter(s => !nampak.includes(s));
+  simpanSusunanLebihShortcuts([...nampak, ...tersembunyi]);
+  renderLebihShortcuts();
 }
 
 function lebihScrollTo(id) {
@@ -8205,8 +8257,8 @@ async function semakArkibBuktiBayaran() {
   btnJalan.disabled = true;
   const { data, error } = await sb.functions.invoke('arkib-bukti-bayaran', { body: { mod: 'semak' } });
   if (error) { el.textContent = 'Gagal semak: '+error.message; return; }
-  if (!data?.bilangan) { el.textContent = '✅ Tiada fail layak diarkibkan sekarang (semua masih dlm 2 bulan, atau belum ada rekod SELESAI/disahkan yg cukup lama).'; return; }
-  el.innerHTML = `📋 <b>${data.bilangan} fail</b> layak diarkibkan (rekod SELESAI/disahkan, &gt;2 bulan) · anggaran ${fmtBytesStoran(data.anggaran_saiz_bytes||0)} akan dijimatkan.`;
+  if (!data?.bilangan) { el.textContent = '✅ Tiada fail layak diarkibkan sekarang (semua masih dlm 1 bulan, atau belum ada rekod SELESAI/disahkan yg cukup lama).'; return; }
+  el.innerHTML = `📋 <b>${data.bilangan} fail</b> layak diarkibkan (rekod SELESAI/disahkan, &gt;1 bulan) · anggaran ${fmtBytesStoran(data.anggaran_saiz_bytes||0)} akan dijimatkan.`;
   if (!TETAPAN_DISKAUN?.arkib_webhook_url) {
     el.innerHTML += '<br/><span style="color:var(--red)">⚠️ Sila isi & simpan URL Webhook Arkib dahulu sebelum boleh jalankan.</span>';
   } else {

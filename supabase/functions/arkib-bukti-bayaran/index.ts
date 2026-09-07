@@ -2,7 +2,7 @@
 // Dipanggil dari pengurusan.html (kad "Arkib Bukti Bayaran Lama", pemilik sahaja).
 // Body: { mod: 'semak' | 'jalankan' }
 //   mod='semak'   -> kira berapa fail LAYAK diarkibkan (rekod SELESAI/disahkan,
-//                    >2 bulan) + anggaran saiz, TANPA sentuh apa-apa.
+//                    >1 bulan) + anggaran saiz, TANPA sentuh apa-apa.
 //   mod='jalankan'-> muat turun tiap fail drpd Supabase Storage bucket
 //                    'bukti-bayaran', POST ke URL webhook (tetapan.arkib_webhook_url,
 //                    editable dlm app), padam drpd Storage bila BERJAYA dihantar,
@@ -60,9 +60,9 @@ Deno.serve(async (req) => {
 
     const { mod } = await req.json();
 
-    const duaBulanLalu = new Date();
-    duaBulanLalu.setMonth(duaBulanLalu.getMonth() - 2);
-    const potong = duaBulanLalu.toISOString();
+    const sebulanLalu = new Date();
+    sebulanLalu.setMonth(sebulanLalu.getMonth() - 1);
+    const potong = sebulanLalu.toISOString();
 
     const { data: hutangList } = await adminClient
       .from("permohonan_bayaran_hutang")
