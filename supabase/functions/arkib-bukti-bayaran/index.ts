@@ -3,11 +3,12 @@
 // Body: { mod: 'semak' | 'jalankan' }
 //   mod='semak'   -> kira berapa fail LAYAK diarkibkan (rekod SELESAI/disahkan,
 //                    >1 bulan) + anggaran saiz, TANPA sentuh apa-apa.
-//   mod='jalankan'-> muat turun tiap fail drpd Supabase Storage bucket
-//                    'bukti-bayaran', POST ke URL webhook (tetapan.arkib_webhook_url,
-//                    editable dlm app), padam drpd Storage bila BERJAYA dihantar,
-//                    & kemaskini rujukan resit_bukti_url pd rekod DB (permohonan_
-//                    bayaran_hutang / transaksi) supaya jelas ia dah diarkibkan.
+//   mod='jalankan'-> jana SIGNED URL sementara (10 minit) bagi tiap fail drpd
+//                    Supabase Storage bucket 'bukti-bayaran', POST ke URL webhook
+//                    (tetapan.arkib_webhook_url, editable dlm app), padam drpd
+//                    Storage bila BERJAYA dihantar, & kemaskini rujukan
+//                    resit_bukti_url pd rekod DB (permohonan_bayaran_hutang /
+//                    transaksi) supaya jelas ia dah diarkibkan.
 //
 // SEBAB pendekatan webhook (bukan terus API cloud spt Google Drive/Dropbox): OAuth
 // pihak ke-3 terlalu kompleks utk edge function tunggal & tak semestinya sepadan
@@ -16,14 +17,32 @@
 // Power Automate + OneDrive, Zapier/Make/n8n + Google Drive/Dropbox, atau server
 // sendiri), tanpa edge function ni perlu tahu butiran platform tu.
 //
-// Format payload: JSON (bukan multipart/form-data) — { nama_fail, content_type,
-// fail_base64, sumber, rekod_id, path_asal }. Sengaja JSON+base64 supaya senang
-// diproses Power Automate ("When a HTTP request is received" + "OneDrive - Create
-// file", guna base64ToBinary(triggerBody()?['fail_base64']) pada kandungan fail)
-// tanpa perlu urai multipart yang lebih rumit di Power Automate.
+// Format payload: JSON — { nama_fail, file_url, sumber, rekod_id, path_asal }.
+//
+// PENTING (susulan ujian sebenar pemilik): percubaan PERTAMA hantar kandungan
+// fail sbg JSON+base64 (`fail_base64`) — TERNYATA ada 2 isu besar: (1) gelung
+// manual String.fromCharCode per-byte utk encode base64 terlajak had CPU Time
+// edge function ("CPU Time exceeded", worker crash status 546) utk fail
+// beberapa MB (biasa utk gambar resit); (2) walaupun ditukar ke encodeBase64()
+// std library (jauh lebih cekap CPU), payload base64 (lebih besar ~33% drpd
+// fail asal) MASIH kena tolak oleh webhook Make.com dgn ralat "request entity
+// too large" — had saiz webhook Make.com/Power Automate/Zapier biasanya jauh
+// lebih kecil drpd saiz gambar resit sebenar (few MB).
+//
+// PENYELESAIAN: jana SIGNED URL (pautan sementara, sah 10 minit) drpd Supabase
+// Storage & hantar PAUTAN tu sahaja dlm payload webhook — BUKAN kandungan fail.
+// Servis destinasi (Make.com "HTTP > Get a file", Power Automate "HTTP" action,
+// n8n "HTTP Request") muat turun fail terus drpd signed URL tu sendiri, kemudian
+// upload ke OneDrive/Google Drive/dll. Edge function ni jadi sangat ringan
+// (tiada muat turun/encode fail langsung) — elak SEPENUHNYA isu CPU Time & had
+// saiz payload webhook.
+//
+// Susunan scenario Make.com yg BETUL (3 modul):
+//   1. Webhook (Custom webhook) — terima { nama_fail, file_url, sumber, rekod_id, path_asal }
+//   2. HTTP > Get a file — URL = {{1.file_url}}
+//   3. OneDrive > Upload a file — File Name = {{1.nama_fail}}, Data = {{2.Data}} (output modul 2)
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { encodeBase64 } from "jsr:@std/encoding@1/base64";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,7 +50,8 @@ const corsHeaders = {
 };
 
 const BUCKET = "bukti-bayaran";
-const HAD_BILANGAN_SEKALI_JALAN = 20; // hadkan 1 panggilan (elak had CPU Time edge function jika byk fail besar — pemilik boleh tekan sekali lagi utk baki, lihat baki_belum_diproses)
+const SIGNED_URL_TTL_SAAT = 600; // 10 minit — cukup masa utk webhook/servis destinasi muat turun fail
+const HAD_BILANGAN_SEKALI_JALAN = 50; // ringan (tiada muat turun/encode fail dlm edge function ni lagi), boleh proses lebih byk sekali panggilan
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -107,36 +127,41 @@ Deno.serve(async (req) => {
       }
 
       const senaraiJalan = senarai.slice(0, HAD_BILANGAN_SEKALI_JALAN);
+
+      // Saiz sebenar tiap fail (utk laporan "saiz dijimatkan") — WAJIB dikira
+      // SEBELUM apa-apa dipadam (lookup lepas padam pulangkan 0, rekod storan dah
+      // tiada). get_saiz_fail_storan() pulangkan JUMLAH agregat sahaja, jadi
+      // panggil sekali per-path (jumlah kecil bila had 50/panggilan, bukan isu).
+      const petaSaiz: Record<string, number> = {};
+      for (const item of senaraiJalan) {
+        const { data: saizSatu } = await adminClient.rpc("get_saiz_fail_storan", { p_bucket: BUCKET, p_paths: [item.path] });
+        petaSaiz[item.path] = Number(saizSatu) || 0;
+      }
+
       let berjaya = 0, gagal = 0, saizDijimatkan = 0;
       const ralatSenarai: string[] = [];
 
       for (const item of senaraiJalan) {
         try {
-          const { data: fileBlob, error: dlErr } = await adminClient.storage.from(BUCKET).download(item.path);
-          if (dlErr || !fileBlob) { gagal++; const m = `${item.path}: gagal muat turun drpd storan — ${dlErr?.message||'tiada fail'}`; console.error(m); ralatSenarai.push(m); continue; }
+          const { data: signedData, error: signErr } = await adminClient.storage
+            .from(BUCKET)
+            .createSignedUrl(item.path, SIGNED_URL_TTL_SAAT);
+          if (signErr || !signedData?.signedUrl) {
+            gagal++;
+            const m = `${item.path}: gagal jana pautan sementara — ${signErr?.message || 'ralat tidak diketahui'}`;
+            console.error(m);
+            ralatSenarai.push(m);
+            continue;
+          }
 
-          const saizFail = fileBlob.size;
           const namaFail = item.path.split("/").pop() || item.path;
-
-          // JSON + base64 (bukan multipart/form-data) — sengaja dipilih supaya senang
-          // diproses oleh Microsoft Power Automate ("When a HTTP request is received"
-          // + "OneDrive - Create file", guna expression base64ToBinary() pada medan
-          // fail_base64) tanpa perlu urai multipart yang lebih rumit. Servis lain
-          // (Zapier/Make/n8n) turut boleh terima JSON macam ni dgn mudah.
-          //
-          // PENTING: guna encodeBase64() std library (bukan gelung String.fromCharCode
-          // per-byte manual) — gelung manual utk fail beberapa MB (biasa utk gambar
-          // resit/bukti transfer) terlajak had CPU Time edge function ("CPU Time
-          // exceeded", worker crash status 546) — ditemui semasa ujian sebenar pemilik.
-          const fail_base64 = encodeBase64(await fileBlob.arrayBuffer());
 
           const webhookRes = await fetch(webhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               nama_fail: namaFail,
-              content_type: fileBlob.type || "application/octet-stream",
-              fail_base64,
+              file_url: signedData.signedUrl,
               sumber: item.sumber,
               rekod_id: item.id,
               path_asal: item.path,
@@ -146,7 +171,7 @@ Deno.serve(async (req) => {
             gagal++;
             let badanRalat = '';
             try { badanRalat = (await webhookRes.text()).slice(0, 300); } catch { /* biar kosong jika gagal baca */ }
-            const m = `${item.path}: webhook pulangkan status ${webhookRes.status}${badanRalat?` — ${badanRalat}`:''}`;
+            const m = `${item.path}: webhook pulangkan status ${webhookRes.status}${badanRalat ? ` — ${badanRalat}` : ''}`;
             console.error(m);
             ralatSenarai.push(m);
             continue;
@@ -171,7 +196,7 @@ Deno.serve(async (req) => {
           await adminClient.from(item.sumber).update({ resit_bukti_url: nilaiBaharu }).eq("id", item.id);
 
           berjaya++;
-          saizDijimatkan += saizFail;
+          saizDijimatkan += petaSaiz[item.path] || 0;
         } catch (e) {
           gagal++;
           const m = `${item.path}: ${String((e as Error)?.message || e)}`;
