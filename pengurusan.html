@@ -401,6 +401,16 @@
     <div class="section-title">Dashboard</div>
     <div class="section-sub" id="dash-date">—</div>
 
+    <!-- Shortcut Storan Sistem (pemilik sahaja) — klik terus ke Tetapan → Storan Sistem
+    Live. Disorok lalai, ditunjuk oleh renderStoranSistem() lepas data siap dimuat. -->
+    <div class="card" id="dash-storan-badge" style="display:none;border-left:4px solid var(--green);padding:10px 14px;cursor:pointer" onclick="setPage('lebih').then(()=>document.getElementById('storan-sistem-card')?.scrollIntoView({behavior:'smooth',block:'start'}))">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:12px;font-weight:700">📊 Storan Sistem</div>
+        <div class="dash-storan-val" style="font-size:16px;font-weight:800">—</div>
+      </div>
+      <div style="font-size:10px;color:var(--muted)">Tekan untuk lihat penuh & arkib fail lama</div>
+    </div>
+
     <div class="card" id="kehadiran-card" style="border-left:4px solid var(--purple)">
       <div class="card-title" style="color:var(--purple)">👍 Kehadiran</div>
       <div id="kehadiran-status" style="font-size:13px;color:var(--muted);margin-bottom:10px">—</div>
@@ -1201,6 +1211,37 @@
       <div class="card-title">🏪 Bonus Kedai Baru Terkumpul</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Bonus kedai baru TIDAK lagi dibayar terus dlm baucar harian — dikumpul di sini, matang (boleh dibayar) selepas genap 1 bulan. Tick "Bayar Sekarang" utk lulus SEMUA jumlah matang pekerja terbabit sekaligus.</div>
       <div id="bonus-kedai-semua-list"></div>
+    </div>
+
+    <!-- Storan Sistem (Live) — infografik pemilik sahaja, saiz sebenar DB + Storage
+    (bukan sekadar "boleh akses" spt Status Sistem di bawah) — supaya pemilik nampak
+    awal bila had pelan Free (500MB DB / 1GB Storage) hampir dicecah, sebelum jadi
+    kegagalan muat naik senyap. Lihat siasatan Sep 2026 (storan 928MB/1GB, 91%). -->
+    <div class="card" id="storan-sistem-card">
+      <div class="card-title">📊 Storan Sistem (Live)</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Guna storan Supabase (pelan Free) — pangkalan data & fail (gambar/resit). Kemas kini live setiap kali dibuka.</div>
+      <div id="storan-sistem-content">Memuatkan...</div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="renderStoranSistem()">🔄 Kemas Kini</button>
+    </div>
+
+    <!-- Arkib Bukti Bayaran Lama (pemilik sahaja) — hantar fail bukti-bayaran yg
+    rekod dah SELESAI/disahkan & >2 bulan ke URL webhook luaran (editable), pulih
+    ruang storan Supabase. Lihat arkib_bukti_bayaran edge function. -->
+    <div class="card" id="arkib-bukti-card">
+      <div class="card-title">🗄️ Arkib Bukti Bayaran Lama</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Fail bukti bayaran (resit/transfer) yang rekod dah SELESAI/disahkan & lebih 2 bulan boleh dihantar ke storan awan luaran (webhook — cth Zapier/Make/n8n/server sendiri), lepas tu dipadam drpd Supabase utk jimat ruang. Fail yang dihantar berjaya akan digantikan pautan ke lokasi baharu.</div>
+      <div class="form-group">
+        <label class="form-label">URL Webhook Arkib (editable)</label>
+        <input type="url" class="form-input" id="set-arkib-webhook-url" placeholder="https://hook.contoh.com/arkib-bukti-bayaran" />
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="simpanArkibWebhookUrl()">💾 Simpan URL</button>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--border)">
+        <div id="arkib-bukti-ringkasan" style="font-size:11px;color:var(--muted);margin-bottom:8px">Tekan "Semak" untuk lihat berapa fail layak diarkibkan sekarang.</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" style="flex:1;min-width:100px" onclick="semakArkibBuktiBayaran()">🔍 Semak</button>
+          <button class="btn btn-danger btn-sm" style="flex:1;min-width:100px" id="btn-arkib-jalankan" onclick="jalankanArkibBuktiBayaran()" disabled>🗄️ Arkibkan Sekarang</button>
+        </div>
+      </div>
     </div>
 
     <!-- Status Sistem (pemilik sahaja) — semakan pantas DB, storan, domain & automasi -->
@@ -2374,6 +2415,8 @@ async function setPage(p) {
       renderStatusLive();
       semakStatusEasyParcel();
       semakStatusSistem();
+      renderStoranSistem();
+      document.getElementById('set-arkib-webhook-url').value = TETAPAN_DISKAUN.arkib_webhook_url || '';
       renderSenaraiPemohon();
       renderPermohonanPadam();
       renderSerahanCashSemua();
@@ -2454,6 +2497,7 @@ function initAll() {
 //  DASHBOARD
 // ════════════════════════════════════════════════════
 function renderDashboard() {
+  if (currentRole==='pemilik') renderStoranSistem(); // shortcut storan atas dashboard — lihat #dash-storan-badge
   renderKehadiranStatus();
   renderTugasanBaru();
   renderTugasanRouteHariIni();
@@ -8081,6 +8125,106 @@ async function semakStatusSistem() {
   }
 
   el.innerHTML = baris.join('');
+}
+
+// ── Storan Sistem (Live) — infografik saiz DB + Storage sebenar (pemilik sahaja) ──
+function fmtBytesStoran(b) {
+  if (b >= 1073741824) return (b/1073741824).toFixed(2)+' GB';
+  if (b >= 1048576) return (b/1048576).toFixed(1)+' MB';
+  return Math.round(b/1024)+' KB';
+}
+function warnaPeratusStoran(p) { return p>=90?'var(--red)':p>=70?'var(--gold)':'var(--green)'; }
+
+async function renderStoranSistem() {
+  const el = document.getElementById('storan-sistem-content');
+  if (!el || currentRole!=='pemilik') return;
+  el.innerHTML = 'Memuatkan...';
+  const { data, error } = await sb.rpc('get_storan_sistem');
+  if (error || !data) { el.innerHTML = `<div class="empty-text">Gagal muat: ${esc(error?.message||'ralat tidak diketahui')}</div>`; return; }
+
+  const HAD_DB = 500*1024*1024;       // Supabase Free tier: 500MB database
+  const HAD_STORAGE = 1024*1024*1024; // Supabase Free tier: 1GB storage fail
+  const pDb = Math.min(100, data.db_size_bytes/HAD_DB*100);
+  const pStorage = Math.min(100, data.storage_total_bytes/HAD_STORAGE*100);
+
+  const barUtama = (label, nilai, had, p) => `
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:4px">
+        <span>${label}</span>
+        <span style="color:${warnaPeratusStoran(p)}">${fmtBytesStoran(nilai)} / ${fmtBytesStoran(had)} (${p.toFixed(1)}%)</span>
+      </div>
+      <div style="background:var(--bg);border-radius:20px;height:14px;overflow:hidden">
+        <div style="width:${p}%;height:100%;background:${warnaPeratusStoran(p)};border-radius:20px;transition:width 0.3s"></div>
+      </div>
+    </div>`;
+
+  const maxBucket = Math.max(...data.buckets.map(b=>b.saiz_bytes), 1);
+  const bucketBars = data.buckets.map(b=>`
+    <div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
+        <span>${esc(b.bucket)} (${b.bilangan} fail)</span>
+        <span style="color:var(--muted)">${fmtBytesStoran(b.saiz_bytes)}</span>
+      </div>
+      <div style="background:var(--bg);border-radius:6px;height:8px;overflow:hidden">
+        <div style="width:${(b.saiz_bytes/maxBucket*100).toFixed(1)}%;height:100%;background:var(--teal)"></div>
+      </div>
+    </div>`).join('');
+
+  el.innerHTML = `
+    ${barUtama('🗄️ Pangkalan Data (Postgres)', data.db_size_bytes, HAD_DB, pDb)}
+    ${barUtama('📦 Storan Fail (Storage)', data.storage_total_bytes, HAD_STORAGE, pStorage)}
+    ${pStorage>=90?`<div style="background:#FFF0F0;border:1px solid var(--red);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--red);margin-bottom:10px">⚠️ Storan fail hampir penuh! Bila cecah 100%, muat naik gambar/resit BAHARU akan gagal. Naik taraf pelan atau arkibkan fail lama (lihat kad "Arkib Bukti Bayaran Lama" di bawah).</div>`
+      : pStorage>=70?`<div style="background:#FFF9E6;border:1px solid var(--gold);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--gold);margin-bottom:10px">💡 Storan fail dah lebih 70% — mula pantau & pertimbang arkibkan fail lama.</div>`:''}
+    <div style="font-size:11px;font-weight:700;margin:10px 0 6px;color:var(--navy)">Pecahan Ikut Bucket</div>
+    ${bucketBars}
+    <div style="font-size:10px;color:var(--muted);margin-top:8px">Dikira: ${fmtDT(data.dikira_pada)}</div>`;
+
+  // Kemas kini shortcut di Dashboard (badge klik terus ke sini).
+  const badge = document.getElementById('dash-storan-badge');
+  if (badge) {
+    badge.style.display = '';
+    badge.style.borderLeftColor = warnaPeratusStoran(pStorage);
+    const val = badge.querySelector('.dash-storan-val');
+    if (val) { val.textContent = pStorage.toFixed(0)+'%'; val.style.color = warnaPeratusStoran(pStorage); }
+  }
+}
+
+// ── Arkib Bukti Bayaran Lama (pemilik sahaja) ──
+async function simpanArkibWebhookUrl() {
+  const url = document.getElementById('set-arkib-webhook-url').value.trim();
+  const { error } = await sb.from('tetapan').update({ arkib_webhook_url: url||null }).eq('id', 1);
+  if (error) return toast('Gagal simpan URL: '+error.message,'err');
+  if (TETAPAN_DISKAUN) TETAPAN_DISKAUN.arkib_webhook_url = url||null;
+  toast('✅ URL webhook arkib disimpan');
+}
+
+async function semakArkibBuktiBayaran() {
+  const el = document.getElementById('arkib-bukti-ringkasan');
+  const btnJalan = document.getElementById('btn-arkib-jalankan');
+  el.textContent = 'Menyemak...';
+  btnJalan.disabled = true;
+  const { data, error } = await sb.functions.invoke('arkib-bukti-bayaran', { body: { mod: 'semak' } });
+  if (error) { el.textContent = 'Gagal semak: '+error.message; return; }
+  if (!data?.bilangan) { el.textContent = '✅ Tiada fail layak diarkibkan sekarang (semua masih dlm 2 bulan, atau belum ada rekod SELESAI/disahkan yg cukup lama).'; return; }
+  el.innerHTML = `📋 <b>${data.bilangan} fail</b> layak diarkibkan (rekod SELESAI/disahkan, &gt;2 bulan) · anggaran ${fmtBytesStoran(data.anggaran_saiz_bytes||0)} akan dijimatkan.`;
+  if (!TETAPAN_DISKAUN?.arkib_webhook_url) {
+    el.innerHTML += '<br/><span style="color:var(--red)">⚠️ Sila isi & simpan URL Webhook Arkib dahulu sebelum boleh jalankan.</span>';
+  } else {
+    btnJalan.disabled = false;
+  }
+}
+
+async function jalankanArkibBuktiBayaran() {
+  if (!confirm('Hantar fail bukti bayaran lama ke URL webhook yg ditetapkan, kemudian PADAM drpd Supabase Storage?\n\nTindakan ini TIDAK boleh diundur — pastikan URL webhook betul & berfungsi sebelum teruskan.')) return;
+  const btnJalan = document.getElementById('btn-arkib-jalankan');
+  const el = document.getElementById('arkib-bukti-ringkasan');
+  btnJalan.disabled = true;
+  el.textContent = '⏳ Mengarkibkan... jangan tutup app.';
+  const { data, error } = await sb.functions.invoke('arkib-bukti-bayaran', { body: { mod: 'jalankan' } });
+  if (error) { el.textContent = 'Gagal arkibkan: '+error.message; btnJalan.disabled = false; return; }
+  el.innerHTML = `✅ <b>${data.berjaya||0} fail</b> berjaya diarkibkan (${fmtBytesStoran(data.saiz_dijimatkan_bytes||0)} dijimatkan)${data.gagal?` · ⚠️ ${data.gagal} fail gagal (lihat log)`:''}`;
+  toast(`🗄️ Arkib selesai — ${data.berjaya||0} fail dipindah, ${fmtBytesStoran(data.saiz_dijimatkan_bytes||0)} dijimatkan`);
+  renderStoranSistem();
 }
 
 async function semakStatusEasyParcel() {
