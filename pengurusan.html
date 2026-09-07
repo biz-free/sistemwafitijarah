@@ -8273,10 +8273,19 @@ async function jalankanArkibBuktiBayaran() {
   btnJalan.disabled = true;
   el.textContent = '⏳ Mengarkibkan... jangan tutup app.';
   const { data, error } = await sb.functions.invoke('arkib-bukti-bayaran', { body: { mod: 'jalankan' } });
-  if (error) { el.textContent = 'Gagal arkibkan: '+error.message; btnJalan.disabled = false; return; }
-  el.innerHTML = `✅ <b>${data.berjaya||0} fail</b> berjaya diarkibkan (${fmtBytesStoran(data.saiz_dijimatkan_bytes||0)} dijimatkan)${data.gagal?` · ⚠️ ${data.gagal} fail gagal (lihat log)`:''}`;
+  if (error) {
+    // sb.functions.invoke() cuma bagi mesej generik ("non-2xx status code") — cuba
+    // baca badan ralat sebenar drpd Response (error.context) utk maklumat berguna.
+    let mesejSebenar = error.message;
+    try { const badan = await error.context?.json?.(); if (badan?.error) mesejSebenar = badan.error; } catch { /* biar mesej generik jika gagal baca */ }
+    el.textContent = 'Gagal arkibkan: '+mesejSebenar;
+    btnJalan.disabled = false;
+    return;
+  }
+  el.innerHTML = `✅ <b>${data.berjaya||0} fail</b> berjaya diarkibkan (${fmtBytesStoran(data.saiz_dijimatkan_bytes||0)} dijimatkan)${data.gagal?` · ⚠️ ${data.gagal} fail gagal (lihat log)`:''}${data.baki_belum_diproses?` · 📋 ${data.baki_belum_diproses} fail lagi belum diproses — tekan "Arkibkan Sekarang" sekali lagi utk teruskan`:''}`;
   toast(`🗄️ Arkib selesai — ${data.berjaya||0} fail dipindah, ${fmtBytesStoran(data.saiz_dijimatkan_bytes||0)} dijimatkan`);
   renderStoranSistem();
+  if (data.baki_belum_diproses) btnJalan.disabled = false;
 }
 
 async function semakStatusEasyParcel() {

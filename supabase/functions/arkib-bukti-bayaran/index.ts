@@ -23,6 +23,7 @@
 // tanpa perlu urai multipart yang lebih rumit di Power Automate.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { encodeBase64 } from "jsr:@std/encoding@1/base64";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,7 +31,7 @@ const corsHeaders = {
 };
 
 const BUCKET = "bukti-bayaran";
-const HAD_BILANGAN_SEKALI_JALAN = 100; // hadkan 1 panggilan (elak timeout edge function jika fail terlalu banyak — pemilik boleh tekan sekali lagi utk baki)
+const HAD_BILANGAN_SEKALI_JALAN = 20; // hadkan 1 panggilan (elak had CPU Time edge function jika byk fail besar — pemilik boleh tekan sekali lagi utk baki, lihat baki_belum_diproses)
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -122,10 +123,12 @@ Deno.serve(async (req) => {
           // + "OneDrive - Create file", guna expression base64ToBinary() pada medan
           // fail_base64) tanpa perlu urai multipart yang lebih rumit. Servis lain
           // (Zapier/Make/n8n) turut boleh terima JSON macam ni dgn mudah.
-          const bytes = new Uint8Array(await fileBlob.arrayBuffer());
-          let binari = "";
-          for (let i = 0; i < bytes.length; i++) binari += String.fromCharCode(bytes[i]);
-          const fail_base64 = btoa(binari);
+          //
+          // PENTING: guna encodeBase64() std library (bukan gelung String.fromCharCode
+          // per-byte manual) — gelung manual utk fail beberapa MB (biasa utk gambar
+          // resit/bukti transfer) terlajak had CPU Time edge function ("CPU Time
+          // exceeded", worker crash status 546) — ditemui semasa ujian sebenar pemilik.
+          const fail_base64 = encodeBase64(await fileBlob.arrayBuffer());
 
           const webhookRes = await fetch(webhookUrl, {
             method: "POST",
