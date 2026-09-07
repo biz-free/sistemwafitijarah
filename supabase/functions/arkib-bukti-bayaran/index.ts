@@ -11,10 +11,16 @@
 //
 // SEBAB pendekatan webhook (bukan terus API cloud spt Google Drive/Dropbox): OAuth
 // pihak ke-3 terlalu kompleks utk edge function tunggal & tak semestinya sepadan
-// dgn platform storan awan pilihan pemilik. Webhook (Zapier/Make/n8n/server sendiri)
-// ialah corak sejagat yg boleh terima fail (multipart/form-data) & simpan ke
-// mana-mana destinasi pemilik pilih sendiri, tanpa edge function ni perlu tahu
-// butiran platform tu.
+// dgn platform storan awan pilihan pemilik. Webhook ialah corak sejagat yg boleh
+// terima fail & simpan ke mana-mana destinasi pemilik pilih sendiri (Microsoft
+// Power Automate + OneDrive, Zapier/Make/n8n + Google Drive/Dropbox, atau server
+// sendiri), tanpa edge function ni perlu tahu butiran platform tu.
+//
+// Format payload: JSON (bukan multipart/form-data) — { nama_fail, content_type,
+// fail_base64, sumber, rekod_id, path_asal }. Sengaja JSON+base64 supaya senang
+// diproses Power Automate ("When a HTTP request is received" + "OneDrive - Create
+// file", guna base64ToBinary(triggerBody()?['fail_base64']) pada kandungan fail)
+// tanpa perlu urai multipart yang lebih rumit di Power Automate.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -111,13 +117,28 @@ Deno.serve(async (req) => {
           const saizFail = fileBlob.size;
           const namaFail = item.path.split("/").pop() || item.path;
 
-          const formData = new FormData();
-          formData.append("file", fileBlob, namaFail);
-          formData.append("sumber", item.sumber);
-          formData.append("rekod_id", item.id);
-          formData.append("path_asal", item.path);
+          // JSON + base64 (bukan multipart/form-data) — sengaja dipilih supaya senang
+          // diproses oleh Microsoft Power Automate ("When a HTTP request is received"
+          // + "OneDrive - Create file", guna expression base64ToBinary() pada medan
+          // fail_base64) tanpa perlu urai multipart yang lebih rumit. Servis lain
+          // (Zapier/Make/n8n) turut boleh terima JSON macam ni dgn mudah.
+          const bytes = new Uint8Array(await fileBlob.arrayBuffer());
+          let binari = "";
+          for (let i = 0; i < bytes.length; i++) binari += String.fromCharCode(bytes[i]);
+          const fail_base64 = btoa(binari);
 
-          const webhookRes = await fetch(webhookUrl, { method: "POST", body: formData });
+          const webhookRes = await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              nama_fail: namaFail,
+              content_type: fileBlob.type || "application/octet-stream",
+              fail_base64,
+              sumber: item.sumber,
+              rekod_id: item.id,
+              path_asal: item.path,
+            }),
+          });
           if (!webhookRes.ok) { gagal++; ralatSenarai.push(`${item.path}: webhook pulangkan status ${webhookRes.status}`); continue; }
 
           let urlBaharu: string | null = null;
