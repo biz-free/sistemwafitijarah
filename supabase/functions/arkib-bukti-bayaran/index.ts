@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
       for (const item of senaraiJalan) {
         try {
           const { data: fileBlob, error: dlErr } = await adminClient.storage.from(BUCKET).download(item.path);
-          if (dlErr || !fileBlob) { gagal++; ralatSenarai.push(`${item.path}: gagal muat turun drpd storan`); continue; }
+          if (dlErr || !fileBlob) { gagal++; const m = `${item.path}: gagal muat turun drpd storan — ${dlErr?.message||'tiada fail'}`; console.error(m); ralatSenarai.push(m); continue; }
 
           const saizFail = fileBlob.size;
           const namaFail = item.path.split("/").pop() || item.path;
@@ -142,7 +142,15 @@ Deno.serve(async (req) => {
               path_asal: item.path,
             }),
           });
-          if (!webhookRes.ok) { gagal++; ralatSenarai.push(`${item.path}: webhook pulangkan status ${webhookRes.status}`); continue; }
+          if (!webhookRes.ok) {
+            gagal++;
+            let badanRalat = '';
+            try { badanRalat = (await webhookRes.text()).slice(0, 300); } catch { /* biar kosong jika gagal baca */ }
+            const m = `${item.path}: webhook pulangkan status ${webhookRes.status}${badanRalat?` — ${badanRalat}`:''}`;
+            console.error(m);
+            ralatSenarai.push(m);
+            continue;
+          }
 
           let urlBaharu: string | null = null;
           try {
@@ -153,7 +161,9 @@ Deno.serve(async (req) => {
           const { error: rmErr } = await adminClient.storage.from(BUCKET).remove([item.path]);
           if (rmErr) {
             gagal++;
-            ralatSenarai.push(`${item.path}: DAH dihantar ke webhook tapi GAGAL dipadam drpd Supabase — sila padam manual`);
+            const m = `${item.path}: DAH dihantar ke webhook tapi GAGAL dipadam drpd Supabase (${rmErr.message}) — sila padam manual`;
+            console.error(m);
+            ralatSenarai.push(m);
             continue;
           }
 
@@ -164,7 +174,9 @@ Deno.serve(async (req) => {
           saizDijimatkan += saizFail;
         } catch (e) {
           gagal++;
-          ralatSenarai.push(`${item.path}: ${String((e as Error)?.message || e)}`);
+          const m = `${item.path}: ${String((e as Error)?.message || e)}`;
+          console.error(m);
+          ralatSenarai.push(m);
         }
       }
 

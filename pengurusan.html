@@ -8282,7 +8282,8 @@ async function jalankanArkibBuktiBayaran() {
     btnJalan.disabled = false;
     return;
   }
-  el.innerHTML = `✅ <b>${data.berjaya||0} fail</b> berjaya diarkibkan (${fmtBytesStoran(data.saiz_dijimatkan_bytes||0)} dijimatkan)${data.gagal?` · ⚠️ ${data.gagal} fail gagal (lihat log)`:''}${data.baki_belum_diproses?` · 📋 ${data.baki_belum_diproses} fail lagi belum diproses — tekan "Arkibkan Sekarang" sekali lagi utk teruskan`:''}`;
+  const senaraiRalat = (data.ralat||[]).length ? `<div style="margin-top:6px;padding:6px 8px;background:#FFF0F0;border-radius:6px;font-size:10px;color:var(--red)">${data.ralat.map(r=>esc(r)).join('<br/>')}</div>` : '';
+  el.innerHTML = `✅ <b>${data.berjaya||0} fail</b> berjaya diarkibkan (${fmtBytesStoran(data.saiz_dijimatkan_bytes||0)} dijimatkan)${data.gagal?` · ⚠️ ${data.gagal} fail gagal`:''}${data.baki_belum_diproses?` · 📋 ${data.baki_belum_diproses} fail lagi belum diproses — tekan "Arkibkan Sekarang" sekali lagi utk teruskan`:''}${senaraiRalat}`;
   toast(`🗄️ Arkib selesai — ${data.berjaya||0} fail dipindah, ${fmtBytesStoran(data.saiz_dijimatkan_bytes||0)} dijimatkan`);
   renderStoranSistem();
   if (data.baki_belum_diproses) btnJalan.disabled = false;
