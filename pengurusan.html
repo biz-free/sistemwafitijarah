@@ -1229,7 +1229,7 @@
     ruang storan Supabase. Lihat arkib_bukti_bayaran edge function. -->
     <div class="card" id="arkib-bukti-card">
       <div class="card-title">🗄️ Arkib Bukti Bayaran Lama</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Fail bukti bayaran (resit/transfer) yang rekod dah SELESAI/disahkan & lebih 1 bulan boleh dihantar ke storan awan luaran (webhook — cth Zapier/Make/n8n/server sendiri), lepas tu dipadam drpd Supabase utk jimat ruang. Fail yang dihantar berjaya akan digantikan pautan ke lokasi baharu.</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Fail bukti bayaran (resit/transfer) yang rekod dah SELESAI/disahkan & lebih 1 bulan boleh dihantar ke storan awan luaran (webhook — cth Zapier/Make/n8n/server sendiri). Prosesnya <b>2 LANGKAH</b> demi keselamatan: (1) "Hantar ke Webhook" — cuma hantar pautan sementara, fail asal TIDAK disentuh; (2) selepas anda sendiri SEMAK fail betul-betul sampai OneDrive/storan pilihan, baru tekan "Sahkan & Padam Fail Asal" untuk padam drpd Supabase & jimat ruang.</div>
       <div class="form-group">
         <label class="form-label">URL Webhook Arkib (editable)</label>
         <input type="url" class="form-input" id="set-arkib-webhook-url" placeholder="https://hook.contoh.com/arkib-bukti-bayaran" />
@@ -1239,7 +1239,15 @@
         <div id="arkib-bukti-ringkasan" style="font-size:11px;color:var(--muted);margin-bottom:8px">Tekan "Semak" untuk lihat berapa fail layak diarkibkan sekarang.</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" style="flex:1;min-width:100px" onclick="semakArkibBuktiBayaran()">🔍 Semak</button>
-          <button class="btn btn-danger btn-sm" style="flex:1;min-width:100px" id="btn-arkib-jalankan" onclick="jalankanArkibBuktiBayaran()" disabled>🗄️ Arkibkan Sekarang</button>
+          <button class="btn btn-danger btn-sm" style="flex:1;min-width:100px" id="btn-arkib-jalankan" onclick="jalankanArkibBuktiBayaran()" disabled>1️⃣ Hantar ke Webhook</button>
+        </div>
+        <div id="arkib-menunggu-wrap" style="display:none;margin-top:10px;padding:10px;background:#FFF8E6;border-radius:8px;border:1px solid var(--gold)">
+          <div id="arkib-menunggu-teks" style="font-size:11px;color:var(--text);margin-bottom:8px;font-weight:600"></div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:8px">⚠️ SEMAK DAHULU fail betul-betul dah sampai di folder OneDrive/storan luaran anda sebelum tekan "Sahkan & Padam". Jika tak pasti / belum sampai, tekan "Batal" — fail asal akan kekal selamat.</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" style="flex:1;min-width:100px" onclick="batalArkibMenunggu()">↩️ Batal</button>
+            <button class="btn btn-danger btn-sm" style="flex:1;min-width:100px" onclick="sahkanArkibBuktiBayaran()">2️⃣ Sahkan & Padam Fail Asal</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2549,7 +2557,7 @@ function initAll() {
 //  DASHBOARD
 // ════════════════════════════════════════════════════
 function renderDashboard() {
-  if (currentRole==='pemilik') renderStoranSistem(); // shortcut storan atas dashboard — lihat #dash-storan-badge
+  if (currentRole==='pemilik') { renderStoranSistem(); semakArkibBuktiBayaran(); } // shortcut storan atas dashboard — lihat #dash-storan-badge; semak arkib supaya notis "menunggu pengesahan" auto nampak
   renderKehadiranStatus();
   renderTugasanBaru();
   renderTugasanRouteHariIni();
@@ -8250,6 +8258,17 @@ async function simpanArkibWebhookUrl() {
   toast('✅ URL webhook arkib disimpan');
 }
 
+function kemaskiniArkibMenungguUI(bilMenunggu) {
+  const wrap = document.getElementById('arkib-menunggu-wrap');
+  const teks = document.getElementById('arkib-menunggu-teks');
+  if (bilMenunggu > 0) {
+    wrap.style.display = '';
+    teks.textContent = `⏳ ${bilMenunggu} fail sudah dihantar ke webhook & MENUNGGU pengesahan anda (fail asal masih SELAMAT di Supabase, belum dipadam).`;
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
 async function semakArkibBuktiBayaran() {
   const el = document.getElementById('arkib-bukti-ringkasan');
   const btnJalan = document.getElementById('btn-arkib-jalankan');
@@ -8257,7 +8276,8 @@ async function semakArkibBuktiBayaran() {
   btnJalan.disabled = true;
   const { data, error } = await sb.functions.invoke('arkib-bukti-bayaran', { body: { mod: 'semak' } });
   if (error) { el.textContent = 'Gagal semak: '+error.message; return; }
-  if (!data?.bilangan) { el.textContent = '✅ Tiada fail layak diarkibkan sekarang (semua masih dlm 1 bulan, atau belum ada rekod SELESAI/disahkan yg cukup lama).'; return; }
+  kemaskiniArkibMenungguUI(data?.menunggu_pengesahan||0);
+  if (!data?.bilangan) { el.textContent = '✅ Tiada fail baharu layak diarkibkan sekarang (semua masih dlm 1 bulan, atau belum ada rekod SELESAI/disahkan yg cukup lama).'; return; }
   el.innerHTML = `📋 <b>${data.bilangan} fail</b> layak diarkibkan (rekod SELESAI/disahkan, &gt;1 bulan) · anggaran ${fmtBytesStoran(data.anggaran_saiz_bytes||0)} akan dijimatkan.`;
   if (!TETAPAN_DISKAUN?.arkib_webhook_url) {
     el.innerHTML += '<br/><span style="color:var(--red)">⚠️ Sila isi & simpan URL Webhook Arkib dahulu sebelum boleh jalankan.</span>';
@@ -8267,26 +8287,52 @@ async function semakArkibBuktiBayaran() {
 }
 
 async function jalankanArkibBuktiBayaran() {
-  if (!confirm('Hantar fail bukti bayaran lama ke URL webhook yg ditetapkan, kemudian PADAM drpd Supabase Storage?\n\nTindakan ini TIDAK boleh diundur — pastikan URL webhook betul & berfungsi sebelum teruskan.')) return;
+  if (!confirm('Hantar pautan sementara fail bukti bayaran lama ke URL webhook yg ditetapkan?\n\nFail asal TIDAK akan dipadam serta-merta — ia hanya dipadam selepas anda SENDIRI sahkan (langkah 2) fail dah sampai di storan luaran anda. Selamat untuk cuba.')) return;
   const btnJalan = document.getElementById('btn-arkib-jalankan');
   const el = document.getElementById('arkib-bukti-ringkasan');
   btnJalan.disabled = true;
-  el.textContent = '⏳ Mengarkibkan... jangan tutup app.';
+  el.textContent = '⏳ Menghantar ke webhook... jangan tutup app.';
   const { data, error } = await sb.functions.invoke('arkib-bukti-bayaran', { body: { mod: 'jalankan' } });
   if (error) {
     // sb.functions.invoke() cuma bagi mesej generik ("non-2xx status code") — cuba
     // baca badan ralat sebenar drpd Response (error.context) utk maklumat berguna.
     let mesejSebenar = error.message;
     try { const badan = await error.context?.json?.(); if (badan?.error) mesejSebenar = badan.error; } catch { /* biar mesej generik jika gagal baca */ }
-    el.textContent = 'Gagal arkibkan: '+mesejSebenar;
+    el.textContent = 'Gagal hantar: '+mesejSebenar;
     btnJalan.disabled = false;
     return;
   }
   const senaraiRalat = (data.ralat||[]).length ? `<div style="margin-top:6px;padding:6px 8px;background:#FFF0F0;border-radius:6px;font-size:10px;color:var(--red)">${data.ralat.map(r=>esc(r)).join('<br/>')}</div>` : '';
-  el.innerHTML = `✅ <b>${data.berjaya||0} fail</b> berjaya diarkibkan (${fmtBytesStoran(data.saiz_dijimatkan_bytes||0)} dijimatkan)${data.gagal?` · ⚠️ ${data.gagal} fail gagal`:''}${data.baki_belum_diproses?` · 📋 ${data.baki_belum_diproses} fail lagi belum diproses — tekan "Arkibkan Sekarang" sekali lagi utk teruskan`:''}${senaraiRalat}`;
-  toast(`🗄️ Arkib selesai — ${data.berjaya||0} fail dipindah, ${fmtBytesStoran(data.saiz_dijimatkan_bytes||0)} dijimatkan`);
-  renderStoranSistem();
+  el.innerHTML = `✅ <b>${data.berjaya||0} fail</b> berjaya dihantar & menunggu pengesahan${data.gagal?` · ⚠️ ${data.gagal} fail gagal`:''}${data.baki_belum_diproses?` · 📋 ${data.baki_belum_diproses} fail lagi belum diproses — tekan "Hantar ke Webhook" sekali lagi utk teruskan`:''}${senaraiRalat}`;
+  toast(`📤 ${data.berjaya||0} fail dihantar — sila semak OneDrive sebelum sahkan padam`);
   if (data.baki_belum_diproses) btnJalan.disabled = false;
+  semakArkibBuktiBayaran();
+}
+
+async function sahkanArkibBuktiBayaran() {
+  if (!confirm('PENTING: Adakah anda SUDAH SEMAK fail-fail tu betul-betul wujud di OneDrive/storan luaran anda?\n\nJika YA, fail asal di Supabase akan DIPADAM KEKAL sekarang (tidak boleh diundur). Jika masih tak pasti, tekan Batal dan semak dahulu.')) return;
+  const el = document.getElementById('arkib-bukti-ringkasan');
+  el.textContent = '⏳ Mengesahkan & memadam fail asal...';
+  const { data, error } = await sb.functions.invoke('arkib-bukti-bayaran', { body: { mod: 'sahkan' } });
+  if (error) {
+    let mesejSebenar = error.message;
+    try { const badan = await error.context?.json?.(); if (badan?.error) mesejSebenar = badan.error; } catch {}
+    el.textContent = 'Gagal sahkan: '+mesejSebenar;
+    return;
+  }
+  const senaraiRalat = (data.ralat||[]).length ? `<div style="margin-top:6px;padding:6px 8px;background:#FFF0F0;border-radius:6px;font-size:10px;color:var(--red)">${data.ralat.map(r=>esc(r)).join('<br/>')}</div>` : '';
+  el.innerHTML = `✅ <b>${data.berjaya||0} fail</b> disahkan & dipadam (${fmtBytesStoran(data.saiz_dijimatkan_bytes||0)} dijimatkan)${data.gagal?` · ⚠️ ${data.gagal} fail gagal dipadam`:''}${senaraiRalat}`;
+  toast(`🗄️ Arkib disahkan — ${data.berjaya||0} fail dipadam, ${fmtBytesStoran(data.saiz_dijimatkan_bytes||0)} dijimatkan`);
+  renderStoranSistem();
+  semakArkibBuktiBayaran();
+}
+
+async function batalArkibMenunggu() {
+  if (!confirm('Batalkan proses arkib — pulangkan rekod ke keadaan asal (fail di Supabase tidak disentuh, boleh cuba hantar semula kemudian)?')) return;
+  const { data, error } = await sb.functions.invoke('arkib-bukti-bayaran', { body: { mod: 'batal' } });
+  if (error) { toast('Gagal batal: '+error.message, 'err'); return; }
+  toast(`↩️ ${data?.berjaya||0} rekod dipulangkan ke keadaan asal`);
+  semakArkibBuktiBayaran();
 }
 
 async function semakStatusEasyParcel() {
