@@ -5416,7 +5416,7 @@ function kiraKonsainanPecahan(t) {
   return { terjual, baki };
 }
 
-function formKonsainanHTML(t) {
+function formKonsainanHTML(t, ctx='x') {
   const baris = t.items.map((it,i)=>{
     const terjualSblm = (t.items_terjual||[]).find(x=>x.stokId===it.stokId)?.qty || 0;
     const pulangSblm = (t.items_pulang||[]).find(x=>x.stokId===it.stokId)?.qty || 0;
@@ -5426,14 +5426,14 @@ function formKonsainanHTML(t) {
     return `<div style="margin-bottom:8px;font-size:11px">
       <div style="margin-bottom:3px">${esc(s.nama)} — baki <strong>${baki}</strong>${(terjualSblm||pulangSblm)?` (drpd ${it.qty} dihantar; ${terjualSblm} terjual + ${pulangSblm} pulang setakat ini)`:` (dihantar ${it.qty})`}</div>
       <div style="display:flex;gap:6px">
-        <label style="display:flex;align-items:center;gap:4px;flex:1">Terjual <input type="number" min="0" max="${baki}" placeholder="0" id="jual-t-${t.id}-${i}" class="form-input" style="width:56px;padding:4px 6px;font-size:11px" /></label>
-        <label style="display:flex;align-items:center;gap:4px;flex:1">Pulang <input type="number" min="0" max="${baki}" placeholder="0" id="jual-p-${t.id}-${i}" class="form-input" style="width:56px;padding:4px 6px;font-size:11px" /></label>
+        <label style="display:flex;align-items:center;gap:4px;flex:1">Terjual <input type="number" min="0" max="${baki}" placeholder="0" id="jual-t-${ctx}-${t.id}-${i}" class="form-input" style="width:56px;padding:4px 6px;font-size:11px" /></label>
+        <label style="display:flex;align-items:center;gap:4px;flex:1">Pulang <input type="number" min="0" max="${baki}" placeholder="0" id="jual-p-${ctx}-${t.id}-${i}" class="form-input" style="width:56px;padding:4px 6px;font-size:11px" /></label>
       </div>
     </div>`;
   }).join('');
-  return `<div id="jual-items-${t.id}">${baris}</div>
+  return `<div id="jual-items-${ctx}-${t.id}">${baris}</div>
     <div style="font-size:10px;color:var(--muted);margin:2px 0 6px">Baki yang dibiarkan kosong KEKAL belum pasti (bukan terjual, bukan pulang) — boleh kemaskini lagi bila-bila masa.</div>
-    <button class="btn btn-secondary btn-sm" onclick="kemaskiniJualanKonsainan('${t.id}')">✅ Kemaskini Jualan</button>
+    <button class="btn btn-secondary btn-sm" onclick="kemaskiniJualanKonsainan('${t.id}','${ctx}')">✅ Kemaskini Jualan</button>
     <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
       <div style="font-size:10px;color:var(--muted);margin-bottom:4px">🧾 Invois (kongsi kpd kedai — belum terima bayaran, auto kemaskini ikut jualan disahkan setakat ini):</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -5521,13 +5521,13 @@ async function renderSejarah(kedaiId='') {
       ${belumSahkan?`
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
         <div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:6px">🤝 Consignment — ${(t.items_terjual?.length||t.items_pulang?.length)?'separa disahkan (ada baki, upah dikira ikut yg disahkan setakat ini)':'belum disahkan jualan (upah belum dikira)'}</div>
-        ${bolehSahkan?formKonsainanHTML(t):`<div style="font-size:11px;color:var(--muted)">⏳ Menunggu pengesahan jualan</div>`}
+        ${bolehSahkan?formKonsainanHTML(t,'sejarah'):`<div style="font-size:11px;color:var(--muted)">⏳ Menunggu pengesahan jualan</div>`}
       </div>`:''}
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-icon">🚚</div><div class="empty-text">Tiada rekod penghantaran</div></div>';
 }
 
-async function kemaskiniJualanKonsainan(trxId) {
+async function kemaskiniJualanKonsainan(trxId, ctx='x') {
   const t = DATA.transaksi.find(x=>x.id===trxId);
   if (!t) return;
   const itemsInput = [];
@@ -5536,8 +5536,8 @@ async function kemaskiniJualanKonsainan(trxId) {
     const pulangSblm = (t.items_pulang||[]).find(x=>x.stokId===it.stokId)?.qty || 0;
     const baki = it.qty - terjualSblm - pulangSblm;
     if (baki<=0) return;
-    const vT = document.getElementById(`jual-t-${trxId}-${i}`);
-    const vP = document.getElementById(`jual-p-${trxId}-${i}`);
+    const vT = document.getElementById(`jual-t-${ctx}-${trxId}-${i}`);
+    const vP = document.getElementById(`jual-p-${ctx}-${trxId}-${i}`);
     const qtyTerjual = Math.max(0, Math.min(+vT?.value||0, baki));
     const qtyPulang = Math.max(0, Math.min(+vP?.value||0, baki-qtyTerjual));
     if (qtyTerjual>0 || qtyPulang>0) itemsInput.push({ stokId: it.stokId, qtyTerjual, qtyPulang });
@@ -6080,7 +6080,7 @@ async function renderTransaksiKedaiList() {
       ${t.kaedah_bayaran==='consignment' && !t.jualan_disahkan ? `
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
         <div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:6px">🤝 Follow-up: barang sudah habis dijual atau belum?</div>
-        ${formKonsainanHTML(t)}
+        ${formKonsainanHTML(t,'kedai')}
       </div>`:''}
       ${k?.lat&&k?.lng?`<a class="btn btn-secondary btn-sm" style="text-decoration:none;margin-top:8px;display:inline-block" href="https://www.google.com/maps/search/?api=1&query=${k.lat},${k.lng}" target="_blank" rel="noopener">🗺️ Lihat di Google Maps</a>`:''}
     </div>`;
