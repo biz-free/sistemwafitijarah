@@ -1271,6 +1271,21 @@
       <div style="font-size:11px;color:var(--muted);margin-top:-8px">Bonus hanya masuk Kiraan Upah selepas kedai buat penghantaran/transaksi PERTAMA — Tunai/Transfer terus dapat kadar penuh; Consignment/Hutang dapat kadar rendah dahulu, kemudian dapat top-up automatik (sehingga cecah kadar penuh, tak lebih) bila kedai buat belian tunai/transfer buat kali pertama. Kedai berdaftar tanpa transaksi langsung tidak dapat bonus.</div>
     </div>
 
+    <!-- Tetapan Telegram (pemilik sahaja) -->
+    <div class="card" id="tetapan-telegram-card">
+      <div class="card-title">🤖 Notifikasi & Arahan Telegram</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        Pautkan chat Telegram anda supaya semua notifikasi permohonan pekerja turut dihantar ke Telegram (tambahan kepada emel & push, bukan ganti) — dan anda boleh terus lulus/tolak dari Telegram bila tak sempat buka Sistem Pengurusan.
+      </div>
+      <button class="btn btn-primary btn-sm" style="width:auto" onclick="janaKodTelegram()">🔗 Jana Kod Pautan</button>
+      <div id="telegram-kod-hasil" style="display:none;margin-top:10px;padding:10px;border-radius:9px;background:var(--card-alt,#f6f6f6);font-size:13px"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px">Cara pautkan: buka bot Telegram yang anda cipta → hantar <code>/link KOD</code> (kod sah 15 minit) → bot akan sahkan pautan.</div>
+      <div style="border-top:1px dashed var(--border);margin-top:14px;padding-top:12px">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px">Chat Telegram Berdaftar</div>
+        <div id="telegram-admin-list"><div class="empty"><div class="empty-text">Memuatkan...</div></div></div>
+      </div>
+    </div>
+
     <!-- Permohonan Padam daripada pekerja (pemilik sahaja) -->
     <div class="card" id="permohonan-padam-card" style="border-left:4px solid var(--gold)">
       <div class="card-title" style="color:var(--gold)">🗑️ Permohonan Padam Pekerja</div>
@@ -2435,6 +2450,7 @@ async function setPage(p) {
       renderAffiliate();
       whLoad();
       renderSenaraiCutiSemua();
+      renderTelegramAdminList();
       renderStatusLive();
       semakStatusEasyParcel();
       semakStatusSistem();
@@ -9269,6 +9285,56 @@ async function padamVoucher(kod) {
   if (error) return toast('Gagal padam voucher: '+error.message,'err');
   toast('Voucher dipadam');
   renderVoucherList();
+}
+
+// ════════════════════════════════════════════════════
+//  INTEGRASI TELEGRAM (SQL_TAMBAHAN_146) — pemilik jana kod pautan &
+//  urus chat Telegram berdaftar drpd Tetapan (tab Lebih). Kelulusan/
+//  tolak sebenar berlaku di Bot Telegram sendiri (Edge Function
+//  telegram-webhook), bukan di sini — sistem cuma papar SIAPA yang
+//  dah dipautkan supaya mudah diurus/dibuang.
+// ════════════════════════════════════════════════════
+async function janaKodTelegram() {
+  const { data, error } = await sb.rpc('jana_kod_pautan_telegram');
+  if (error) return toast('Gagal jana kod: '+error.message,'err');
+  const el = document.getElementById('telegram-kod-hasil');
+  el.style.display = '';
+  el.innerHTML = `Kod pautan anda: <strong style="font-size:18px;letter-spacing:2px">${esc(data)}</strong><br/>Hantar <code>/link ${esc(data)}</code> ke bot Telegram anda dalam masa 15 minit.`;
+}
+
+async function renderTelegramAdminList() {
+  const el = document.getElementById('telegram-admin-list');
+  if (!el) return;
+  const { data, error } = await sb.from('telegram_admin').select('*').order('linked_at', { ascending: false });
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  if (!data || !data.length) { el.innerHTML = '<div class="empty"><div class="empty-text">Belum ada chat Telegram dipautkan.</div></div>'; return; }
+  el.innerHTML = data.map(a => `
+    <div class="list-item" style="display:block">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div>
+          <div class="list-item-title">${esc(a.nama || 'Pemilik')}</div>
+          <div class="list-item-sub">Dipautkan ${fmtDT(a.linked_at)}${a.aktif ? '' : ' · <span style="color:var(--red)">Tidak Aktif</span>'}${a.notifikasi_aktif ? '' : ' · 🔕 Dimatikan (mute)'}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" style="width:auto" onclick="toggleTelegramAdmin(${a.chat_id},'aktif',${!a.aktif})">${a.aktif ? '🚫 Nyahaktif' : '✅ Aktifkan'}</button>
+          <button class="btn btn-secondary btn-sm" style="width:auto;color:var(--red)" onclick="padamTelegramAdmin(${a.chat_id})">🗑️ Buang</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function toggleTelegramAdmin(chatId, field, value) {
+  const { error } = await sb.from('telegram_admin').update({ [field]: value }).eq('chat_id', chatId);
+  if (error) return toast('Gagal kemaskini: '+error.message,'err');
+  renderTelegramAdminList();
+}
+
+async function padamTelegramAdmin(chatId) {
+  if (!confirm('Buang chat Telegram ini daripada senarai admin? Chat tsb tak lagi terima notifikasi/boleh lulus-tolak.')) return;
+  const { error } = await sb.from('telegram_admin').delete().eq('chat_id', chatId);
+  if (error) return toast('Gagal buang: '+error.message,'err');
+  toast('Chat Telegram dibuang');
+  renderTelegramAdminList();
 }
 
 // ════════════════════════════════════════════════════
