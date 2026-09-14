@@ -1958,6 +1958,21 @@ semula transaksi penuh. Lihat tukar_produk_transaksi() RPC — SQL_TAMBAHAN_139.
   </div>
 </div>
 
+<!-- Edit Tarikh Akhir Bayaran Hutang (pemilik SAHAJA) — Tempahan > Transaksi Kedai.
+Lihat edit_tarikh_akhir_bayaran_transaksi() RPC — SQL_TAMBAHAN_144. -->
+<div class="modal-overlay" id="modal-edit-tarikh-akhir">
+  <div class="modal-box">
+    <div class="modal-title">📅 Edit Tarikh Akhir Bayaran<button class="modal-close" onclick="closeModal('modal-edit-tarikh-akhir')">✕ Tutup</button></div>
+    <input type="hidden" id="eta-trx-id" />
+    <div class="form-group">
+      <label class="form-label">Tarikh Akhir Bayaran Baharu</label>
+      <input type="date" class="form-input" id="eta-tarikh" />
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Lanjutkan/pendekkan tempoh bayaran hutang kedai ini — cth kedai minta lanjutan, atau tersilap masukkan tarikh semasa hantar. Hanya utk transaksi berstatus hutang.</div>
+    <button class="btn btn-primary" onclick="simpanTarikhAkhirBayaran()">💾 Simpan Tarikh</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-lupa-katalaluan">
   <div class="modal-box">
     <div class="modal-title">🔑 Lupa Kata Laluan<button class="modal-close" onclick="closeModal('modal-lupa-katalaluan')">✕ Tutup</button></div>
@@ -6077,6 +6092,10 @@ async function renderTransaksiKedaiList() {
           <option value="consignment" ${t.kaedah_bayaran==='consignment'?'selected':''}>Consignment</option>
         </select>
       </div>`:''}
+      ${t.status==='hutang' ? `<div style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:${t.tarikh_akhir_bayaran && t.tarikh_akhir_bayaran<tarikhTempatan()?'var(--red)':'var(--muted)'}">
+        📅 Tarikh Akhir Bayaran: ${t.tarikh_akhir_bayaran?esc(fmtD(t.tarikh_akhir_bayaran)):'Belum ditetapkan'}${t.tarikh_akhir_bayaran && t.tarikh_akhir_bayaran<tarikhTempatan()?' ⚠️ SUDAH LEWAT':''}
+        ${currentRole==='pemilik'?`<button class="btn-link" style="font-size:10px;font-weight:400" onclick="bukaModalEditTarikhAkhir('${t.id}','${t.tarikh_akhir_bayaran||''}')">✏️ Edit</button>`:''}
+      </div>`:''}
       ${t.kaedah_bayaran==='consignment' && !t.jualan_disahkan ? `
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
         <div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:6px">🤝 Follow-up: barang sudah habis dijual atau belum?</div>
@@ -6117,6 +6136,26 @@ async function editJumlahTransaksi(id, jumlahAsalSemasa) {
   await loadData();
   renderTransaksiKedaiList();
   toast(`✅ Jumlah dibetulkan — jumlah asal kini ${fmt(jumlahBaru)}`);
+}
+
+// Pemilik SAHAJA — edit/tetapkan Tarikh Akhir Bayaran utk transaksi hutang (cth
+// kedai minta lanjutan tempoh bayar, atau pekerja tersilap masukkan tarikh semasa
+// hantar). Lihat edit_tarikh_akhir_bayaran_transaksi() RPC — SQL_TAMBAHAN_144.
+function bukaModalEditTarikhAkhir(id, tarikhSemasa) {
+  document.getElementById('eta-trx-id').value = id;
+  document.getElementById('eta-tarikh').value = tarikhSemasa || '';
+  showModal('modal-edit-tarikh-akhir');
+}
+async function simpanTarikhAkhirBayaran() {
+  const id = document.getElementById('eta-trx-id').value;
+  const tarikhBaru = document.getElementById('eta-tarikh').value;
+  if (!tarikhBaru) return toast('Sila pilih tarikh','err');
+  const { error } = await sb.rpc('edit_tarikh_akhir_bayaran_transaksi', { p_id: id, p_tarikh_akhir_baru: tarikhBaru });
+  if (error) return toast('Gagal kemaskini tarikh akhir bayaran: '+error.message,'err');
+  await loadData();
+  closeModal('modal-edit-tarikh-akhir');
+  renderTransaksiKedaiList();
+  toast(`✅ Tarikh akhir bayaran dikemaskini kepada ${fmtD(tarikhBaru)}`);
 }
 
 // Pemilik SAHAJA — tukar 1 produk dlm transaksi (cth pekerja tersalah pilih produk
