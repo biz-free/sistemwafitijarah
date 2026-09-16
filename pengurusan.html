@@ -437,6 +437,15 @@
       <div id="jualan-pekerja-list"></div>
     </div>
 
+    <!-- Papan Jualan Pekerja Bulan Ini — semua akaun pekerja boleh lihat jualan
+    pekerja lain (bukan setakat sendiri), guna RPC SECURITY DEFINER (papan_jualan_
+    pekerja_bulanan) sebab RLS profiles tak benarkan pekerja baca profil pekerja
+    lain terus — sama corak dgn papan harian di atas, cuma jumlahkan bulan semasa. -->
+    <div class="card" id="jualan-pekerja-bulanan-card" style="border-left:4px solid var(--teal)">
+      <div class="card-title" style="color:var(--teal)">📅 Jumlah Jualan Bulanan</div>
+      <div id="jualan-pekerja-bulanan-list"></div>
+    </div>
+
     <!-- Bonus Kedai Baru Terkumpul — bonus dikumpul & dibayar berasingan (bukan harian),
     matang selepas genap 1 bulan. Setiap pekerja lihat jumlah SENDIRI sahaja. -->
     <div class="card" id="bonus-kedai-saya-card" style="border-left:4px solid var(--purple);display:none">
@@ -2367,6 +2376,13 @@ async function showApp() {
   // Ciri khas pemilik sahaja — tunjuk/sembunyi ikut peranan semasa (boleh tukar dalam sesi yang sama)
   const pemilikOnly = ['sejarah-stok-gudang-card','serahan-produk-semua-card','serahan-cash-semua-card','laporan-harian-card','laporan-card','baucar-card','bonus-kedai-semua-card','status-sistem-card','tetapan-kos-card','urus-pekerja-card','kehadiran-report-card','tetapan-diskaun-card','voucher-card','data-pembeli-card','winback-card','affiliate-card','wa-hebahan-card','kelulusan-cuti-card','stok-mobile-semua-card','status-live-card','easyparcel-card','pemohon-program-card','permohonan-padam-card','mesej-followup-card','storan-sistem-card','arkib-bukti-card'];
   pemilikOnly.forEach(id => document.getElementById(id).style.display = currentRole==='pekerja' ? 'none' : '');
+  // Shortcut "Storan Sistem" atas Dashboard (#dash-storan-badge) — TIDAK letak dlm
+  // pemilikOnly di atas sbb ia sengaja mula disorok (display:none dlm HTML) & cuma
+  // ditunjuk oleh renderStoranSistem() bila pemilik log masuk (elak "flash" kosong
+  // sblm data siap dimuat). Tapi kalau pemilik log keluar & pekerja log masuk PADA
+  // PERANTI/TAB SAMA tanpa reload penuh (SPA), badge yg dah ditunjuk sebelum ni akan
+  // KEKAL visible sbb tiada apa yg sorok balik — paksa sorok eksplisit di sini.
+  if (currentRole==='pekerja') document.getElementById('dash-storan-badge').style.display = 'none';
   // Panduan setup Supabase hanya relevan sebelum disambungkan — gugur automatik lepas useCloud aktif
   document.getElementById('setup-guide-card').style.display = useCloud ? 'none' : (currentRole==='pekerja' ? 'none' : '');
   document.getElementById('nav-analisis').style.display = currentRole==='pekerja' ? 'none' : '';
@@ -2597,6 +2613,7 @@ function renderDashboard() {
   renderTugasanRouteHariIni();
   renderPreorderSaya();
   renderJualanPekerjaHariIni();
+  renderJualanPekerjaBulanan();
   renderBonusKedaiSaya();
   renderCashDipegangDashboard();
   kemaskiniNotifikasi();
@@ -5839,6 +5856,25 @@ async function renderJualanPekerjaHariIni() {
       <div class="list-item-val" style="color:var(--gold)">${fmt(p.jumlah_jualan)}</div>
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-text">Tiada jualan direkod hari ini lagi</div></div>';
+}
+
+// Papan jualan semua pekerja BULAN INI — visible untuk SEMUA akaun pekerja, sama
+// corak dgn renderJualanPekerjaHariIni() di atas (RPC SECURITY DEFINER supaya
+// pekerja boleh nampak nama+jumlah pekerja lain tanpa langgar RLS profiles).
+async function renderJualanPekerjaBulanan() {
+  const el = document.getElementById('jualan-pekerja-bulanan-list');
+  if (!el) return;
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const { data, error } = await sb.rpc('papan_jualan_pekerja_bulanan');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const senarai = data || [];
+  el.innerHTML = senarai.map((p,i)=>{
+    const sayaSendiri = p.pekerja_id === DATA.currentUser?.id;
+    return `<div class="list-item" style="${sayaSendiri?'background:#FFFBEA;border-radius:8px;padding-left:8px;padding-right:8px':''}">
+      <div class="list-item-title">${i===0 && p.jumlah_jualan>0?'🥇 ':''}${esc(p.nama)}${sayaSendiri?' (Saya)':''}</div>
+      <div class="list-item-val" style="color:var(--teal)">${fmt(p.jumlah_jualan)}</div>
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-text">Tiada jualan direkod bulan ini lagi</div></div>';
 }
 
 // Dashboard: bonus kedai baru pekerja SENDIRI (RLS "staff lihat bonus kedai sendiri"
