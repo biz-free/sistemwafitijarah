@@ -2186,6 +2186,27 @@ const fmtD = iso => new Date(iso).toLocaleDateString('ms-MY',{day:'2-digit',mont
 const fmtDT = iso => new Date(iso).toLocaleString('ms-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
 const daysSince = iso => iso ? Math.floor((Date.now()-new Date(iso))/86400000) : 999;
 const daysUntil = iso => Math.ceil((new Date(iso)-Date.now())/86400000);
+// kedai.hutang ialah medan agregat DB (dikemaskini server-side oleh submit_penghantaran/
+// sahkan_jualan_konsainan/rekod_bayaran) yang GABUNGKAN kaedah_bayaran='hutang' (jualan
+// kredit sebenar) DENGAN 'consignment' (nilai stok dihantar consignment yg BELUM disahkan
+// dijual — bukan hutang sebenar lagi, cuma anggaran sementara sehingga disahkan/pulang).
+// Sengaja dikekalkan begitu utk kutipan bayaran sebenar (rekod_bayaran perlu satu baki
+// gabungan). TAPI mana2 paparan/penapis "Hutang" (senarai kedai, amaran dashboard) MESTI
+// kira TULEN drpd transaksi ikut kaedah_bayaran sebenar — sama pattern spt renderAnalisis()
+// (SQL_TAMBAHAN/commit "Kemaskini /hutang: asingkan Hutang Jualan Terus vs Consignment"),
+// supaya bilangan kedai yg dipapar padan dgn hutang jualan terus SEBENAR sahaja.
+function hutangTulenIkutKedai() {
+  const map = {};
+  DATA.transaksi.filter(t=>t.kaedah_bayaran==='hutang' && t.status==='hutang' && t.kedai_id)
+    .forEach(t=>{ map[t.kedai_id] = (map[t.kedai_id]||0) + t.jumlah; });
+  return map;
+}
+function consignmentBelumSelesaiIkutKedai() {
+  const map = {};
+  DATA.transaksi.filter(t=>t.kaedah_bayaran==='consignment' && t.status==='hutang' && t.kedai_id)
+    .forEach(t=>{ map[t.kedai_id] = (map[t.kedai_id]||0) + t.jumlah; });
+  return map;
+}
 const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 function toast(msg, type='ok') {
@@ -2648,7 +2669,11 @@ function renderDashboard() {
   const stokAktif = DATA.stok.filter(s=>s.aktif!==false);
   const stokRendah = stokAktif.filter(s=>s.stok<=10);
   document.getElementById('badge-stok').style.display = stokRendah.length?'':'none';
-  const hutangKedai = DATA.kedai.filter(k=>k.hutang>0);
+  // Guna hutang TULEN (kaedah_bayaran='hutang' sahaja) supaya amaran ni konsisten dgn
+  // penapis "Hutang" di senarai Kedai — bukan kedai.hutang gabungan yg turut kira
+  // consignment blm disahkan (consignment ada amaran sendiri berasingan di bawah).
+  const petaHutangTulenDash = hutangTulenIkutKedai();
+  const hutangKedai = DATA.kedai.filter(k=>(petaHutangTulenDash[k.id]||0)>0);
   document.getElementById('badge-kedai').style.display = hutangKedai.length?'':'none';
 
   // Amaran
@@ -2659,7 +2684,7 @@ function renderDashboard() {
     const d=daysUntil(s.tarikh_luput);
     aHTML+=`<div class="list-item"><div><div class="list-item-title">⏳ ${esc(s.nama)}</div><div class="list-item-sub">${d<0?'Sudah luput':'Luput dalam '+d+' hari'} · ${fmtD(s.tarikh_luput)}</div></div><span class="badge ${d<0?'badge-red':'badge-gold'}">${d<0?'LUPUT':d+'h'}</span></div>`;
   });
-  hutangKedai.forEach(k=>{ aHTML+=`<div class="list-item"><div><div class="list-item-title">💳 ${esc(k.nama)}</div><div class="list-item-sub">Hutang belum bayar</div></div><span class="badge badge-gold">${fmt(k.hutang)}</span></div>`; });
+  hutangKedai.forEach(k=>{ aHTML+=`<div class="list-item"><div><div class="list-item-title">💳 ${esc(k.nama)}</div><div class="list-item-sub">Hutang belum bayar</div></div><span class="badge badge-gold">${fmt(petaHutangTulenDash[k.id])}</span></div>`; });
   // Tarikh akhir bayaran hutang sudah tiba/lepas (SQL_TAMBAHAN_98) — pekerja nampak
   // transaksi SENDIRI sahaja (kedai dia berurusan), pemilik nampak SEMUA + nama pekerja
   // bertanggungjawab, supaya boleh follow-up terus.
@@ -3599,14 +3624,18 @@ function renderKedai(q='') {
     const kedaiIdsPekerjaIni = new Set(DATA.transaksi.filter(t=>t.created_by===pekerjaHantarPilih && t.kedai_id).map(t=>t.kedai_id));
     list = list.filter(k=>kedaiIdsPekerjaIni.has(k.id));
   }
+  // "Hutang" di sini TULEN kaedah_bayaran='hutang' sahaja (bukan kedai.hutang gabungan
+  // yg turut kira consignment blm disahkan) — lihat nota hutangTulenIkutKedai() di atas.
+  const petaHutangTulen = hutangTulenIkutKedai();
+  const petaConsignBelumSelesai = consignmentBelumSelesaiIkutKedai();
   if (tapisPilih==='aktif') list = list.filter(k=>k.status==='aktif');
   else if (tapisPilih==='tidak_aktif') list = list.filter(k=>k.status!=='aktif');
-  else if (tapisPilih==='hutang') list = list.filter(k=>k.hutang>0);
+  else if (tapisPilih==='hutang') list = list.filter(k=>(petaHutangTulen[k.id]||0)>0);
   else if (tapisPilih==='lama') list = list.filter(k=>daysSince(k.last_visit)>=14);
 
   document.getElementById('kedai-sub-tapis').textContent = (daerahPilih||pendaftarPilih||pekerjaHantarPilih||tapisPilih) ? `Menapis: ${list.length} kedai dipaparkan` : '';
 
-  const hutangTotal=DATA.kedai.reduce((a,k)=>a+k.hutang,0);
+  const hutangTotal=Object.values(petaHutangTulen).reduce((a,v)=>a+v,0);
   document.getElementById('kedai-sub').textContent = `${DATA.kedai.filter(k=>k.status==='aktif').length} aktif · Hutang: ${fmt(hutangTotal)}`;
 
   // Bayar hutang section — semua pekerja boleh kutip & MOHON (pemilik kekal terus
@@ -3641,7 +3670,9 @@ function renderKedai(q='') {
   document.getElementById('kedai-list').innerHTML = list.map((k,i)=>{
     const trxK=DATA.transaksi.filter(t=>t.kedai_id===k.id);
     const lama=daysSince(k.last_visit)>=14;
-    const cls=k.hutang>0?'hutang':lama?'lama':'';
+    const hutangTulenK = petaHutangTulen[k.id]||0;
+    const consignK = petaConsignBelumSelesai[k.id]||0;
+    const cls=hutangTulenK>0?'hutang':lama?'lama':'';
     return `<div class="kedai-card ${cls}">
       ${ikonPadam(`padamKedai('${k.id}','${esc(k.nama)}')`, 'kedai', k.id, k.nama, 'Padam kedai')}
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
@@ -3653,7 +3684,8 @@ function renderKedai(q='') {
       ${k.nota?`<div style="font-size:12px;color:var(--gold);margin-bottom:6px">📝 ${esc(k.nota)}</div>`:''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
         <span class="badge badge-teal">${trxK.length} penghantaran</span>
-        ${k.hutang>0?`<span class="badge badge-red">Hutang: ${fmt(k.hutang)}</span>`:''}
+        ${hutangTulenK>0?`<span class="badge badge-red">Hutang: ${fmt(hutangTulenK)}</span>`:''}
+        ${consignK>0?`<span class="badge badge-purple">🤝 Consignment blm selesai: ${fmt(consignK)}</span>`:''}
         ${k.diskaun_hutang_peratus>0?`<span class="badge badge-gold">💯 Diskaun ${k.diskaun_hutang_peratus}% bayar penuh</span>`:''}
         ${lama?`<span class="badge badge-gold">${daysSince(k.last_visit)} hari tak lawat</span>`:''}
         ${k.last_visit?`<span class="badge badge-muted">Terakhir: ${fmtD(k.last_visit)}</span>`:''}
@@ -6994,7 +7026,10 @@ async function renderLaporan() {
   // sebelum ini berisiko terkeluar drpd bulan yg betul dlm Laporan Bulanan.
   const fil=DATA.transaksi.filter(t=>t.tarikh_masa&&bulanTempatan(t.tarikh_masa)===bulan);
   const hasil=fil.filter(t=>t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
-  const hutang=fil.filter(t=>t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
+  // Hutang & Consignment DIPECAHKAN ikut kaedah_bayaran sebenar (bukan 1 nombor
+  // "Hutang" bercampur) — sama pattern spt renderDashboard()/renderAnalisis().
+  const hutang=fil.filter(t=>t.kaedah_bayaran==='hutang' && t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
+  const consignmentBlmSelesai=fil.filter(t=>t.kaedah_bayaran==='consignment' && t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
   // Diskaun automatik Pre-Order (COD/Transfer ≥ minima, lihat kiraDiskaunHantarPeratus())
   // potong terus dari HASIL yang dikutip (t.jumlah dah didiskaun), tapi kos barang
   // (harga_beli) tak berubah — jadi diskaun ni 100% ambil dari margin. Untung kasar
@@ -7072,7 +7107,7 @@ async function renderLaporan() {
   LAPORAN_BULAN_TERKINI = bulan;
   LAPORAN_PEKERJA_TERKINI = pecahanPekerja;
   LAPORAN_RINGKASAN_TERKINI = {
-    bilanganTransaksi: fil.length, hasil, hutang, untung, diskaunKedai,
+    bilanganTransaksi: fil.length, hasil, hutang, consignmentBlmSelesai, untung, diskaunKedai,
     jumlahKm, hariKerja, kosUpah, kosMinyak, kosMakan,
     kosKedaiBaru, kedaiBonusKedaiUnik, kosUpahEdagang, edagangBil: edagangLayakUpah.length,
     kosOperasi, untungBersih,
@@ -7083,6 +7118,7 @@ async function renderLaporan() {
       <div class="stat-box"><div class="stat-label">Transaksi</div><div class="stat-val" style="color:var(--teal)">${fil.length}</div></div>
       <div class="stat-box"><div class="stat-label">Hasil</div><div class="stat-val" style="color:var(--green);font-size:16px">${fmt(hasil)}</div></div>
       <div class="stat-box"><div class="stat-label">Hutang</div><div class="stat-val" style="color:var(--red);font-size:16px">${fmt(hutang)}</div></div>
+      <div class="stat-box"><div class="stat-label">Consignment</div><div class="stat-val" style="color:var(--purple);font-size:16px">${fmt(consignmentBlmSelesai)}</div></div>
       <div class="stat-box"><div class="stat-label">Untung Kasar</div><div class="stat-val" style="color:var(--gold);font-size:16px">${fmt(untung)}</div></div>
     </div>
     ${diskaunKedai>0?`<div class="list-item"><div class="list-item-title">💸 Diskaun Diberi Kedai (sudah ditolak dari Untung Kasar)</div><div class="list-item-val" style="color:var(--red)">−${fmt(diskaunKedai)}</div></div>`:''}
@@ -7123,7 +7159,10 @@ async function renderLaporanHarian() {
   let fil = DATA.transaksi.filter(t=>t.tarikh_masa && tarikhTempatan(t.tarikh_masa)===tarikh);
   if (pekerjaPilih) fil = fil.filter(t=>t.created_by===pekerjaPilih);
   const hasil = fil.filter(t=>t.status==='selesai').reduce((a,t)=>a+t.jumlah,0);
-  const hutang = fil.filter(t=>t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
+  // Hutang & Consignment DIPECAHKAN ikut kaedah_bayaran sebenar (bukan 1 nombor
+  // "Hutang" bercampur) — sama pattern spt renderDashboard()/renderAnalisis().
+  const hutang = fil.filter(t=>t.kaedah_bayaran==='hutang' && t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
+  const consignmentBlmSelesai = fil.filter(t=>t.kaedah_bayaran==='consignment' && t.status==='hutang').reduce((a,t)=>a+t.jumlah,0);
   // Diskaun automatik Pre-Order (COD/Transfer ≥ minima) potong dari HASIL (t.jumlah
   // dah didiskaun) tapi kos barang tak berubah — diskaun ni 100% ambil dari margin,
   // jadi untung kasar mesti tolak jumlah diskaun sebenar (jumlah_asal-jumlah).
@@ -7185,6 +7224,7 @@ async function renderLaporanHarian() {
       <div class="stat-box"><div class="stat-label">Transaksi</div><div class="stat-val" style="color:var(--teal)">${fil.length}</div></div>
       <div class="stat-box"><div class="stat-label">Hasil</div><div class="stat-val" style="color:var(--green);font-size:16px">${fmt(hasil)}</div></div>
       <div class="stat-box"><div class="stat-label">Hutang</div><div class="stat-val" style="color:var(--red);font-size:16px">${fmt(hutang)}</div></div>
+      <div class="stat-box"><div class="stat-label">Consignment</div><div class="stat-val" style="color:var(--purple);font-size:16px">${fmt(consignmentBlmSelesai)}</div></div>
       <div class="stat-box"><div class="stat-label">Untung Kasar</div><div class="stat-val" style="color:var(--gold);font-size:16px">${fmt(untung)}</div></div>
     </div>
     ${diskaunKedai>0?`<div class="list-item"><div class="list-item-title">💸 Diskaun Diberi Kedai (sudah ditolak dari Untung Kasar)</div><div class="list-item-val" style="color:var(--red)">−${fmt(diskaunKedai)}</div></div>`:''}
@@ -7691,6 +7731,7 @@ function bangunkanLaporanBulananPrintBox(r, pekerjaList, baucarList, bulan) {
     <div style="font-weight:800;font-size:12px;margin:12px 0 6px;color:var(--navy)">RINGKASAN KEWANGAN</div>
     <div class="baucar-row"><span>Hasil (Selesai)</span><span>${fmt(r.hasil)}</span></div>
     <div class="baucar-row"><span>Hutang Belum Selesai</span><span>${fmt(r.hutang)}</span></div>
+    <div class="baucar-row"><span>Consignment Belum Selesai</span><span>${fmt(r.consignmentBlmSelesai||0)}</span></div>
     <div class="baucar-row" style="font-weight:700"><span>Untung Kasar</span><span>${fmt(r.untung)}</span></div>
     ${r.diskaunKedai>0?`<div class="baucar-row"><span>(Sudah tolak diskaun diberi kedai)</span><span>−${fmt(r.diskaunKedai)}</span></div>`:''}
 
