@@ -595,6 +595,13 @@ Deno.serve(async (req) => {
       await answerCallback(cq.id, hasil || "Selesai");
       const asalText = cq.message?.text || "";
       await editText(chatId, messageId, `${asalText}\n\n➡️ ${hasil}\n👤 oleh ${admin.nama} · ${nowKLDisplay()}`);
+      // Rekod utk dihantar ke kumpulan WhatsApp Team Sales (skrip VPS ambil & hantar). Kegagalan di sini
+      // TIDAK boleh menjejaskan kelulusan yg sudah berjaya.
+      try {
+        const teksWa = `📢 *KELULUSAN PEMILIK — WAFI TIJARAH TRADING*\n\n${asalText}\n\n➡️ ${hasil}\n👤 oleh ${admin.nama} · ${nowKLDisplay()}`;
+        const { error: eRekod } = await sb.rpc("rekod_pemakluman_kelulusan", { p_jadual: jadual, p_id: id, p_status: status, p_teks: teksWa });
+        if (eRekod) console.warn("[telegram-webhook] rekod pemakluman WA gagal", eRekod);
+      } catch (err) { console.warn("[telegram-webhook] rekod pemakluman WA gagal", err); }
       return json({ ok: true });
     }
 
