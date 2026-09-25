@@ -7464,7 +7464,7 @@ async function renderBaucarList() {
           <span class="badge ${v.status==='dibayar'?'badge-green':v.status==='diluluskan'?'badge-teal':v.status==='dibatalkan'?'badge-red':'badge-gold'}">${BAUCAR_STATUS_LABEL[v.status]}</span>
         </div>
       </div>
-      ${amaranLokasi.length?`<div style="font-size:11px;color:var(--red);background:#FFF0F0;border:1px solid #FFD0D0;border-radius:6px;padding:6px 8px;margin-bottom:6px">⚠️ <strong>Semak lokasi kedai sebelum luluskan</strong> (jejaskan kiraan minyak):<br/>${amaranLokasi.map(a=>'• '+esc(a)).join('<br/>')}</div>`:''}
+      ${amaranLokasi.length?`<div style="font-size:11px;color:var(--red);background:#FFF0F0;border:1px solid #FFD0D0;border-radius:6px;padding:6px 8px;margin-bottom:6px">⚠️ <strong>Semak lokasi kedai sebelum luluskan</strong> (jejaskan kiraan minyak):<br/>${amaranLokasi.map(a=>'• '+esc(a.teks)+(a.lat&&a.lng?` <a href="https://www.google.com/maps/search/?api=1&query=${a.lat},${a.lng}" target="_blank" rel="noopener" style="white-space:nowrap;font-weight:600;color:var(--red)">📍 Lihat pin</a>`:'')).join('<br/>')}</div>`:''}
       ${v.kategori==='upah_harian'?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;background:var(--bg);border-radius:6px;padding:6px 8px">
         ${v.butiran?`<div style="margin-bottom:4px">Upah ${fmt(v.butiran.upah)} + Minyak ${fmt(v.butiran.minyak)} (${(v.butiran.km||0).toFixed(1)}km) + Makan ${fmt(v.butiran.makan)}${v.butiran.upahEdagang?` + E-dagang ${fmt(v.butiran.upahEdagang)}`:''}</div>
         ${v.butiran.bonus>0?`<div style="margin-bottom:4px;color:var(--gold)">🏪 Bonus Kedai Baru hari ini: ${fmt(v.butiran.bonus)} (dikumpul berasingan, tiada dlm jumlah di atas)</div>`:''}
@@ -10565,6 +10565,7 @@ function haversineKm(a, b) {
 
 // Kesan kedai lokasi mencurigakan bagi hari+pekerja tertentu — amaran kpd pemilik
 // SEBELUM luluskan baucar harian (kos minyak baucar tu dikira drpd jarak kedai ni).
+// Pulang senarai { teks, lat, lng } (lat/lng = pin kedai berdaftar, utk pautan Google Maps).
 // 2 isyarat: (1) kedai didaftar dgn pin jauh drpd GPS pekerja masa tu (rekod baharu
 // sahaja, lihat SQL_TAMBAHAN_136); (2) kedai jauh BERASINGAN drpd kedai lain yg
 // dilawati hari sama (isyarat sejagat, berfungsi utk kedai lama jugak — lihat
@@ -10578,10 +10579,10 @@ function kesanKedaiMencurigakanHariIni(pekerjaId, tarikh) {
   const amaran = [];
   titik.forEach(k => {
     if (k.jarak_pin_gps_km>5) {
-      amaran.push(`${k.nama} — pin didaftar ${k.jarak_pin_gps_km.toFixed(1)}km dari GPS pekerja masa tu`);
+      amaran.push({ teks: `${k.nama} — pin didaftar ${k.jarak_pin_gps_km.toFixed(1)}km dari GPS pekerja masa tu`, lat: k.lat, lng: k.lng });
     } else if (titik.length>=2) {
       const jarakTerdekat = Math.min(...titik.filter(x=>x.id!==k.id).map(x=>haversineKm(k,x)));
-      if (jarakTerdekat>15) amaran.push(`${k.nama} — ~${jarakTerdekat.toFixed(0)}km terasing drpd kedai lain hari sama, sila sahkan bukan silap pin`);
+      if (jarakTerdekat>15) amaran.push({ teks: `${k.nama} — ~${jarakTerdekat.toFixed(0)}km terasing drpd kedai lain hari sama, sila sahkan bukan silap pin`, lat: k.lat, lng: k.lng });
     }
   });
   return amaran;
