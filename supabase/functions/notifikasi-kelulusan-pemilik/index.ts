@@ -61,8 +61,9 @@ async function hantarTelegram(admin: any, jenis: string, pekerjaNama: string, bu
     const code = JADUAL_CODE[jenisRekod];
     // baucar_bayaran guna status draf/diluluskan/dibatalkan (bukan menunggu/disahkan/
     // ditolak spt 4 jadual lain) — label butang "Batal" lebih tepat drpd "Tolak".
-    const labelTolak = jenisRekod === "baucar_bayaran" ? "✕ Batal" : jenisRekod === "transaksi" ? "✕ Belum Masuk" : "✕ Tolak";
-    // transaksi = Online Transfer (SQL_TAMBAHAN_151): "Duit Masuk" / "Belum Masuk".
+    const labelTolak = jenisRekod === "baucar_bayaran" ? "✕ Batal" : jenisRekod === "transaksi" ? "✕ Belum Masuk → Hutang" : "✕ Tolak";
+    // transaksi = Online Transfer (SQL_TAMBAHAN_151/152): "Duit Masuk" / "Belum Masuk → Hutang"
+    // (Belum Masuk auto tukar transaksi kpd hutang).
     const labelLulus = jenisRekod === "transaksi" ? "✅ Duit Masuk" : "✅ Lulus";
     replyMarkup = { inline_keyboard: [[
       { text: labelLulus, callback_data: `tp:${code}:${recordId}:A` },
