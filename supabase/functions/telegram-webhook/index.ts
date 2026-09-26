@@ -62,6 +62,17 @@ function fmtRM(n: unknown): string {
   const v = Number(n) || 0;
   return "RM" + v.toFixed(2);
 }
+// Buang butiran kewangan sulit (Upah/Cash tangan/Baki serah pekerja) sebelum
+// teks dihantar ke kumpulan WhatsApp Team Sales — elak pekerja lain nampak
+// upah/cash rakan sekerja. Paparan Telegram pemilik sendiri (asalText di
+// editText) TIDAK terjejas — fungsi ni cuma dipakai pada teksWa.
+function sulitkanUntukWa(teks: string): string {
+  return teks
+    .split("\n")
+    .filter((baris) => !/^\s*Cash tangan\s+RM/i.test(baris))
+    .map((baris) => baris.replace(/\s*—\s*Upah\s+RM[\d.,-]+\s*$/i, ""))
+    .join("\n");
+}
 function tarikhKL(d?: string | Date | null): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" })
     .format(d ? (d instanceof Date ? d : new Date(d)) : new Date());
@@ -636,7 +647,7 @@ Deno.serve(async (req) => {
       // TIDAK boleh menjejaskan kelulusan yg sudah berjaya.
       try {
         const tajukWa = jadual === "transaksi" ? "PENGESAHAN BANK (ONLINE TRANSFER)" : "KELULUSAN PEMILIK";
-        const teksWa = `📢 *${tajukWa} — WAFI TIJARAH TRADING*\n\n${asalText}\n\n➡️ ${hasil}\n👤 oleh ${admin.nama} · ${nowKLDisplay()}`;
+        const teksWa = `📢 *${tajukWa} — WAFI TIJARAH TRADING*\n\n${sulitkanUntukWa(asalText)}\n\n➡️ ${hasil}\n👤 oleh ${admin.nama} · ${nowKLDisplay()}`;
         const { error: eRekod } = await sb.rpc("rekod_pemakluman_kelulusan", { p_jadual: jadual, p_id: id, p_status: status, p_teks: teksWa });
         if (eRekod) console.warn("[telegram-webhook] rekod pemakluman WA gagal", eRekod);
       } catch (err) { console.warn("[telegram-webhook] rekod pemakluman WA gagal", err); }
