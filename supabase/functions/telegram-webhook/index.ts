@@ -51,6 +51,7 @@ const CODE_JADUAL: Record<string, string> = {
   bh: "permohonan_bayaran_hutang",
   sp: "serahan_produk",
   bu: "baucar_bayaran",
+  tf: "transaksi", // Online Transfer: Duit Masuk / Belum Masuk (SQL_TAMBAHAN_151)
 };
 
 function json(body: unknown, status = 200) {
@@ -587,7 +588,9 @@ Deno.serve(async (req) => {
       const jadual = CODE_JADUAL[code];
       const status = action === "A" ? "disahkan" : "ditolak";
 
-      const { data: hasil, error } = await sb.rpc("telegram_putuskan", { p_admin_chat_id: chatId, p_jadual: jadual, p_id: id, p_status: status });
+      const { data: hasil, error } = jadual === "transaksi"
+        ? await sb.rpc("telegram_putuskan_transfer", { p_admin_chat_id: chatId, p_id: id, p_status: status })
+        : await sb.rpc("telegram_putuskan", { p_admin_chat_id: chatId, p_jadual: jadual, p_id: id, p_status: status });
       if (error) {
         await answerCallback(cq.id, "❌ " + error.message, true);
         return json({ ok: true });
@@ -598,7 +601,8 @@ Deno.serve(async (req) => {
       // Rekod utk dihantar ke kumpulan WhatsApp Team Sales (skrip VPS ambil & hantar). Kegagalan di sini
       // TIDAK boleh menjejaskan kelulusan yg sudah berjaya.
       try {
-        const teksWa = `📢 *KELULUSAN PEMILIK — WAFI TIJARAH TRADING*\n\n${asalText}\n\n➡️ ${hasil}\n👤 oleh ${admin.nama} · ${nowKLDisplay()}`;
+        const tajukWa = jadual === "transaksi" ? "PENGESAHAN BANK (ONLINE TRANSFER)" : "KELULUSAN PEMILIK";
+        const teksWa = `📢 *${tajukWa} — WAFI TIJARAH TRADING*\n\n${asalText}\n\n➡️ ${hasil}\n👤 oleh ${admin.nama} · ${nowKLDisplay()}`;
         const { error: eRekod } = await sb.rpc("rekod_pemakluman_kelulusan", { p_jadual: jadual, p_id: id, p_status: status, p_teks: teksWa });
         if (eRekod) console.warn("[telegram-webhook] rekod pemakluman WA gagal", eRekod);
       } catch (err) { console.warn("[telegram-webhook] rekod pemakluman WA gagal", err); }
