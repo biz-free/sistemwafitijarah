@@ -52,6 +52,7 @@ const CODE_JADUAL: Record<string, string> = {
   sp: "serahan_produk",
   bu: "baucar_bayaran",
   tf: "transaksi", // Online Transfer: Duit Masuk / Belum Masuk (SQL_TAMBAHAN_151)
+  pd: "permohonan_padam", // Permohonan Padam jenis transaksi (SQL_TAMBAHAN_154) — pengesahan 2 langkah
 };
 
 function json(body: unknown, status = 200) {
@@ -105,8 +106,8 @@ function sendMessage(chatId: number, text: string, replyMarkup?: unknown) {
 function answerCallback(id: string, text?: string, showAlert = false) {
   return tg("answerCallbackQuery", { callback_query_id: id, text, show_alert: showAlert });
 }
-function editText(chatId: number, messageId: number, text: string) {
-  return tg("editMessageText", { chat_id: chatId, message_id: messageId, text });
+function editText(chatId: number, messageId: number, text: string, replyMarkup?: unknown) {
+  return tg("editMessageText", { chat_id: chatId, message_id: messageId, text, reply_markup: replyMarkup });
 }
 function kb(code: string, id: string) {
   return { inline_keyboard: [[{ text: "✅ Lulus", callback_data: `tp:${code}:${id}:A` }, { text: "✕ Tolak", callback_data: `tp:${code}:${id}:R` }]] };
@@ -586,6 +587,39 @@ Deno.serve(async (req) => {
       }
       const [, code, id, action] = parts;
       const jadual = CODE_JADUAL[code];
+
+      // ── SQL_TAMBAHAN_154: Permohonan Padam (transaksi) — Luluskan & Padam perlu PENGESAHAN 2 LANGKAH ──
+      if (code === "pd") {
+        const asalPd = String(cq.message?.text || "").split("\n\n⚠️ PADAM KEKAL")[0];
+        const kbAsal = { inline_keyboard: [[
+          { text: "✅ Luluskan & Padam", callback_data: `tp:pd:${id}:A` },
+          { text: "✕ Tolak", callback_data: `tp:pd:${id}:R` },
+        ]] };
+        if (action === "A") {
+          await answerCallback(cq.id);
+          await editText(chatId, messageId, `${asalPd}\n\n⚠️ PADAM KEKAL? Transaksi dipadam selamanya (salinan penuh disimpan dlm arkib). Sahkan?`, { inline_keyboard: [[
+            { text: "✅ Ya, Padam Kekal", callback_data: `tp:pd:${id}:Y` },
+            { text: "↩ Batal", callback_data: `tp:pd:${id}:N` },
+          ]] });
+          return json({ ok: true });
+        }
+        if (action === "N") {
+          await answerCallback(cq.id, "Dibatalkan — tiada apa dipadam");
+          await editText(chatId, messageId, asalPd, kbAsal);
+          return json({ ok: true });
+        }
+        if (action !== "Y" && action !== "R") { await answerCallback(cq.id, "Data tidak sah.", true); return json({ ok: true }); }
+        const { data: hasilPd, error: ePd } = await sb.rpc("telegram_putuskan_padam", { p_admin_chat_id: chatId, p_id: id, p_tindakan: action === "Y" ? "luluskan" : "tolak" });
+        if (ePd) {
+          await answerCallback(cq.id, "❌ " + ePd.message, true);
+          await editText(chatId, messageId, asalPd, kbAsal); // pulihkan butang asal supaya boleh cuba lagi / tolak
+          return json({ ok: true });
+        }
+        await answerCallback(cq.id, hasilPd || "Selesai");
+        await editText(chatId, messageId, `${asalPd}\n\n➡️ ${hasilPd}\n👤 oleh ${admin.nama} · ${nowKLDisplay()}`);
+        // Pemakluman WhatsApp direkod oleh pencetus DB (SQL_TAMBAHAN_153) — tidak perlu rekod di sini.
+        return json({ ok: true });
+      }
       const status = action === "A" ? "disahkan" : "ditolak";
 
       const { data: hasil, error } = jadual === "transaksi"
