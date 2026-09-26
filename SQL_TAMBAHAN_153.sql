@@ -189,3 +189,9 @@ BEGIN
       AND p.dicipta < now() - interval '15 seconds'
     ORDER BY p.id LIMIT 20;
 END $function$;
+
+-- PEMBETULAN (selepas dijalankan): CREATE OR REPLACE di atas menggugurkan hak 'anon' pada
+-- ambil_pemakluman_kelulusan sehingga skrip VPS (kunci anon) ditolak (42501). Pulihkan hak
+-- asal SQL 150 (fungsi ini dilindungi kunci private.api_kunci, salah kunci = 'tidak dibenarkan'):
+REVOKE EXECUTE ON FUNCTION public.ambil_pemakluman_kelulusan(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.ambil_pemakluman_kelulusan(text) TO anon, authenticated;
