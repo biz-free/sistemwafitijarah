@@ -1302,6 +1302,12 @@
       <div id="permohonan-padam-list"></div>
     </div>
 
+    <div class="card" id="arkib-padam-card" style="border-left:4px solid var(--gold)">
+      <div class="card-title" style="color:var(--gold)">🗄️ Arkib Padam (boleh dipulihkan)</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Rekod yang telah diluluskan padam — salinan penuh masih disimpan di sini. Tersilap luluskan? Klik "Pulihkan" untuk kembalikan rekod ke keadaan asal.</div>
+      <div id="arkib-padam-list"></div>
+    </div>
+
     <!-- Tetapan Pre-Order & Diskaun Online Transfer (pemilik sahaja) -->
     <div class="card" id="tetapan-diskaun-card">
       <div class="card-title">💳 Tetapan Pre-Order & Diskaun</div>
@@ -2498,6 +2504,7 @@ async function setPage(p) {
       document.getElementById('set-arkib-webhook-url').value = TETAPAN_DISKAUN.arkib_webhook_url || '';
       renderSenaraiPemohon();
       renderPermohonanPadam();
+      renderArkibPadam();
       renderSerahanCashSemua();
       renderSejarahSerahanCash();
     }
@@ -10109,7 +10116,11 @@ async function putuskanPermohonanPadam(id, tindakan) {
     if (ePadam) return toast('Gagal padam rekod: '+ePadam.message,'err');
     mesejTambahan = ` ${hasil?.stok_dipulihkan?.length||0} jenis produk dipulangkan ke bawaan pekerja.`;
   } else {
-    const { error: ePadam } = await sb.from(peta.jadual).delete().eq('id', p.rekod_id);
+    // Guna RPC (bukan delete() terus) — ia simpan salinan PENUH baris ke
+    // private.arkib_padam SEBELUM padam (lihat SQL_TAMBAHAN_155), supaya
+    // kalau pemilik tersilap luluskan, rekod boleh dipulih semula di
+    // "Arkib Padam" di bawah senarai permohonan menunggu.
+    const { error: ePadam } = await sb.rpc('padam_rekod_permohonan', { p_jenis: p.jenis, p_rekod_id: p.rekod_id, p_permohonan_id: p.id });
     if (ePadam) return toast('Gagal padam rekod: '+ePadam.message,'err');
   }
 
@@ -10121,6 +10132,42 @@ async function putuskanPermohonanPadam(id, tindakan) {
   toast(`✅ "${p.rekod_label||p.rekod_id}" telah dipadam.${mesejTambahan}`);
   await loadData();
   renderPermohonanPadam();
+  renderArkibPadam();
+  kemaskiniNotifikasi();
+}
+
+const ARKIB_PADAM_LABEL = { kedai:'Kedai', pre_order:'Pre-Order', stok:'Produk', baucar_bayaran:'Baucar Bayaran', serahan_cash:'Serahan Cash', serahan_produk:'Serahan Produk', pesanan_edagang:'Pesanan E-Dagang', transaksi:'Transaksi' };
+
+// ── Arkib Padam (salinan rekod yg dah diluluskan padam — boleh dipulihkan) ──
+async function renderArkibPadam() {
+  const el = document.getElementById('arkib-padam-list');
+  if (!el) return;
+  if (!useCloud) { el.innerHTML = '<div class="empty"><div class="empty-text">Ciri ini perlu Supabase disambungkan</div></div>'; return; }
+  const { data, error } = await sb.rpc('senarai_arkib_padam');
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  const senarai = data || [];
+  el.innerHTML = senarai.map(a=>`
+    <div class="list-item" style="display:block">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">
+        <div>
+          <div class="list-item-title">${esc(a.label||a.rekod_id)}</div>
+          <div class="list-item-sub">${esc(ARKIB_PADAM_LABEL[a.jadual]||a.jadual)} · dipadam oleh ${esc(a.diputuskan_oleh_nama||'?')} · ${fmtDT(a.dicipta)}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" style="width:auto" onclick="pulihkanArkibPadam(${a.id},'${esc(String(a.label||a.rekod_id)).replace(/'/g,"&#39;")}')">🔄 Pulihkan</button>
+      </div>
+    </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada rekod dalam arkib</div></div>';
+}
+
+async function pulihkanArkibPadam(arkibId, label) {
+  if (!confirm(`Pulihkan semula "${label}" ke sistem?\n\nRekod akan dimasukkan semula ke jadual asal dengan data yang tersimpan.`)) return;
+  const { data, error } = await sb.rpc('pulih_rekod_arkib_padam', { p_arkib_id: arkibId });
+  if (error) return toast('Gagal pulihkan: '+error.message,'err');
+  toast(`✅ "${label}" telah dipulihkan (${data}).`);
+  await loadData();
+  renderPermohonanPadam();
+  renderArkibPadam();
   kemaskiniNotifikasi();
 }
 
