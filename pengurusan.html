@@ -10064,6 +10064,50 @@ async function renderPermohonanPadam() {
     </div>`).join('') || '<div class="empty"><div class="empty-text">Tiada permohonan padam menunggu</div></div>';
 }
 
+// Papar butiran SEBENAR (terkini, terus dari jadual) rekod yang nak dipadam — pemilik pernah
+// tersalah luluskan padam sebab label/sebab permohonan pekerja tak padan dgn rekod sebenar.
+// Confirm() lama hanya papar rekod_label yg pekerja taip sendiri semasa mohon (boleh silap/lapuk).
+async function butiranRekodPadam(jenis, id) {
+  try {
+    if (jenis === 'pre_order') {
+      const { data: r } = await sb.from('pre_order').select('*').eq('id', id).single();
+      if (!r) return null;
+      const items = (r.items||[]).map(it=>`${it.nama} ×${it.qty}`).join(', ') || '-';
+      const jumlah = r.bayar_metod==='consignment' ? 'Consignment' : fmt(r.jumlah_selepas_diskaun ?? r.jumlah_asal ?? 0);
+      return `Kedai: ${r.kedai_nama||'-'} (${r.kedai_telefon||'-'})
+Barang: ${items}
+Jumlah: ${jumlah} (${r.bayar_metod||'-'})
+Status semasa: ${r.status}
+Dicipta: ${fmtDT(r.created_at)}`;
+    }
+    if (jenis === 'kedai') {
+      const { data: r } = await sb.from('kedai').select('nama,telefon,alamat').eq('id', id).single();
+      if (!r) return null;
+      return `Nama: ${r.nama||'-'}
+Telefon: ${r.telefon||'-'}
+Alamat: ${r.alamat||'-'}`;
+    }
+    if (jenis === 'stok') {
+      const { data: r } = await sb.from('stok').select('nama,harga_jual,stok').eq('id', id).single();
+      if (!r) return null;
+      return `Produk: ${r.nama||'-'}
+Harga jual: ${fmt(r.harga_jual||0)}
+Baki stok: ${r.stok ?? '-'}`;
+    }
+    if (jenis === 'pesanan_edagang') {
+      const { data: r } = await sb.from('pesanan_edagang').select('*').eq('id', id).single();
+      if (!r) return null;
+      return `Pembeli: ${r.pelanggan_nama||'-'} (${r.pelanggan_telefon||'-'})
+Jumlah: ${fmt(r.jumlah||0)}
+Status semasa: ${r.status_pesanan||'-'}
+Dicipta: ${fmtDT(r.created_at)}`;
+    }
+    const { data: r } = await sb.from(PADAM_JADUAL[jenis].jadual).select('*').eq('id', id).single();
+    return r ? `Rekod sebenar dalam pangkalan data:
+${JSON.stringify(r, null, 1).slice(0,500)}` : null;
+  } catch { return null; }
+}
+
 async function putuskanPermohonanPadam(id, tindakan) {
   const { data: p, error: eGet } = await sb.from('permohonan_padam').select('*').eq('id', id).single();
   if (eGet || !p) return toast('Permohonan tidak dijumpai','err');
@@ -10079,7 +10123,31 @@ async function putuskanPermohonanPadam(id, tindakan) {
 
   const peta = PADAM_JADUAL[p.jenis];
   if (!peta) return toast('Jenis rekod tidak dikenali: '+p.jenis,'err');
-  if (!confirm(`Padam KEKAL "${p.rekod_label||p.rekod_id}"?\n\nJenis: ${peta.label}\nTindakan ini TIDAK boleh diundur.`)) return;
+
+  const butiran = await butiranRekodPadam(p.jenis, p.rekod_id);
+  if (!butiran) {
+    if (!confirm(`⚠️ Rekod "${p.rekod_label||p.rekod_id}" sudah tiada dalam pangkalan data (mungkin sudah dipadam/diubah).
+
+Tandakan permohonan ini sebagai selesai sahaja (tiada apa dipadam)?`)) return;
+    const { error: eUpd0 } = await sb.from('permohonan_padam').update({
+      status:'diluluskan', diputuskan_oleh: DATA.currentUser.id, diputuskan_pada: new Date().toISOString(),
+    }).eq('id', id);
+    if (eUpd0) return toast('Gagal kemaskini permohonan: '+eUpd0.message,'err');
+    toast('Permohonan ditutup — rekod sudah tiada.');
+    return renderPermohonanPadam();
+  }
+  const labelPekerja = `Label pekerja: ${p.rekod_label||p.rekod_id}${p.sebab?`
+Sebab pekerja: ${p.sebab}`:''}`;
+  if (!confirm(`PADAM KEKAL — sila SEMAK dahulu, ini tindakan tidak boleh diundur:
+
+${labelPekerja}
+
+— BUTIRAN SEBENAR REKOD —
+${butiran}
+
+Jenis: ${peta.label}
+
+Teruskan padam?`)) return;
 
   let mesejTambahan = '';
   if (p.jenis === 'transaksi') {
