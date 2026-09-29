@@ -626,7 +626,9 @@
         <div id="bayar-section-hint" style="font-size:11px;color:var(--muted);margin-bottom:10px;display:none">Permohonan anda perlu disahkan pemilik dahulu sebelum hutang kedai berkurang.</div>
         <div class="form-group">
           <label class="form-label">Kedai & Peribadi</label>
+          <input type="text" class="form-input" id="bayar-kedai-cari" placeholder="🔍 Cari nama kedai/peribadi..." style="margin-bottom:6px" oninput="renderBayarKedaiSelect(this.value)" />
           <select class="form-input" id="bayar-kedai-sel" onchange="kemaskiniInfoDiskaunHutang()"></select>
+          <div id="bayar-kedai-tiada" style="display:none;font-size:11px;color:var(--muted);margin-top:4px">Tiada kedai/peribadi sepadan carian.</div>
         </div>
         <div id="bayar-pecahan-info" style="display:none;background:#F0F7FF;border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px"></div>
         <div id="bayar-diskaun-info" style="display:none;background:#FFF3CD;border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px"></div>
@@ -3581,6 +3583,36 @@ async function padamRoute(id) {
   renderServisKedai();
 }
 
+// Cache senarai kedai/peribadi berhutang (disusun ikut invois paling awal tertunggak
+// dahulu) — diisi semula setiap kali renderKedai() jalan, dibaca semula oleh
+// renderBayarKedaiSelect() bila pengguna menaip carian supaya tak perlu kira semula
+// tarikh setiap kali oninput.
+var BAYAR_KEDAI_CACHE = [];
+var BAYAR_PERIBADI_CACHE = [];
+
+// Bina semula <select id="bayar-kedai-sel"> ikut carian (jika ada) drpd cache sedia
+// ada — dipanggil dari renderKedai() (carian kosong) & terus dari kotak carian
+// (oninput) supaya senarai turun ikut carian tanpa perlu render semula seluruh tab.
+function renderBayarKedaiSelect(carian='') {
+  const bSel = document.getElementById('bayar-kedai-sel');
+  if (!bSel) return;
+  const selamatSebelum = bSel.value;
+  const q = carian.trim().toLowerCase();
+  const kedaiTertapis = q ? BAYAR_KEDAI_CACHE.filter(k=>k.nama.toLowerCase().includes(q)) : BAYAR_KEDAI_CACHE;
+  const peribadiTertapis = q ? BAYAR_PERIBADI_CACHE.filter(([nama])=>nama.toLowerCase().includes(q)) : BAYAR_PERIBADI_CACHE;
+  bSel.innerHTML =
+    kedaiTertapis.map(k=>`<option value="${esc(k.id)}">${esc(k.nama)} · Hutang: ${fmt(k.hutang)}${k.diskaun_hutang_peratus>0?` (diskaun ${k.diskaun_hutang_peratus}% bayar penuh)`:''}</option>`).join('') +
+    peribadiTertapis.map(([nama,jum])=>`<option value="PERIBADI:${encodeURIComponent(nama)}">👤 ${esc(nama)} (Peribadi) · Hutang: ${fmt(jum)}</option>`).join('');
+  const tiadaEl = document.getElementById('bayar-kedai-tiada');
+  const takDeJumpa = !kedaiTertapis.length && !peribadiTertapis.length;
+  if (tiadaEl) tiadaEl.style.display = takDeJumpa ? '' : 'none';
+  bSel.style.display = takDeJumpa ? 'none' : '';
+  // Kekalkan pilihan asal kalau masih wujud dalam senarai tertapis, elak "tersasar"
+  // ke kedai lain bila pengguna taip carian selepas dah pilih sesuatu.
+  if ([...bSel.options].some(o=>o.value===selamatSebelum)) bSel.value = selamatSebelum;
+  kemaskiniInfoDiskaunHutang();
+}
+
 function renderKedai(q='') {
   // Pekerja juga boleh daftar kedai baru (mereka yang cari prospek di lapangan) — edit kekal pemilik sahaja
   document.getElementById('btn-daftar-kedai').style.display='';
@@ -3643,20 +3675,33 @@ function renderKedai(q='') {
   // belian PERIBADI (tiada kedai_id) — dikumpul ikut nama_pembeli (satu-satunya
   // identiti sedia ada utk pembeli peribadi), value diberi awalan "PERIBADI:"
   // supaya rekodBayaran() boleh bezakan drpd kedai_id sebenar.
-  const bKedai=DATA.kedai.filter(k=>k.hutang>0);
+  // Tarikh invois PALING AWAL yg belum bayar per kedai/peribadi — utk susun senarai
+  // ikut hutang paling lama tertunggak dahulu (bantu PA utamakan susulan kutipan).
+  const tarikhAwalKedai={}, tarikhAwalPeribadi={};
+  DATA.transaksi.filter(t=>t.status==='hutang').forEach(t=>{
+    const masa = t.tarikh_masa || t.created_at || '';
+    if (t.kedai_id) {
+      if (!tarikhAwalKedai[t.kedai_id] || masa < tarikhAwalKedai[t.kedai_id]) tarikhAwalKedai[t.kedai_id] = masa;
+    } else {
+      const nama = t.nama_pembeli||'Tanpa Nama';
+      if (!tarikhAwalPeribadi[nama] || masa < tarikhAwalPeribadi[nama]) tarikhAwalPeribadi[nama] = masa;
+    }
+  });
+  const bKedai=DATA.kedai.filter(k=>k.hutang>0)
+    .sort((a,b)=>(tarikhAwalKedai[a.id]||'').localeCompare(tarikhAwalKedai[b.id]||''));
   const hutangPeribadi={};
   DATA.transaksi.filter(t=>!t.kedai_id && t.status==='hutang').forEach(t=>{
     const nama=t.nama_pembeli||'Tanpa Nama';
     hutangPeribadi[nama]=(hutangPeribadi[nama]||0)+t.jumlah;
   });
-  const bPeribadi=Object.entries(hutangPeribadi).filter(([,jum])=>jum>0);
+  const bPeribadi=Object.entries(hutangPeribadi).filter(([,jum])=>jum>0)
+    .sort((a,b)=>(tarikhAwalPeribadi[a[0]]||'').localeCompare(tarikhAwalPeribadi[b[0]]||''));
+  BAYAR_KEDAI_CACHE = bKedai;
+  BAYAR_PERIBADI_CACHE = bPeribadi;
   const bSec=document.getElementById('bayar-section');
   bSec.style.display=(bKedai.length||bPeribadi.length)?'block':'none';
-  const bSel=document.getElementById('bayar-kedai-sel');
-  bSel.innerHTML=
-    bKedai.map(k=>`<option value="${esc(k.id)}">${esc(k.nama)} · Hutang: ${fmt(k.hutang)}${k.diskaun_hutang_peratus>0?` (diskaun ${k.diskaun_hutang_peratus}% bayar penuh)`:''}</option>`).join('') +
-    bPeribadi.map(([nama,jum])=>`<option value="PERIBADI:${encodeURIComponent(nama)}">👤 ${esc(nama)} (Peribadi) · Hutang: ${fmt(jum)}</option>`).join('');
-  kemaskiniInfoDiskaunHutang();
+  const bCariEl=document.getElementById('bayar-kedai-cari');
+  renderBayarKedaiSelect(bCariEl?bCariEl.value:'');
   document.getElementById('bayar-section-title').textContent = currentRole==='pemilik' ? 'Terima Bayaran Hutang' : 'Mohon Rekod Bayaran Hutang';
   document.getElementById('bayar-section-hint').style.display = currentRole==='pemilik' ? 'none' : '';
   document.getElementById('bayar-btn').textContent = currentRole==='pemilik' ? '✅ Rekod Bayaran Diterima' : '📤 Hantar Permohonan';
