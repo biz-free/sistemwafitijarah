@@ -3662,7 +3662,11 @@ function renderKedai(q='') {
   const petaConsignBelumSelesai = consignmentBelumSelesaiIkutKedai();
   if (tapisPilih==='aktif') list = list.filter(k=>k.status==='aktif');
   else if (tapisPilih==='tidak_aktif') list = list.filter(k=>k.status!=='aktif');
-  else if (tapisPilih==='hutang') list = list.filter(k=>(petaHutangTulen[k.id]||0)>0);
+  // "💳 Ada Hutang" kena masuk kedai consignment blm disahkan jugak — bukan hutang
+  // tulen tapi PA masih perlu susulan (kutip/sahkan jualan), jadi patut kelihatan di
+  // sini. Baiki bug: kedai consignment SAHAJA (tiada hutang tulen) sebelum ini hilang
+  // TERUS drpd senarai bila ditapis "Ada Hutang" (bukan sekadar tiada badge merah).
+  else if (tapisPilih==='hutang') list = list.filter(k=>(petaHutangTulen[k.id]||0)>0 || (petaConsignBelumSelesai[k.id]||0)>0);
   else if (tapisPilih==='lama') list = list.filter(k=>daysSince(k.last_visit)>=14);
 
   document.getElementById('kedai-sub-tapis').textContent = (daerahPilih||pendaftarPilih||pekerjaHantarPilih||tapisPilih) ? `Menapis: ${list.length} kedai dipaparkan` : '';
