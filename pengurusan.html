@@ -508,6 +508,7 @@
       <div class="stat-box"><div class="stat-icon">📦</div><div class="stat-label">Produk</div><div class="stat-val" id="s-produk" style="color:var(--gold)">—</div></div>
       <div class="stat-box"><div class="stat-icon">💵</div><div class="stat-label" id="s-cash-label">Cash Dipegang</div><div class="stat-val" id="s-cash-pegang" style="color:var(--gold)">—</div></div>
     </div>
+    <button id="btn-betulkan-bayaran" class="btn-link" style="display:none;font-size:11px;margin:-6px 0 10px" onclick="bukaModalBetulkanBayaran()">✏️ Betulkan rekod bayaran tunai (silap pekerja/sudah bank in)</button>
 
     <div class="card">
       <div class="card-title">🚨 Perlu Tindakan Segera</div>
@@ -1987,6 +1988,17 @@ semula transaksi penuh. Lihat tukar_produk_transaksi() RPC — SQL_TAMBAHAN_139.
   </div>
 </div>
 
+<!-- Betulkan Rekod Bayaran Tunai Diterima (pemilik SAHAJA) — Dashboard, bawah kad
+Cash Dipegang. Utk kes bayaran direkod di bawah akaun salah (cth Pemilik rekod bagi
+pihak pekerja) atau duit tunai yg kemudian didapati sudah dibank-in terus. -->
+<div class="modal-overlay" id="modal-betulkan-bayaran">
+  <div class="modal-box">
+    <div class="modal-title">✏️ Betulkan Rekod Bayaran Tunai<button class="modal-close" onclick="closeModal('modal-betulkan-bayaran')">✕ Tutup</button></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">30 bayaran TUNAI disahkan terkini. Guna bila rekod tersilap pekerja, atau duit tunai ni didapati sudah dibank-in terus (tandakan "Sudah Bank In" — ia akan keluar dari kiraan Cash Dipegang).</div>
+    <div id="betulkan-bayaran-list"><div class="empty"><div class="empty-text">Memuatkan...</div></div></div>
+  </div>
+</div>
+
 <!-- Edit Tarikh Akhir Bayaran Hutang (pemilik SAHAJA) — Tempahan > Transaksi Kedai.
 Lihat edit_tarikh_akhir_bayaran_transaksi() RPC — SQL_TAMBAHAN_144. -->
 <div class="modal-overlay" id="modal-edit-tarikh-akhir">
@@ -2733,6 +2745,8 @@ async function renderCashDipegangDashboard() {
   const valEl = document.getElementById('s-cash-pegang');
   if (!labelEl || !valEl) return;
   if (!useCloud) { valEl.textContent = '—'; return; }
+  const btnBetulkan = document.getElementById('btn-betulkan-bayaran');
+  if (btnBetulkan) btnBetulkan.style.display = currentRole==='pemilik' ? '' : 'none';
   if (currentRole==='pemilik') {
     labelEl.textContent = 'Cash Dipegang (Semua)';
     const [{ data: serahanSemua }, { data: baucarHarianSemua }, { data: hutangTunaiSemua }] = await Promise.all([
@@ -2752,6 +2766,73 @@ async function renderCashDipegangDashboard() {
     ]);
     valEl.textContent = fmt(kiraCashDipegang(DATA.currentUser.id, serahanSaya||[], baucarHarianSaya||[], hutangTunaiSaya||[]));
   }
+}
+
+// ── Betulkan Rekod Bayaran Tunai Diterima (pemilik SAHAJA) ──────────────────────
+// Senarai 30 bayaran TUNAI disahkan terkini + kawalan betulkan kaedah/pekerja.
+// Lihat betulkan_bayaran_hutang_diterima() RPC — SQL_TAMBAHAN_155. Punca: rekod
+// bayaran yang Pemilik buat sendiri (bukan pekerja mohon) catat pekerja_id =
+// akaun Pemilik, bukan pekerja yg sebenarnya pegang/kutip duit tunai di lapangan.
+let SENARAI_PEKERJA_CACHE = null;
+async function bukaModalBetulkanBayaran() {
+  showModal('modal-betulkan-bayaran');
+  const el = document.getElementById('betulkan-bayaran-list');
+  el.innerHTML = '<div class="empty"><div class="empty-text">Memuatkan...</div></div>';
+  if (!Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
+  if (!SENARAI_PEKERJA_CACHE) {
+    const { data } = await sb.from('profiles').select('id,nama').order('nama');
+    SENARAI_PEKERJA_CACHE = data || [];
+  }
+  const { data, error } = await sb.from('permohonan_bayaran_hutang').select('*')
+    .eq('kaedah_bayaran', 'tunai').eq('status', 'disahkan')
+    .order('created_at', { ascending: false }).limit(30);
+  if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
+  renderSenaraiBetulkanBayaran(data || []);
+}
+
+function renderSenaraiBetulkanBayaran(senarai) {
+  const el = document.getElementById('betulkan-bayaran-list');
+  if (!senarai.length) { el.innerHTML = '<div class="empty"><div class="empty-text">Tiada bayaran tunai disahkan lagi</div></div>'; return; }
+  el.innerHTML = senarai.map(r => {
+    const namaDestinasi = r.kedai_id ? (DATA.kedai.find(k=>k.id===r.kedai_id)?.nama || '?') : `🙋 ${esc(r.nama_pembeli||'Peribadi')}`;
+    const namaPekerja = PROFIL_NAMA_CACHE[r.pekerja_id] || r.pekerja_id;
+    return `<div class="list-item" style="flex-direction:column;align-items:stretch;gap:6px">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <div><div class="list-item-title">${esc(namaDestinasi)}</div><div class="list-item-sub">${fmtDT(r.created_at)} · direkod di bawah: <b>${esc(namaPekerja)}</b></div></div>
+        <div style="font-weight:800;color:var(--gold);white-space:nowrap">${fmt(r.jumlah)}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="tandaBayaranSudahBankIn('${r.id}','${esc(namaDestinasi)}')">🏦 Sudah Bank In</button>
+        <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="tukarPekerjaBayaranDiterima('${r.id}', this.value, this)">
+          <option value="">↔️ Pindah ke pekerja lain...</option>
+          ${SENARAI_PEKERJA_CACHE.filter(p=>p.id!==r.pekerja_id).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('')}
+        </select>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function tandaBayaranSudahBankIn(id, namaDestinasi) {
+  if (!confirm(`Tandakan bayaran ${namaDestinasi} ni sebagai SUDAH BANK IN?\n\nIa akan ditukar drpd "Tunai" kepada "Transfer" — keluar terus drpd kiraan Cash Dipegang sesiapa.`)) return;
+  const { error } = await sb.rpc('betulkan_bayaran_hutang_diterima', { p_id: id, p_kaedah_bayaran_baru: 'transfer' });
+  if (error) return toast('Gagal: '+error.message, 'err');
+  toast('✅ Ditandakan sudah bank in — keluar drpd Cash Dipegang');
+  await bukaModalBetulkanBayaran();
+  renderCashDipegangDashboard();
+}
+
+async function tukarPekerjaBayaranDiterima(id, pekerjaIdBaru, selectEl) {
+  if (!pekerjaIdBaru) return;
+  const namaBaru = PROFIL_NAMA_CACHE[pekerjaIdBaru] || pekerjaIdBaru;
+  if (!confirm(`Pindahkan rekod bayaran ni ke akaun "${namaBaru}"?\n\nGuna ini kalau pekerja lain yg sebenarnya kutip/pegang duit tunai ni, bukan yg tercatat sekarang.`)) {
+    selectEl.value = '';
+    return;
+  }
+  const { error } = await sb.rpc('betulkan_bayaran_hutang_diterima', { p_id: id, p_pekerja_id_baru: pekerjaIdBaru });
+  if (error) return toast('Gagal: '+error.message, 'err');
+  toast(`✅ Dipindahkan ke ${namaBaru}`);
+  await bukaModalBetulkanBayaran();
+  renderCashDipegangDashboard();
 }
 
 // ════════════════════════════════════════════════════
