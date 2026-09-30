@@ -6800,7 +6800,14 @@ async function renderResit(id) {
     ${t.diskaun_peratus>0?`<div class="resit-row"><span>SUBJUMLAH</span><span>RM ${(t.jumlah_asal??t.jumlah).toFixed(2)}</span></div>
     <div class="resit-row" style="color:var(--green)"><span>DISKAUN (${t.diskaun_peratus}%)</span><span>−RM ${((t.jumlah_asal??t.jumlah)-t.jumlah).toFixed(2)}</span></div>`:''}
     <div class="resit-total" style="display:flex;justify-content:space-between"><span>JUMLAH:</span><span>RM ${t.jumlah.toFixed(2)}</span></div>
-    ${t.kaedah_bayaran==='consignment' && konsainanNilaiBaki>0.005?`<div style="margin-top:6px;padding:6px 8px;background:#6B4EAF0D;border:1px dashed var(--purple);border-radius:6px">
+    ${// Baiki bug: panel ni sebelum ini cuma semak kuantiti item (terjual/pulang/baki),
+    // tak pernah semak t.status — jadi resit consignment yang dah "Selesai" (dibayar
+    // melalui rekod_bayaran TANPA lalui Kemaskini Jualan dulu) tetap papar "Baki belum
+    // pasti (blm disahkan)" walaupun bayaran dah diterima & disahkan, mengelirukan
+    // pemilik (nampak macam duit "hilang"/tak jelas ke mana). Sorok terus bila
+    // status='selesai' — bayaran diterima bermakna urusan dah selesai utk paparan resit,
+    // tak kira sama ada kuantiti terjual/pulang pernah direkod item demi item.
+    t.kaedah_bayaran==='consignment' && t.status!=='selesai' && konsainanNilaiBaki>0.005?`<div style="margin-top:6px;padding:6px 8px;background:#6B4EAF0D;border:1px dashed var(--purple);border-radius:6px">
       <div class="resit-row" style="color:var(--purple);font-weight:700"><span>💵 PERLU DIBAYAR SEKARANG</span><span>RM ${konsainanNilaiTerjual.toFixed(2)}</span></div>
       <div class="resit-row" style="color:var(--muted);font-size:15px"><span>⏳ Baki belum pasti (blm disahkan)</span><span>RM ${konsainanNilaiBaki.toFixed(2)}</span></div>
     </div>`:''}
