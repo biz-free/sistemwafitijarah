@@ -4381,10 +4381,10 @@ let hDiskaunPilihan = null; // null | 0 | 'cod' | 'transfer'
 // Kadar diskaun ikut kaedah bayaran — guna semula tetapan yang sama dengan
 // diskaun pre-order (Lebih > Tetapan Pre-Order & Diskaun), supaya satu sahaja
 // tempat untuk ubah kadar, tak kira borang mana yang guna.
-let TETAPAN_DISKAUN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5, qr_bank_url: null, butiran_bank: '', mesej_followup_servis: '', skim_hutang_mula: '2026-10-01', skim_hutang_hari_awal: 5, skim_hutang_peratus_awal: 10, skim_hutang_hari_akhir: 7, skim_hutang_peratus_akhir: 5 };
+let TETAPAN_DISKAUN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5, qr_bank_url: null, butiran_bank: '', mesej_followup_servis: '', skim_hutang_mula: '2026-10-01', skim_hutang_hari_awal: 5, skim_hutang_peratus_awal: 10, skim_hutang_hari_akhir: 7, skim_hutang_peratus_akhir: 5, diskaun_segera_kecil_peratus: 2 };
 async function muatTetapanDiskaunUntukHantar() {
   if (!useCloud) return;
-  const { data } = await sb.from('tetapan').select('minima_transfer, diskaun_peratus, diskaun_cod_peratus, qr_bank_url, butiran_bank, mesej_followup_servis, skim_hutang_mula, skim_hutang_hari_awal, skim_hutang_peratus_awal, skim_hutang_hari_akhir, skim_hutang_peratus_akhir').eq('id', 1).single();
+  const { data } = await sb.from('tetapan').select('minima_transfer, diskaun_peratus, diskaun_cod_peratus, qr_bank_url, butiran_bank, mesej_followup_servis, skim_hutang_mula, skim_hutang_hari_awal, skim_hutang_peratus_awal, skim_hutang_hari_akhir, skim_hutang_peratus_akhir, diskaun_segera_kecil_peratus').eq('id', 1).single();
   if (data) TETAPAN_DISKAUN = { ...TETAPAN_DISKAUN, ...data };
 }
 // Jumlah >= minima_transfer: pekerja WAJIB pilih diskaun eksplisit (0%/kadar tunai/
@@ -4402,8 +4402,18 @@ function skimHutangAktif(subjumlah) {
   const tarikhInvois = document.getElementById('h-tarikh')?.value || tarikhTempatan();
   return tarikhInvois >= mula;
 }
+// Diskaun kecil (SQL_TAMBAHAN_156): bayar tunai/transfer serta-merta untuk jumlah BAWAH minima.
+function diskaunKecilPeratus(subjumlah) {
+  if (hBayar !== 'terus' && hBayar !== 'transfer') return 0;
+  const minima = TETAPAN_DISKAUN.minima_transfer||0;
+  if (minima > 0 && subjumlah >= minima) return 0;
+  const mula = TETAPAN_DISKAUN.skim_hutang_mula;
+  if (!mula) return 0;
+  const tarikhInvois = document.getElementById('h-tarikh')?.value || tarikhTempatan();
+  return tarikhInvois >= mula ? (TETAPAN_DISKAUN.diskaun_segera_kecil_peratus||0) : 0;
+}
 function kiraDiskaunHantarPeratus(subjumlah) {
-  if (subjumlah < (TETAPAN_DISKAUN.minima_transfer||0)) return 0;
+  if (subjumlah < (TETAPAN_DISKAUN.minima_transfer||0)) return diskaunKecilPeratus(subjumlah);
   if (skimHutangAktif(subjumlah)) return TETAPAN_DISKAUN.skim_hutang_peratus_awal||0;
   if (hDiskaunPilihan === 'cod') return TETAPAN_DISKAUN.diskaun_cod_peratus||0;
   if (hDiskaunPilihan === 'transfer') return TETAPAN_DISKAUN.diskaun_peratus||0;

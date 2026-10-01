@@ -13,7 +13,10 @@
 --   * Cron: lepas tarikh_akhir_bayaran -> 5%; lepas (tarikh_akhir + 2 hari) -> 0%.
 --     transaksi.jumlah & kedai.hutang dilaras automatik pada setiap penurunan.
 --   * Kadar, bilangan hari & tarikh mula boleh diubah di jadual tetapan.
---   * Invois SEBELUM tarikh mula, consignment, dan jualan tunai/transfer TIDAK berubah.
+--   * Tambahan: jualan TUNAI / TRANSFER serta-merta untuk pembelian BAWAH minima dapat
+--     diskaun kecil 2% (diskaun_segera_kecil_peratus). Bila >= minima, kadar sedia ada
+--     (tunai 5% / transfer 10%, pilihan pekerja) kekal.
+--   * Invois SEBELUM tarikh mula dan consignment TIDAK berubah.
 --   * Pemilik boleh lanjutkan tarikh_akhir_bayaran (SQL 144) SEBELUM cron menurunkan
 --     diskaun; diskaun yg sudah diturunkan tidak dipulihkan secara automatik.
 -- Fungsi submit_penghantaran di bawah = SQL 123 + blok skim sahaja.
@@ -24,12 +27,15 @@ ALTER TABLE public.tetapan ADD COLUMN IF NOT EXISTS skim_hutang_hari_awal intege
 ALTER TABLE public.tetapan ADD COLUMN IF NOT EXISTS skim_hutang_peratus_awal double precision DEFAULT 10;
 ALTER TABLE public.tetapan ADD COLUMN IF NOT EXISTS skim_hutang_hari_akhir integer DEFAULT 7;
 ALTER TABLE public.tetapan ADD COLUMN IF NOT EXISTS skim_hutang_peratus_akhir double precision DEFAULT 5;
+-- Diskaun kecil: bayar TUNAI / TRANSFER serta-merta (hari sama) untuk pembelian BAWAH minima.
+ALTER TABLE public.tetapan ADD COLUMN IF NOT EXISTS diskaun_segera_kecil_peratus double precision DEFAULT 2;
 UPDATE public.tetapan SET
   skim_hutang_mula = COALESCE(skim_hutang_mula, DATE '2026-10-01'),
   skim_hutang_hari_awal = COALESCE(skim_hutang_hari_awal, 5),
   skim_hutang_peratus_awal = COALESCE(skim_hutang_peratus_awal, 10),
   skim_hutang_hari_akhir = COALESCE(skim_hutang_hari_akhir, 7),
-  skim_hutang_peratus_akhir = COALESCE(skim_hutang_peratus_akhir, 5)
+  skim_hutang_peratus_akhir = COALESCE(skim_hutang_peratus_akhir, 5),
+  diskaun_segera_kecil_peratus = COALESCE(diskaun_segera_kecil_peratus, 2)
 WHERE id = 1;
 
 ALTER TABLE public.transaksi ADD COLUMN IF NOT EXISTS skim_hutang_berperingkat boolean NOT NULL DEFAULT false;
@@ -52,7 +58,7 @@ DECLARE
   v_minima double precision; v_kadar_cod double precision; v_kadar_transfer double precision;
   v_sub double precision := 0; v_harga double precision; v_jumlah_final double precision;
   v_diskaun_efektif double precision;
-  v_skim_mula date; v_hari_awal int; v_peratus_awal double precision;
+  v_skim_mula date; v_hari_awal int; v_peratus_awal double precision; v_peratus_kecil double precision;
   v_skim boolean := false; v_tarikh_akhir date := p_tarikh_akhir_bayaran;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()) THEN
@@ -63,9 +69,9 @@ BEGIN
   v_tarikh_masa := CASE WHEN p_tarikh_masa IS NOT NULL AND is_pemilik() THEN p_tarikh_masa ELSE now() END;
 
   SELECT minima_transfer, diskaun_cod_peratus, diskaun_peratus,
-         skim_hutang_mula, skim_hutang_hari_awal, skim_hutang_peratus_awal
+         skim_hutang_mula, skim_hutang_hari_awal, skim_hutang_peratus_awal, diskaun_segera_kecil_peratus
     INTO v_minima, v_kadar_cod, v_kadar_transfer,
-         v_skim_mula, v_hari_awal, v_peratus_awal
+         v_skim_mula, v_hari_awal, v_peratus_awal, v_peratus_kecil
     FROM tetapan WHERE id = 1;
 
   -- Kira semula subjumlah SEBENAR drpd harga_jual sebenar di stok — server
@@ -98,6 +104,11 @@ BEGIN
       WHEN 'transfer' THEN COALESCE(v_kadar_transfer, 0)
       ELSE 0
     END;
+  ELSIF p_kaedah_bayaran IN ('tunai', 'transfer') AND p_status = 'selesai'
+        AND v_skim_mula IS NOT NULL
+        AND (v_tarikh_masa AT TIME ZONE 'Asia/Kuala_Lumpur')::date >= v_skim_mula THEN
+    -- Bawah minima: bayar tunai / instant transfer terus (status selesai) dapat diskaun kecil.
+    v_diskaun_efektif := COALESCE(v_peratus_kecil, 0);
   ELSE
     v_diskaun_efektif := 0;
   END IF;
