@@ -2175,6 +2175,11 @@ function saveData() {
 //  HELPERS
 // ════════════════════════════════════════════════════
 const fmt = n => 'RM ' + Number(n).toFixed(2);
+// Harga jual SEBENAR semasa transaksi dibuat (disimpan dalam items[].harga). Laporan/untung WAJIB
+// guna ini — bukan stok.harga_jual semasa — supaya laporan bulan lepas tidak berubah bila harga
+// produk dinaikkan kemudian (cth kenaikan Tamar Cocoa 1 Okt 2026). Jatuh balik ke harga stok
+// semasa hanya jika item lama tiada harga tersimpan.
+const hargaJualItem = (it, stokItem) => { const h = Number(it?.harga); return (it?.harga != null && isFinite(h)) ? h : (stokItem ? stokItem.harga_jual : 0); };
 // "2026-08" -> "Ogos 2026" — label bulan mesra utk skop filter (dashboard, dll).
 const fmtBulanMY = bulanYYYYMM => {
   const [y,m] = bulanYYYYMM.split('-').map(Number);
@@ -7202,7 +7207,7 @@ async function renderLaporan() {
   // MESTI tolak jumlah diskaun sebenar (jumlah_asal-jumlah), bukan cuma kira ikut
   // harga_jual penuh macam tiada diskaun langsung berlaku.
   const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
-  const untung=fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0); },0) - diskaunKedai;
+  const untung=fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(hargaJualItem(it,stokItem)-stokItem.harga_beli)*it.qty:0); },0); },0) - diskaunKedai;
 
   const jumlahStok = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
   const { totalKm: jumlahKm, kmIkutPekerja } = await kiraJarakKehadiranJulat(bulan+'-01T00:00:00', akhirBulanISO(bulan));
@@ -7333,7 +7338,7 @@ async function renderLaporanHarian() {
   // dah didiskaun) tapi kos barang tak berubah — diskaun ni 100% ambil dari margin,
   // jadi untung kasar mesti tolak jumlah diskaun sebenar (jumlah_asal-jumlah).
   const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
-  const untung = fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0); },0) - diskaunKedai;
+  const untung = fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(hargaJualItem(it,stokItem)-stokItem.harga_beli)*it.qty:0); },0); },0) - diskaunKedai;
 
   const { totalKm: jumlahKm, kmIkutPekerja } = await kiraJarakKehadiranJulat(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaPilih||null);
   const hariLayakMakan = await kiraHariLayakMakan(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaPilih||null);
@@ -8033,7 +8038,7 @@ function renderAnalisis() {
   // Diskaun automatik Pre-Order (COD/Transfer ≥ minima) MESTI ditolak dari untung
   // (100% ambil dari margin, sama pattern spt renderLaporan()) — sblm ni tertinggal.
   const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
-  const untung = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(x=>x.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0),0) - diskaunKedai;
+  const untung = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(x=>x.id===it.stokId); return s+(stokItem?(hargaJualItem(it,stokItem)-stokItem.harga_beli)*it.qty:0); },0),0) - diskaunKedai;
 
   // Hutang Semasa & Consignment Semasa — dipecahkan berasingan (bukan lagi 1 nombor
   // "Hutang Semasa (Semua Masa)" bercampur, spt kedai.hutang yg gabungkan kedua-dua
@@ -8089,7 +8094,7 @@ function renderAnalisis() {
     ikutBulan[bln] ||= { jualan:0, modal:0, untung:0 };
     if (t.status==='selesai') ikutBulan[bln].jualan += t.jumlah;
     ikutBulan[bln].untung -= (t.jumlah_asal??t.jumlah)-t.jumlah;
-    t.items.forEach(it=>{ const s=DATA.stok.find(x=>x.id===it.stokId); if (s) { ikutBulan[bln].modal += s.harga_beli*it.qty; ikutBulan[bln].untung += (s.harga_jual-s.harga_beli)*it.qty; } });
+    t.items.forEach(it=>{ const s=DATA.stok.find(x=>x.id===it.stokId); if (s) { ikutBulan[bln].modal += s.harga_beli*it.qty; ikutBulan[bln].untung += (hargaJualItem(it,s)-s.harga_beli)*it.qty; } });
   });
   document.getElementById('an-bulanan-list').innerHTML = Object.entries(ikutBulan).sort((a,b)=>a[0].localeCompare(b[0])).map(([bln,d])=>
     `<div class="list-item"><div class="list-item-title">${bln}</div><div style="text-align:right;font-size:11px"><div>Jualan: ${fmt(d.jualan)}</div><div style="color:var(--gold)">Untung: ${fmt(d.untung)}</div></div></div>`
@@ -10595,7 +10600,7 @@ async function thumbIn() {
 async function kiraUntungBersihHarianPekerja(pekerjaId, tarikh) {
   const fil = DATA.transaksi.filter(t=>t.created_by===pekerjaId && t.tarikh_masa && tarikhTempatan(t.tarikh_masa)===tarikh);
   const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
-  const untung = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0),0) - diskaunKedai;
+  const untung = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(hargaJualItem(it,stokItem)-stokItem.harga_beli)*it.qty:0); },0),0) - diskaunKedai;
 
   const { kmIkutHari } = await kiraJarakKehadiranJulat(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaId);
   const kmPekerja = kmIkutHari[`${pekerjaId}|${tarikh}`] || 0;
