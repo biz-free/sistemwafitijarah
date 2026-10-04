@@ -76,8 +76,10 @@ async function hantarTelegram(admin: any, jenis: string, pekerjaNama: string, bu
   }
 
   // Pilihan kaedah minyak GPS / P2P (SQL_TAMBAHAN_161, arahan Amirul 2026-10-04): untuk
-  // baucar_bayaran sahaja. kira_minyak_gps_baucar mengira jumlah baucar jika minyak dikira
-  // ikut jejak GPS tertapis; P2P = jumlah baucar sedia ada (tiada ubah). jumlah_gps = null
+  // baucar_bayaran sahaja. Baris & butang menunjukkan KOS MINYAK sahaja (bukan jumlah baucar
+  // penuh -- pembetulan 2026-10-05): minyak GPS drpd kira_minyak_gps_baucar().minyak_gps,
+  // minyak P2P drpd baucar_bayaran.butiran.minyak (tiada ubah). Butang GPS sendiri tetap
+  // meluluskan dgn jumlah baucar penuh yg dikira semula di server. jumlah_gps = null
   // (data GPS tak cukup) -> baris & butang GPS/P2P TIDAK ditawarkan, hanya ✅/✕ biasa.
   // Baris "💰 P2P: ..." DITAPIS keluar drpd teks WhatsApp oleh sulitkanUntukWa()
   // (telegram-webhook) supaya mesej Team Sales tak berubah.
@@ -88,10 +90,15 @@ async function hantarTelegram(admin: any, jenis: string, pekerjaNama: string, bu
     try {
       const { data: gps } = await admin.rpc("kira_minyak_gps_baucar", { p_baucar_id: recordId });
       const g = Array.isArray(gps) ? gps[0] : gps;
-      if (g && g.jumlah_gps != null && g.jumlah_p2p != null) {
-        jumlahGps = Number(g.jumlah_gps);
-        jumlahP2p = Number(g.jumlah_p2p);
-        barisJumlah = `💰 P2P: RM${jumlahP2p.toFixed(2)} | 🛰️ GPS: RM${jumlahGps.toFixed(2)}\n`;
+      if (g && g.jumlah_gps != null && g.minyak_gps != null) {
+        const { data: bRow } = await admin.from("baucar_bayaran").select("butiran").eq("id", recordId).maybeSingle();
+        const minyakP2p = Number(bRow?.butiran?.minyak);
+        if (Number.isFinite(minyakP2p)) {
+          jumlahGps = Number(g.minyak_gps); // KOS MINYAK GPS sahaja (nama pembolehubah dikekalkan utk butang)
+          jumlahP2p = minyakP2p;            // KOS MINYAK P2P sahaja
+          // Awalan "💰 P2P:" mesti kekal — dikenali oleh sulitkanUntukWa() (telegram-webhook) utk tapis daripada WhatsApp.
+          barisJumlah = `💰 P2P: RM${jumlahP2p.toFixed(2)} | 🛰️ GPS: RM${jumlahGps.toFixed(2)} (kos minyak)\n`;
+        }
       }
     } catch (err) {
       console.warn(`[notifikasi-kelulusan-pemilik] kira minyak GPS gagal record_id=${recordId}`, err);
