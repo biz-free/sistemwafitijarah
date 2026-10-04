@@ -53,6 +53,8 @@ const CODE_JADUAL: Record<string, string> = {
   bu: "baucar_bayaran",
   tf: "transaksi", // Online Transfer: Duit Masuk / Belum Masuk (SQL_TAMBAHAN_151)
   pd: "permohonan_padam", // Permohonan Padam jenis transaksi (SQL_TAMBAHAN_154) — pengesahan 2 langkah
+  bg: "baucar_bayaran", // 🛰️ Lulus baucar harian dgn minyak GPS Trail Tertapis (SQL_TAMBAHAN_161)
+  bp: "baucar_bayaran", // 📍 Lulus baucar harian dgn minyak P2P (pilihan eksplisit, sama spt "bu" Lulus)
 };
 
 function json(body: unknown, status = 200) {
@@ -66,11 +68,20 @@ function fmtRM(n: unknown): string {
 // teks dihantar ke kumpulan WhatsApp Team Sales — elak pekerja lain nampak
 // upah/cash rakan sekerja. Paparan Telegram pemilik sendiri (asalText di
 // editText) TIDAK terjejas — fungsi ni cuma dipakai pada teksWa.
+// SQL_TAMBAHAN_161: (1) baris pilihan "💰 P2P: RM.. | 🛰️ GPS: RM.." (kad baucar harian) DITAPIS
+// supaya teks WhatsApp tak berubah; (2) corak lama hanya padan jika "Cash tangan" di baris
+// sendiri / "— Upah" di hujung baris, sedangkan format semasa baucar harian ialah satu baris:
+// "DD/MM/YYYY — Upah RMx | Cash tangan RMy | Baki serah RMz" -> kini ketiga-tiga butiran dibuang
+// di mana-mana dlm baris (arahan Amirul 2026-10-04: baiki terus).
 function sulitkanUntukWa(teks: string): string {
   return teks
     .split("\n")
     .filter((baris) => !/^\s*Cash tangan\s+RM/i.test(baris))
-    .map((baris) => baris.replace(/\s*—\s*Upah\s+RM[\d.,-]+\s*$/i, ""))
+    .filter((baris) => !/^\s*💰\s*P2P:/.test(baris))
+    .map((baris) => baris
+      .replace(/\s*\|\s*Cash tangan\s+RM[\d.,-]+/gi, "")
+      .replace(/\s*\|\s*Baki serah\s+RM[\d.,-]+/gi, "")
+      .replace(/\s*—\s*Upah\s+RM[\d.,-]+/gi, ""))
     .join("\n");
 }
 function tarikhKL(d?: string | Date | null): string {
@@ -631,18 +642,33 @@ Deno.serve(async (req) => {
         // Pemakluman WhatsApp direkod oleh pencetus DB (SQL_TAMBAHAN_153) — tidak perlu rekod di sini.
         return json({ ok: true });
       }
+      // bg (🛰️ GPS) / bp (📍 P2P) — hanya tindakan lulus (A) yg sah (SQL_TAMBAHAN_161).
+      if ((code === "bg" || code === "bp") && action !== "A") {
+        await answerCallback(cq.id, "Data tidak sah.", true);
+        return json({ ok: true });
+      }
       const status = action === "A" ? "disahkan" : "ditolak";
 
+      // bg: kira SEMULA jumlah GPS di server (telegram_putuskan_baucar_gps) — tak guna nilai dr butang.
+      // bp: sama spt "bu" Lulus (jumlah P2P sedia ada, tiada ubah).
       const { data: hasil, error } = jadual === "transaksi"
         ? await sb.rpc("telegram_putuskan_transfer", { p_admin_chat_id: chatId, p_id: id, p_status: status })
-        : await sb.rpc("telegram_putuskan", { p_admin_chat_id: chatId, p_jadual: jadual, p_id: id, p_status: status });
+        : code === "bg"
+          ? await sb.rpc("telegram_putuskan_baucar_gps", { p_admin_chat_id: chatId, p_id: id })
+          : await sb.rpc("telegram_putuskan", { p_admin_chat_id: chatId, p_jadual: jadual, p_id: id, p_status: status });
       if (error) {
         await answerCallback(cq.id, "❌ " + error.message, true);
         return json({ ok: true });
       }
       await answerCallback(cq.id, hasil || "Selesai");
       const asalText = cq.message?.text || "";
-      await editText(chatId, messageId, `${asalText}\n\n➡️ ${hasil}\n👤 oleh ${admin.nama} · ${nowKLDisplay()}`);
+      // Paparan Telegram sahaja (BUKAN teks WhatsApp): nyatakan kaedah minyak & jumlah baucar diluluskan.
+      let barisKaedah = "";
+      if (code === "bg" || code === "bp") {
+        const { data: bRow } = await sb.from("baucar_bayaran").select("jumlah").eq("id", id).maybeSingle();
+        barisKaedah = `${code === "bg" ? "🛰️ Kaedah minyak: GPS" : "📍 Kaedah minyak: P2P"} — jumlah ${fmtRM(bRow?.jumlah)}\n`;
+      }
+      await editText(chatId, messageId, `${asalText}\n\n➡️ ${hasil}\n${barisKaedah}👤 oleh ${admin.nama} · ${nowKLDisplay()}`);
       // Rekod utk dihantar ke kumpulan WhatsApp Team Sales (skrip VPS ambil & hantar). Kegagalan di sini
       // TIDAK boleh menjejaskan kelulusan yg sudah berjaya.
       try {

@@ -75,7 +75,30 @@ async function hantarTelegram(admin: any, jenis: string, pekerjaNama: string, bu
     }
   }
 
-  const text = `🔔 ${jenis}\n👤 ${pekerjaNama}\n${statusLokasi}${butiran || ""}`.trim();
+  // Pilihan kaedah minyak GPS / P2P (SQL_TAMBAHAN_161, arahan Amirul 2026-10-04): untuk
+  // baucar_bayaran sahaja. kira_minyak_gps_baucar mengira jumlah baucar jika minyak dikira
+  // ikut jejak GPS tertapis; P2P = jumlah baucar sedia ada (tiada ubah). jumlah_gps = null
+  // (data GPS tak cukup) -> baris & butang GPS/P2P TIDAK ditawarkan, hanya ✅/✕ biasa.
+  // Baris "💰 P2P: ..." DITAPIS keluar drpd teks WhatsApp oleh sulitkanUntukWa()
+  // (telegram-webhook) supaya mesej Team Sales tak berubah.
+  let barisJumlah = "";
+  let jumlahGps: number | null = null;
+  let jumlahP2p: number | null = null;
+  if (jenisRekod === "baucar_bayaran" && recordId) {
+    try {
+      const { data: gps } = await admin.rpc("kira_minyak_gps_baucar", { p_baucar_id: recordId });
+      const g = Array.isArray(gps) ? gps[0] : gps;
+      if (g && g.jumlah_gps != null && g.jumlah_p2p != null) {
+        jumlahGps = Number(g.jumlah_gps);
+        jumlahP2p = Number(g.jumlah_p2p);
+        barisJumlah = `💰 P2P: RM${jumlahP2p.toFixed(2)} | 🛰️ GPS: RM${jumlahGps.toFixed(2)}\n`;
+      }
+    } catch (err) {
+      console.warn(`[notifikasi-kelulusan-pemilik] kira minyak GPS gagal record_id=${recordId}`, err);
+    }
+  }
+
+  const text = `🔔 ${jenis}\n👤 ${pekerjaNama}\n${statusLokasi}${barisJumlah}${butiran || ""}`.trim();
   let replyMarkup: unknown = undefined;
   const padamBukanTransaksi = jenisRekod === "permohonan_padam" && !String(butiran || "").startsWith("Transaksi ");
   if (recordId && jenisRekod && JADUAL_CODE[jenisRekod] && !padamBukanTransaksi) {
@@ -86,10 +109,18 @@ async function hantarTelegram(admin: any, jenis: string, pekerjaNama: string, bu
     // transaksi = Online Transfer (SQL_TAMBAHAN_151/152): "Duit Masuk" / "Belum Masuk → Hutang"
     // (Belum Masuk auto tukar transaksi kpd hutang).
     const labelLulus = jenisRekod === "transaksi" ? "✅ Duit Masuk" : jenisRekod === "permohonan_padam" ? "✅ Luluskan & Padam" : "✅ Lulus";
-    replyMarkup = { inline_keyboard: [[
+    const barisButang: unknown[][] = [[
       { text: labelLulus, callback_data: `tp:${code}:${recordId}:A` },
       { text: labelTolak, callback_data: `tp:${code}:${recordId}:R` },
-    ]] };
+    ]];
+    // Baris berasingan: pilih kaedah minyak (bg = GPS, bp = P2P) — kod mesti PADAN CODE_JADUAL webhook.
+    if (jenisRekod === "baucar_bayaran" && jumlahGps != null && jumlahP2p != null) {
+      barisButang.push([
+        { text: `🛰️ GPS RM${jumlahGps.toFixed(2)}`, callback_data: `tp:bg:${recordId}:A` },
+        { text: `📍 P2P RM${jumlahP2p.toFixed(2)}`, callback_data: `tp:bp:${recordId}:A` },
+      ]);
+    }
+    replyMarkup = { inline_keyboard: barisButang };
   }
 
   let berjaya = 0;
