@@ -328,7 +328,7 @@ function toast(msg, type='ok') {
 }
 
 let PRODUK = [];
-let TETAPAN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5, consignment_limit: 300, minima_penghantaran_percuma: 100, qr_bank_url: null, butiran_bank: '' };
+let TETAPAN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5, consignment_limit: 300, minima_penghantaran_percuma: 100, qr_bank_url: null, butiran_bank: '', skim_hutang_mula: '2026-10-01', diskaun_segera_kecil_peratus: 2 };
 let cart = {}; // { stokId: qty }
 let bayarMetod = 'cod';
 const kedaiIdDariQR = new URLSearchParams(location.search).get('kedai');
@@ -390,7 +390,7 @@ async function initHalaman() {
   document.getElementById('dk-peratus').textContent = TETAPAN.diskaun_peratus;
   document.getElementById('dk-cod-peratus').textContent = TETAPAN.diskaun_cod_peratus;
   document.getElementById('cl-had').textContent = fmt(TETAPAN.consignment_limit);
-  document.getElementById('promo-track').textContent = `PROMOSI POTONGAN ${TETAPAN.diskaun_cod_peratus}% (TUNAI/COD) ATAU ${TETAPAN.diskaun_peratus}% (INSTANT TRANSFER/QR), JIKA ANDA BELI MINIMA ${fmt(TETAPAN.minima_transfer)} DARI SISTEM INI`;
+  document.getElementById('promo-track').textContent = `PROMOSI POTONGAN ${TETAPAN.diskaun_cod_peratus}% (TUNAI/COD) ATAU ${TETAPAN.diskaun_peratus}% (INSTANT TRANSFER/QR), JIKA ANDA BELI MINIMA ${fmt(TETAPAN.minima_transfer)} DARI SISTEM INI. BELIAN BAWAH ${fmt(TETAPAN.minima_transfer)}: DISKAUN ${TETAPAN.diskaun_segera_kecil_peratus}% UNTUK BAYARAN TUNAI/TRANSFER SERTA-MERTA`;
   document.getElementById('ph-minima').textContent = fmt(TETAPAN.minima_penghantaran_percuma);
   renderKategoriChips();
   renderProdukGrid();
@@ -530,7 +530,13 @@ function subtotal() {
 
 // Peratus diskaun yang terpakai ikut kaedah bayaran semasa (0 jika consignment atau bawah minima)
 function peratusDiskaunSemasa() {
-  if (subtotal() < TETAPAN.minima_transfer) return 0;
+  if (subtotal() < TETAPAN.minima_transfer) {
+    // Bawah minima: bayar tunai (COD) / transfer / online serta-merta dapat diskaun kecil
+    // mulai skim_hutang_mula (SQL_TAMBAHAN_158 — mesti selari dengan trigger server).
+    if (bayarMetod === 'consignment') return 0;
+    const hariIni = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }).format(new Date());
+    return (TETAPAN.skim_hutang_mula && hariIni >= TETAPAN.skim_hutang_mula) ? (TETAPAN.diskaun_segera_kecil_peratus || 0) : 0;
+  }
   if (bayarMetod === 'cod') return TETAPAN.diskaun_cod_peratus || 0;
   // Billplz (Bayar Online) = bayaran penuh serta-merta, sama seperti instant
   // transfer — jadi layak kadar diskaun yang sama. Mesti selari dengan trigger
@@ -570,9 +576,9 @@ function kemaskiniTotal() {
   document.getElementById('kiraan-diskaun-nilai').textContent = '-'+fmt(diskaunNilai);
   document.getElementById('grand-total').textContent = fmt(tot - diskaunNilai);
 
-  document.getElementById('cod-diskaun-info').style.display = (bayarMetod==='cod' && layak) ? 'block' : 'none';
+  document.getElementById('cod-diskaun-info').style.display = (bayarMetod==='cod' && layak && tot >= TETAPAN.minima_transfer) ? 'block' : 'none';
   const tajukEl = document.querySelector('#diskaun-info .tajuk');
-  if (tajukEl) tajukEl.style.opacity = (bayarMetod==='transfer' && layak) ? '1' : '0.4';
+  if (tajukEl) tajukEl.style.opacity = (bayarMetod==='transfer' && layak && tot >= TETAPAN.minima_transfer) ? '1' : '0.4';
 
   // Consignment tak dibenarkan lepas had — tukar automatik ke COD jika sudah dipilih
   const melebihiHad = melebihiHadConsignment();

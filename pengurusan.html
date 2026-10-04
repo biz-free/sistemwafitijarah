@@ -730,7 +730,7 @@
         </div>
         <div class="form-group" id="h-tarikh-wrap" style="display:none">
           <label class="form-label">Tarikh Transaksi</label>
-          <input type="date" class="form-input" id="h-tarikh" />
+          <input type="date" class="form-input" id="h-tarikh" onchange="calcTotal()" />
           <div style="font-size:11px;color:var(--muted);margin-top:4px">Tukar tarikh untuk rekod transaksi lampau (cth: pekerja lupa rekod hari tu) — resit akan ikut tarikh ini. Baucar harian pekerja pada tarikh terbabit (jika sudah dijana) akan dibatalkan automatik supaya anda jana/luluskan semula dengan angka betul.</div>
         </div>
         <div class="form-group">
@@ -789,6 +789,7 @@
 
         <!-- Pilihan diskaun WAJIB (jumlah ≥ minima_transfer sahaja) — pekerja mesti
         tick salah satu (0%/kadar tunai/kadar transfer), tiada auto-pilih. -->
+        <div id="h-skim-hutang-info" style="display:none;font-size:11px;color:var(--navy);background:#E8F5EC;border:1px solid var(--green);border-radius:8px;padding:8px 10px;margin-bottom:12px"></div>
         <div class="form-group" id="h-diskaun-pilihan-wrap" style="display:none">
           <label class="form-label">💸 Diskaun (Wajib Pilih — jumlah ≥ <span id="h-diskaun-minima-label"></span>)</label>
           <div class="bayar-toggle" id="h-diskaun-toggle">
@@ -2174,6 +2175,11 @@ function saveData() {
 //  HELPERS
 // ════════════════════════════════════════════════════
 const fmt = n => 'RM ' + Number(n).toFixed(2);
+// Harga jual SEBENAR semasa transaksi dibuat (disimpan dalam items[].harga). Laporan/untung WAJIB
+// guna ini — bukan stok.harga_jual semasa — supaya laporan bulan lepas tidak berubah bila harga
+// produk dinaikkan kemudian (cth kenaikan Tamar Cocoa 1 Okt 2026). Jatuh balik ke harga stok
+// semasa hanya jika item lama tiada harga tersimpan.
+const hargaJualItem = (it, stokItem) => { const h = Number(it?.harga); return (it?.harga != null && isFinite(h)) ? h : (stokItem ? stokItem.harga_jual : 0); };
 // "2026-08" -> "Ogos 2026" — label bulan mesra utk skop filter (dashboard, dll).
 const fmtBulanMY = bulanYYYYMM => {
   const [y,m] = bulanYYYYMM.split('-').map(Number);
@@ -4380,18 +4386,40 @@ let hDiskaunPilihan = null; // null | 0 | 'cod' | 'transfer'
 // Kadar diskaun ikut kaedah bayaran — guna semula tetapan yang sama dengan
 // diskaun pre-order (Lebih > Tetapan Pre-Order & Diskaun), supaya satu sahaja
 // tempat untuk ubah kadar, tak kira borang mana yang guna.
-let TETAPAN_DISKAUN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5, qr_bank_url: null, butiran_bank: '', mesej_followup_servis: '' };
+let TETAPAN_DISKAUN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5, qr_bank_url: null, butiran_bank: '', mesej_followup_servis: '', skim_hutang_mula: '2026-10-01', skim_hutang_hari_awal: 5, skim_hutang_peratus_awal: 10, skim_hutang_hari_akhir: 7, skim_hutang_peratus_akhir: 5, diskaun_segera_kecil_peratus: 2 };
 async function muatTetapanDiskaunUntukHantar() {
   if (!useCloud) return;
-  const { data } = await sb.from('tetapan').select('minima_transfer, diskaun_peratus, diskaun_cod_peratus, qr_bank_url, butiran_bank, mesej_followup_servis').eq('id', 1).single();
+  const { data } = await sb.from('tetapan').select('minima_transfer, diskaun_peratus, diskaun_cod_peratus, qr_bank_url, butiran_bank, mesej_followup_servis, skim_hutang_mula, skim_hutang_hari_awal, skim_hutang_peratus_awal, skim_hutang_hari_akhir, skim_hutang_peratus_akhir, diskaun_segera_kecil_peratus').eq('id', 1).single();
   if (data) TETAPAN_DISKAUN = { ...TETAPAN_DISKAUN, ...data };
 }
 // Jumlah >= minima_transfer: pekerja WAJIB pilih diskaun eksplisit (0%/kadar tunai/
 // kadar transfer) via setDiskaunPilihan() — TAK auto ikut kaedah bayaran lagi (pekerja
 // boleh pilih kadar transfer walaupun kaedah bayaran sebenar Hutang/Consignment, atas
 // permintaan pemilik). Bawah minima, tiada pilihan diperlukan — terus 0%.
+// Skim bayar awal hutang (SQL_TAMBAHAN_156): hutang >= minima, tarikh invois >= skim_hutang_mula.
+// Diskaun kadar awal diberi terus; server (submit_penghantaran) tetapkan kadar & tarikh akhir sebenar.
+function skimHutangAktif(subjumlah) {
+  if (hBayar !== 'hutang') return false;
+  const minima = TETAPAN_DISKAUN.minima_transfer||0;
+  if (!(minima > 0) || subjumlah < minima) return false;
+  const mula = TETAPAN_DISKAUN.skim_hutang_mula;
+  if (!mula) return false;
+  const tarikhInvois = document.getElementById('h-tarikh')?.value || tarikhTempatan();
+  return tarikhInvois >= mula;
+}
+// Diskaun kecil (SQL_TAMBAHAN_156): bayar tunai/transfer serta-merta untuk jumlah BAWAH minima.
+function diskaunKecilPeratus(subjumlah) {
+  if (hBayar !== 'terus' && hBayar !== 'transfer') return 0;
+  const minima = TETAPAN_DISKAUN.minima_transfer||0;
+  if (minima > 0 && subjumlah >= minima) return 0;
+  const mula = TETAPAN_DISKAUN.skim_hutang_mula;
+  if (!mula) return 0;
+  const tarikhInvois = document.getElementById('h-tarikh')?.value || tarikhTempatan();
+  return tarikhInvois >= mula ? (TETAPAN_DISKAUN.diskaun_segera_kecil_peratus||0) : 0;
+}
 function kiraDiskaunHantarPeratus(subjumlah) {
-  if (subjumlah < (TETAPAN_DISKAUN.minima_transfer||0)) return 0;
+  if (subjumlah < (TETAPAN_DISKAUN.minima_transfer||0)) return diskaunKecilPeratus(subjumlah);
+  if (skimHutangAktif(subjumlah)) return TETAPAN_DISKAUN.skim_hutang_peratus_awal||0;
   if (hDiskaunPilihan === 'cod') return TETAPAN_DISKAUN.diskaun_cod_peratus||0;
   if (hDiskaunPilihan === 'transfer') return TETAPAN_DISKAUN.diskaun_peratus||0;
   return 0; // termasuk hDiskaunPilihan===0 (pekerja pilih 0% eksplisit)
@@ -5243,7 +5271,13 @@ function calcTotal() {
   // semula (elak pilihan lama "melekat" kalau pekerja buang item).
   const diskaunWrap = document.getElementById('h-diskaun-pilihan-wrap');
   const minima = TETAPAN_DISKAUN.minima_transfer||0;
-  if (sub >= minima && minima > 0) {
+  const skimAktif = skimHutangAktif(sub);
+  const skimInfo = document.getElementById('h-skim-hutang-info');
+  if (skimInfo) {
+    skimInfo.style.display = skimAktif ? 'block' : 'none';
+    skimInfo.innerHTML = `📅 <b>Skim bayar awal:</b> ${TETAPAN_DISKAUN.skim_hutang_peratus_awal}% jika kedai bayar dalam ${TETAPAN_DISKAUN.skim_hutang_hari_awal} hari, ${TETAPAN_DISKAUN.skim_hutang_peratus_akhir}% dalam ${TETAPAN_DISKAUN.skim_hutang_hari_akhir} hari, selepas itu harga penuh. Tarikh akhir ditetapkan automatik.`;
+  }
+  if (sub >= minima && minima > 0 && !skimAktif) {
     diskaunWrap.style.display = '';
     document.getElementById('h-diskaun-minima-label').textContent = fmt(minima);
     document.getElementById('opt-diskaun-cod').textContent = `💵 ${TETAPAN_DISKAUN.diskaun_cod_peratus||0}% (Tunai)`;
@@ -5373,7 +5407,7 @@ async function submitHantarSebenar() {
   if (!peribadi && hBayar==='transfer' && !resitBuktiFilePilihan && !poSudahBayar) return toast('Sila snap & lampir gambar resit/bukti transaksi dahulu','err');
   // Tarikh akhir bayaran WAJIB utk kaedah Hutang — pemilik perlu tarikh jelas utk
   // ikut jejak & amaran Dashboard bila hutang tertunggak (SQL_TAMBAHAN_98/99).
-  if (hBayar==='hutang' && !document.getElementById('h-tarikh-akhir-bayaran')?.value) return toast('Sila isi Tarikh Akhir Bayaran (wajib untuk kaedah Hutang)','err');
+  if (hBayar==='hutang' && !document.getElementById('h-tarikh-akhir-bayaran')?.value && !skimHutangAktif(hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty||0):0); },0))) return toast('Sila isi Tarikh Akhir Bayaran (wajib untuk kaedah Hutang)','err');
   let kedaiId = peribadi ? null : document.getElementById('h-kedai').value;
   const namaPembeli = peribadi ? document.getElementById('h-nama-pembeli').value.trim() : null;
   if(!peribadi && !kedaiId) return toast('Sila pilih kedai','err');
@@ -5410,7 +5444,7 @@ async function submitHantarSebenar() {
   }
   const jumlahAsal=hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty):0); },0);
   // Diskaun WAJIB dipilih eksplisit bila jumlah cukup minima — sekat submit kalau belum.
-  if (jumlahAsal >= (TETAPAN_DISKAUN.minima_transfer||0) && (TETAPAN_DISKAUN.minima_transfer||0) > 0 && hDiskaunPilihan === null) {
+  if (jumlahAsal >= (TETAPAN_DISKAUN.minima_transfer||0) && (TETAPAN_DISKAUN.minima_transfer||0) > 0 && hDiskaunPilihan === null && !skimHutangAktif(jumlahAsal)) {
     return toast('Sila pilih diskaun (0% / kadar tunai / kadar transfer) — wajib untuk jumlah ini','err');
   }
   const peratusDiskaun = kiraDiskaunHantarPeratus(jumlahAsal);
@@ -7173,7 +7207,7 @@ async function renderLaporan() {
   // MESTI tolak jumlah diskaun sebenar (jumlah_asal-jumlah), bukan cuma kira ikut
   // harga_jual penuh macam tiada diskaun langsung berlaku.
   const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
-  const untung=fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0); },0) - diskaunKedai;
+  const untung=fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(hargaJualItem(it,stokItem)-stokItem.harga_beli)*it.qty:0); },0); },0) - diskaunKedai;
 
   const jumlahStok = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>s+(+it.qty),0),0);
   const { totalKm: jumlahKm, kmIkutPekerja } = await kiraJarakKehadiranJulat(bulan+'-01T00:00:00', akhirBulanISO(bulan));
@@ -7304,7 +7338,7 @@ async function renderLaporanHarian() {
   // dah didiskaun) tapi kos barang tak berubah — diskaun ni 100% ambil dari margin,
   // jadi untung kasar mesti tolak jumlah diskaun sebenar (jumlah_asal-jumlah).
   const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
-  const untung = fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0); },0) - diskaunKedai;
+  const untung = fil.reduce((a,t)=>{ return a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(hargaJualItem(it,stokItem)-stokItem.harga_beli)*it.qty:0); },0); },0) - diskaunKedai;
 
   const { totalKm: jumlahKm, kmIkutPekerja } = await kiraJarakKehadiranJulat(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaPilih||null);
   const hariLayakMakan = await kiraHariLayakMakan(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaPilih||null);
@@ -8004,7 +8038,7 @@ function renderAnalisis() {
   // Diskaun automatik Pre-Order (COD/Transfer ≥ minima) MESTI ditolak dari untung
   // (100% ambil dari margin, sama pattern spt renderLaporan()) — sblm ni tertinggal.
   const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
-  const untung = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(x=>x.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0),0) - diskaunKedai;
+  const untung = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(x=>x.id===it.stokId); return s+(stokItem?(hargaJualItem(it,stokItem)-stokItem.harga_beli)*it.qty:0); },0),0) - diskaunKedai;
 
   // Hutang Semasa & Consignment Semasa — dipecahkan berasingan (bukan lagi 1 nombor
   // "Hutang Semasa (Semua Masa)" bercampur, spt kedai.hutang yg gabungkan kedua-dua
@@ -8060,7 +8094,7 @@ function renderAnalisis() {
     ikutBulan[bln] ||= { jualan:0, modal:0, untung:0 };
     if (t.status==='selesai') ikutBulan[bln].jualan += t.jumlah;
     ikutBulan[bln].untung -= (t.jumlah_asal??t.jumlah)-t.jumlah;
-    t.items.forEach(it=>{ const s=DATA.stok.find(x=>x.id===it.stokId); if (s) { ikutBulan[bln].modal += s.harga_beli*it.qty; ikutBulan[bln].untung += (s.harga_jual-s.harga_beli)*it.qty; } });
+    t.items.forEach(it=>{ const s=DATA.stok.find(x=>x.id===it.stokId); if (s) { ikutBulan[bln].modal += s.harga_beli*it.qty; ikutBulan[bln].untung += (hargaJualItem(it,s)-s.harga_beli)*it.qty; } });
   });
   document.getElementById('an-bulanan-list').innerHTML = Object.entries(ikutBulan).sort((a,b)=>a[0].localeCompare(b[0])).map(([bln,d])=>
     `<div class="list-item"><div class="list-item-title">${bln}</div><div style="text-align:right;font-size:11px"><div>Jualan: ${fmt(d.jualan)}</div><div style="color:var(--gold)">Untung: ${fmt(d.untung)}</div></div></div>`
@@ -10566,7 +10600,7 @@ async function thumbIn() {
 async function kiraUntungBersihHarianPekerja(pekerjaId, tarikh) {
   const fil = DATA.transaksi.filter(t=>t.created_by===pekerjaId && t.tarikh_masa && tarikhTempatan(t.tarikh_masa)===tarikh);
   const diskaunKedai = fil.reduce((a,t)=>a+((t.jumlah_asal??t.jumlah)-t.jumlah),0);
-  const untung = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(stokItem.harga_jual-stokItem.harga_beli)*it.qty:0); },0),0) - diskaunKedai;
+  const untung = fil.reduce((a,t)=>a+t.items.reduce((s,it)=>{ const stokItem=DATA.stok.find(s=>s.id===it.stokId); return s+(stokItem?(hargaJualItem(it,stokItem)-stokItem.harga_beli)*it.qty:0); },0),0) - diskaunKedai;
 
   const { kmIkutHari } = await kiraJarakKehadiranJulat(tarikh+'T00:00:00', tarikh+'T23:59:59', pekerjaId);
   const kmPekerja = kmIkutHari[`${pekerjaId}|${tarikh}`] || 0;
