@@ -56,7 +56,26 @@ async function hantarTelegram(admin: any, jenis: string, pekerjaNama: string, bu
   const { data: adminList } = await admin.from("telegram_admin").select("chat_id").eq("aktif", true).eq("notifikasi_aktif", true);
   if (!adminList?.length) return 0;
 
-  const text = `🔔 ${jenis}\n👤 ${pekerjaNama}\n${butiran || ""}`.trim();
+  // Status lokasi 🔴/🟢 (susulan SQL_TAMBAHAN_160, arahan Amirul 2026-10-05): untuk
+  // baucar_bayaran sahaja (kos minyak upah harian) -- RPC kesan_kedai_mencurigakan_baucar
+  // semula logik kesanKedaiMencurigakanHariIni() (pengurusan.html) di sisi DB supaya
+  // Amirul nampak terus dlm Telegram tanpa buka app. Gagal senyap (jangan jatuhkan notifikasi).
+  let statusLokasi = "";
+  if (jenisRekod === "baucar_bayaran" && recordId) {
+    try {
+      const { data: hasil } = await admin.rpc("kesan_kedai_mencurigakan_baucar", { p_baucar_id: recordId });
+      const row = Array.isArray(hasil) ? hasil[0] : hasil;
+      if (row?.status === "merah") {
+        statusLokasi = `🔴 Semak lokasi kedai sebelum luluskan (jejaskan kiraan minyak): ${row.mesej}\n`;
+      } else if (row?.status === "hijau") {
+        statusLokasi = `🟢 Lokasi kedai OK, tiada isu dikesan\n`;
+      }
+    } catch (err) {
+      console.warn(`[notifikasi-kelulusan-pemilik] semak lokasi gagal record_id=${recordId}`, err);
+    }
+  }
+
+  const text = `🔔 ${jenis}\n👤 ${pekerjaNama}\n${statusLokasi}${butiran || ""}`.trim();
   let replyMarkup: unknown = undefined;
   const padamBukanTransaksi = jenisRekod === "permohonan_padam" && !String(butiran || "").startsWith("Transaksi ");
   if (recordId && jenisRekod && JADUAL_CODE[jenisRekod] && !padamBukanTransaksi) {
