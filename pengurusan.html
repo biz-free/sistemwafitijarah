@@ -1278,6 +1278,7 @@
       <div class="card-title">⚙️ Tetapan Kos Operasi</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Kadar ini digunakan untuk kira untung bersih sebenar dalam Laporan Bulanan. Upah pekerja kini ditetapkan per-produk (lihat Edit Produk di tab Stok).</div>
       <div class="form-group"><label class="form-label">Minyak Kenderaan (RM per km)</label><input type="number" class="form-input" id="set-minyak" step="0.10" min="0" onchange="saveSettings()" /></div>
+      <div class="form-group"><label class="form-label">Kadar Minyak (GPS Trail) RM/km</label><input type="number" class="form-input" id="set-minyak-gps" step="0.10" min="0" onchange="saveSettings()" /><div style="font-size:10px;color:var(--muted);margin-top:4px">Untuk pilihan 🛰️ GPS bila luluskan baucar harian di Telegram (jejak GPS tertapis). Kadar P2P di atas tidak terjejas.</div></div>
       <div class="form-group"><label class="form-label">Duit Makan (RM sehari seorang pekerja)</label><input type="number" class="form-input" id="set-makan" step="0.50" min="0" onchange="saveSettings()" /></div>
       <div class="form-group"><label class="form-label">Bonus Kedai Baru — Beli & Bayar (RM)</label><input type="number" class="form-input" id="set-upah-kedai-baru-bayar" step="1" min="0" onchange="saveSettings()" /></div>
       <div class="form-group"><label class="form-label">Bonus Kedai Baru — Consignment/Hutang (RM)</label><input type="number" class="form-input" id="set-upah-kedai-baru-consignment" step="1" min="0" onchange="saveSettings()" /></div>
@@ -8250,7 +8251,7 @@ function muatTurunCSV() {
 // ════════════════════════════════════════════════════
 //  TETAPAN KOS OPERASI
 // ════════════════════════════════════════════════════
-const SETTINGS_DEF = { minyak:0.50, makan:10.00, upahKedaiBaruBayar:10.00, upahKedaiBaruConsignment:2.00 };
+const SETTINGS_DEF = { minyak:0.50, minyakGps:0.50, makan:10.00, upahKedaiBaruBayar:10.00, upahKedaiBaruConsignment:2.00 };
 let SETTINGS = {...SETTINGS_DEF};
 
 // Bonus kedai baru — dikira daripada transaksi SEBENAR kedai (bukan tarikh didaftarkan):
@@ -8325,10 +8326,11 @@ async function loadSettings() {
   // tiada localStorage pemilik) dapat kadar yang SAMA bila auto-jana baucar harian
   // sendiri selepas Thumb Out.
   if (useCloud) {
-    const { data } = await sb.from('tetapan').select('minyak_rm_km,makan_rm_hari,upah_kedai_baru_bayar,upah_kedai_baru_consignment').eq('id',1).single();
+    const { data } = await sb.from('tetapan').select('minyak_rm_km,minyak_gps_rm_km,makan_rm_hari,upah_kedai_baru_bayar,upah_kedai_baru_consignment').eq('id',1).single();
     if (data) {
       SETTINGS = {
         minyak: data.minyak_rm_km ?? SETTINGS.minyak,
+        minyakGps: data.minyak_gps_rm_km ?? SETTINGS.minyakGps,
         makan: data.makan_rm_hari ?? SETTINGS.makan,
         upahKedaiBaruBayar: data.upah_kedai_baru_bayar ?? SETTINGS.upahKedaiBaruBayar,
         upahKedaiBaruConsignment: data.upah_kedai_baru_consignment ?? SETTINGS.upahKedaiBaruConsignment,
@@ -8336,6 +8338,7 @@ async function loadSettings() {
     }
   }
   document.getElementById('set-minyak').value = SETTINGS.minyak;
+  document.getElementById('set-minyak-gps').value = SETTINGS.minyakGps;
   document.getElementById('set-makan').value = SETTINGS.makan;
   document.getElementById('set-upah-kedai-baru-bayar').value = SETTINGS.upahKedaiBaruBayar;
   document.getElementById('set-upah-kedai-baru-consignment').value = SETTINGS.upahKedaiBaruConsignment;
@@ -8344,6 +8347,7 @@ async function loadSettings() {
 async function saveSettings() {
   SETTINGS = {
     minyak: +document.getElementById('set-minyak').value || 0,
+    minyakGps: +document.getElementById('set-minyak-gps').value || 0,
     makan: +document.getElementById('set-makan').value || 0,
     upahKedaiBaruBayar: +document.getElementById('set-upah-kedai-baru-bayar').value || 0,
     upahKedaiBaruConsignment: +document.getElementById('set-upah-kedai-baru-consignment').value || 0,
@@ -8351,7 +8355,7 @@ async function saveSettings() {
   localStorage.setItem('wafi_settings', JSON.stringify(SETTINGS));
   if (useCloud) {
     const { error } = await sb.from('tetapan').update({
-      minyak_rm_km: SETTINGS.minyak, makan_rm_hari: SETTINGS.makan,
+      minyak_rm_km: SETTINGS.minyak, minyak_gps_rm_km: SETTINGS.minyakGps, makan_rm_hari: SETTINGS.makan,
       upah_kedai_baru_bayar: SETTINGS.upahKedaiBaruBayar, upah_kedai_baru_consignment: SETTINGS.upahKedaiBaruConsignment,
     }).eq('id', 1);
     if (error) return toast('Gagal simpan tetapan ke server: '+error.message,'err');
