@@ -47,6 +47,7 @@ const JADUAL_CODE: Record<string, string> = {
   baucar_bayaran: "bu",
   transaksi: "tf",
   permohonan_padam: "pd", // SQL_TAMBAHAN_154: butang hanya utk padam jenis transaksi (butiran bermula "Transaksi ")
+  affiliate: "af", // SQL_TAMBAHAN_163: permohonan affiliate baharu
 };
 
 // deno-lint-ignore no-explicit-any
@@ -112,7 +113,7 @@ async function hantarTelegram(admin: any, jenis: string, pekerjaNama: string, bu
     const code = JADUAL_CODE[jenisRekod];
     // baucar_bayaran guna status draf/diluluskan/dibatalkan (bukan menunggu/disahkan/
     // ditolak spt 4 jadual lain) — label butang "Batal" lebih tepat drpd "Tolak".
-    const labelTolak = jenisRekod === "baucar_bayaran" ? "✕ Batal" : jenisRekod === "transaksi" ? "✕ Belum Masuk → Hutang" : "✕ Tolak";
+    const labelTolak = jenisRekod === "baucar_bayaran" || jenisRekod === "affiliate" ? "✕ Batal" : jenisRekod === "transaksi" ? "✕ Belum Masuk → Hutang" : "✕ Tolak";
     // transaksi = Online Transfer (SQL_TAMBAHAN_151/152): "Duit Masuk" / "Belum Masuk → Hutang"
     // (Belum Masuk auto tukar transaksi kpd hutang).
     const labelLulus = jenisRekod === "transaksi" ? "✅ Duit Masuk" : jenisRekod === "permohonan_padam" ? "✅ Luluskan & Padam" : "✅ Lulus";

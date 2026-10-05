@@ -55,6 +55,7 @@ const CODE_JADUAL: Record<string, string> = {
   pd: "permohonan_padam", // Permohonan Padam jenis transaksi (SQL_TAMBAHAN_154) — pengesahan 2 langkah
   bg: "baucar_bayaran", // 🛰️ Lulus baucar harian dgn minyak GPS Trail Tertapis (SQL_TAMBAHAN_161)
   bp: "baucar_bayaran", // 📍 Lulus baucar harian dgn minyak P2P (pilihan eksplisit, sama spt "bu" Lulus)
+  af: "affiliates", // SQL_TAMBAHAN_163: permohonan affiliate baharu (jadual = affiliates, bukan singular "affiliate")
 };
 
 function json(body: unknown, status = 200) {
