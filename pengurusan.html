@@ -1951,8 +1951,14 @@ mula drpd 0) supaya sentiasa padan realiti walaupun ada jurang sejarah lampau. -
 
     <div class="form-group">
       <label class="form-label">📸 Galeri Gambar Kedai</label>
-      <input type="file" accept="image/*" capture="environment" id="f-kedai-gambar" onchange="previewGambarKedai()" class="form-input" />
+      <input type="file" accept="image/*" capture="environment" id="f-kedai-gambar" onchange="previewGambarKedai('f-kedai-gambar')" class="form-input" />
       <div class="map-hint">Snap gambar depan kedai — boleh tambah lagi gambar semasa lawatan akan datang.</div>
+      <!-- Pemilik sahaja: muat naik fail sedia ada drpd galeri telefon/komputer (tanpa capture supaya galeri dibuka, bukan terus kamera). -->
+      <div id="f-kedai-galeri-wrap" style="display:none;margin-top:10px">
+        <label class="form-label" style="font-size:12px">🖼️ Atau pilih dari galeri / fail (pemilik)</label>
+        <input type="file" accept="image/*" multiple id="f-kedai-gambar-galeri" onchange="previewGambarKedai('f-kedai-gambar-galeri')" class="form-input" />
+        <div class="map-hint">Boleh pilih beberapa gambar sekaligus.</div>
+      </div>
       <div id="f-kedai-gambar-preview-wrap" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
     </div>
 
@@ -4036,6 +4042,7 @@ async function bukaModalKedaiBaru() {
   document.getElementById('f-kedai-tel').value='';
   document.getElementById('f-kedai-nota').value='';
   document.getElementById('f-kedai-gambar').value='';
+  kemaskiniGaleriKedaiWrap();
   document.getElementById('f-kedai-hutang-wrap').style.display='none';
   document.getElementById('f-kedai-diskaun-hutang-wrap').style.display='none';
   kedaiGambarUrlsSedia = []; kedaiGambarFilesPilihan = [];
@@ -4074,6 +4081,7 @@ function editKedai(id) {
   document.getElementById('f-kedai-lng').value=k.lng||100.3678;
   document.getElementById('f-kedai-nota').value=k.nota||'';
   document.getElementById('f-kedai-gambar').value='';
+  kemaskiniGaleriKedaiWrap();
   const hutangWrap = document.getElementById('f-kedai-hutang-wrap');
   const diskaunHutangWrap = document.getElementById('f-kedai-diskaun-hutang-wrap');
   if (currentRole==='pemilik') {
@@ -4109,12 +4117,20 @@ function hapusGambarKedai(src, idx) {
   renderKedaiGambarPreview();
 }
 
-function previewGambarKedai() {
-  const files = Array.from(document.getElementById('f-kedai-gambar').files || []);
+function previewGambarKedai(inputId = 'f-kedai-gambar') {
+  const el = document.getElementById(inputId);
+  const files = Array.from(el.files || []);
   if (!files.length) return;
   kedaiGambarFilesPilihan = [...kedaiGambarFilesPilihan, ...files];
-  document.getElementById('f-kedai-gambar').value = '';
+  el.value = '';
   renderKedaiGambarPreview();
+}
+// Input galeri/fail hanya untuk pemilik (pekerja kekal snap guna kamera).
+function kemaskiniGaleriKedaiWrap() {
+  const wrap = document.getElementById('f-kedai-galeri-wrap');
+  if (wrap) wrap.style.display = currentRole === 'pemilik' ? '' : 'none';
+  const el = document.getElementById('f-kedai-gambar-galeri');
+  if (el) el.value = '';
 }
 
 // Resize sahaja (tiada watermark/sharpen — gambar keadaan kedai, bukan gambar produk pemasaran)
@@ -4154,7 +4170,9 @@ async function saveKedai() {
   if (useCloud && kedaiGambarFilesPilihan.length) {
     toast('Memproses & memuat naik gambar kedai...');
     for (let i=0; i<kedaiGambarFilesPilihan.length; i++) {
-      const blob = await prosesGambarKedai(kedaiGambarFilesPilihan[i]);
+      let blob;
+      try { blob = await prosesGambarKedai(kedaiGambarFilesPilihan[i]); }
+      catch (e) { return toast(`Gambar "${kedaiGambarFilesPilihan[i].name || (i+1)}" tak boleh diproses (format tak disokong, cth HEIC). Tukar kepada JPG/PNG dan cuba lagi.`,'err'); }
       const path = `${kedaiId}-${Date.now()}-${i}.jpg`;
       const { error: upErr } = await sb.storage.from('kedai-gambar').upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
       if (upErr) return toast('Gagal muat naik gambar kedai: '+upErr.message,'err');
