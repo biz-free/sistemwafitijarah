@@ -74,11 +74,16 @@ function fmtRM(n: unknown): string {
 // sendiri / "— Upah" di hujung baris, sedangkan format semasa baucar harian ialah satu baris:
 // "DD/MM/YYYY — Upah RMx | Cash tangan RMy | Baki serah RMz" -> kini ketiga-tiga butiran dibuang
 // di mana-mana dlm baris (arahan Amirul 2026-10-04: baiki terus).
+// 2026-10-12 (arahan Amirul): baris status semak lokasi kedai (🔴 Semak lokasi kedai... /
+// 🟢 Lokasi kedai OK...) dibina di notifikasi-kelulusan-pemilik/index.ts khas utk pemilik
+// semak sebelum lulus — pekerja dalam kumpulan WhatsApp tak perlu nampak status ni, jadi
+// ditapis di sini juga (mesej Telegram pemilik tak terjejas, sama spt butiran kewangan di atas).
 function sulitkanUntukWa(teks: string): string {
   return teks
     .split("\n")
     .filter((baris) => !/^\s*Cash tangan\s+RM/i.test(baris))
     .filter((baris) => !/^\s*💰\s*P2P:/.test(baris))
+    .filter((baris) => !/^\s*[🔴🟢]\s*(Semak lokasi kedai|Lokasi kedai OK)/i.test(baris))
     .map((baris) => baris
       .replace(/\s*\|\s*Cash tangan\s+RM[\d.,-]+/gi, "")
       .replace(/\s*\|\s*Baki serah\s+RM[\d.,-]+/gi, "")
