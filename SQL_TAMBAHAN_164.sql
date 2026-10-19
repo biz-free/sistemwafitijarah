@@ -14,6 +14,7 @@
 -- tidak berubah. Hanya urutan berubah. Bahagian lain kedua-dua fungsi KEKAL sama dgn
 -- SQL 159 / 162 (disemak sama dgn definisi live pada 19 Okt 2026).
 -- Tiada data sedia ada diubah. Kes semasa: tiada kedai terkesan.
+-- DIAPPLY pada Supabase Wafi 19 Okt 2026 (migration sql_tambahan_164_fifo_hutang_sebenar_dahulu).
 -- ═══════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public.rekod_bayaran(p_kedai_id text, p_jumlah double precision)
