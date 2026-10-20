@@ -620,7 +620,7 @@ Deno.serve(async (req) => {
       const [, code, id, action] = parts;
       const jadual = CODE_JADUAL[code];
 
-      // ── SQL_TAMBAHAN_154: Permohonan Padam (transaksi) — Luluskan & Padam perlu PENGESAHAN 2 LANGKAH ──
+      // ── SQL_TAMBAHAN_154: Permohonan Padam (transaksi & kedai, SQL_TAMBAHAN_165) — Luluskan & Padam perlu PENGESAHAN 2 LANGKAH ──
       if (code === "pd") {
         const asalPd = String(cq.message?.text || "").split("\n\n⚠️ PADAM KEKAL")[0];
         const kbAsal = { inline_keyboard: [[
@@ -629,7 +629,7 @@ Deno.serve(async (req) => {
         ]] };
         if (action === "A") {
           await answerCallback(cq.id);
-          await editText(chatId, messageId, `${asalPd}\n\n⚠️ PADAM KEKAL? Transaksi dipadam selamanya (salinan penuh disimpan dlm arkib). Sahkan?`, { inline_keyboard: [[
+          await editText(chatId, messageId, `${asalPd}\n\n⚠️ PADAM KEKAL? Rekod dipadam selamanya (salinan penuh disimpan dlm arkib). Sahkan?`, { inline_keyboard: [[
             { text: "✅ Ya, Padam Kekal", callback_data: `tp:pd:${id}:Y` },
             { text: "↩ Batal", callback_data: `tp:pd:${id}:N` },
           ]] });

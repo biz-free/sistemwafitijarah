@@ -46,7 +46,7 @@ const JADUAL_CODE: Record<string, string> = {
   serahan_produk: "sp",
   baucar_bayaran: "bu",
   transaksi: "tf",
-  permohonan_padam: "pd", // SQL_TAMBAHAN_154: butang hanya utk padam jenis transaksi (butiran bermula "Transaksi ")
+  permohonan_padam: "pd", // SQL_TAMBAHAN_154/165: butang utk padam jenis transaksi & kedai
   affiliate: "af", // SQL_TAMBAHAN_163: permohonan affiliate baharu
 };
 
@@ -108,7 +108,13 @@ async function hantarTelegram(admin: any, jenis: string, pekerjaNama: string, bu
 
   const text = `🔔 ${jenis}\n👤 ${pekerjaNama}\n${statusLokasi}${barisJumlah}${butiran || ""}`.trim();
   let replyMarkup: unknown = undefined;
-  const padamBukanTransaksi = jenisRekod === "permohonan_padam" && !String(butiran || "").startsWith("Transaksi ");
+  // SQL_TAMBAHAN_165: butang padam disokong utk jenis 'transaksi' & 'kedai' sahaja — jenis diambil
+  // drpd baris permohonan_padam (butiran hanya label, tak boleh dipercayai utk teka jenis).
+  let padamBukanTransaksi = false;
+  if (jenisRekod === "permohonan_padam" && recordId) {
+    const { data: pp } = await admin.from("permohonan_padam").select("jenis").eq("id", recordId).maybeSingle();
+    padamBukanTransaksi = !(pp?.jenis === "transaksi" || pp?.jenis === "kedai");
+  }
   if (recordId && jenisRekod && JADUAL_CODE[jenisRekod] && !padamBukanTransaksi) {
     const code = JADUAL_CODE[jenisRekod];
     // baucar_bayaran guna status draf/diluluskan/dibatalkan (bukan menunggu/disahkan/
