@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════
--- SQL TAMBAHAN 166 (LANGKAH A): simpan tarikh duit hutang DITERIMA — DRAF, BELUM DIAPPLY.
+-- SQL TAMBAHAN 166 (LANGKAH A): simpan tarikh duit hutang DITERIMA. DIAPPLY pada Supabase Wafi 21 Okt 2026.
 --
 -- Tambah permohonan_bayaran_hutang.tarikh_diterima (date) dan terima p_tarikh_diterima
 -- dalam mohon_bayaran_hutang(). Tarikh hanya DISIMPAN & disahkan (tak boleh akan
