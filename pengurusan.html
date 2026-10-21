@@ -641,6 +641,11 @@
           <input type="number" class="form-input" id="bayar-jum" placeholder="0.00" min="0" step="0.50" />
         </div>
         <div class="form-group">
+          <label class="form-label">Tarikh Duit Diterima (wajib)</label>
+          <input type="date" class="form-input" id="bayar-tarikh" />
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Tarikh duit SEBENAR masuk (cth: kedai transfer semalam tapi baru inform hari ini). Penting untuk elak kedai kena bayar lebih sebab terlepas tarikh akhir.</div>
+        </div>
+        <div class="form-group">
           <label class="form-label">Kaedah Bayaran</label>
           <select class="form-input" id="bayar-kaedah" onchange="document.getElementById('bayar-resit-wrap').style.display=this.value==='transfer'?'':'none'">
             <option value="tunai">Tunai</option>
@@ -3690,6 +3695,8 @@ var BAYAR_PERIBADI_CACHE = [];
 function renderBayarKedaiSelect(carian='') {
   const bSel = document.getElementById('bayar-kedai-sel');
   if (!bSel) return;
+  const bTarikh = document.getElementById('bayar-tarikh');
+  if (bTarikh) { bTarikh.max = tarikhTempatan(); if (!bTarikh.value) bTarikh.value = tarikhTempatan(); }
   const selamatSebelum = bSel.value;
   const q = carian.trim().toLowerCase();
   const kedaiTertapis = q ? BAYAR_KEDAI_CACHE.filter(k=>k.nama.toLowerCase().includes(q)) : BAYAR_KEDAI_CACHE;
@@ -4304,6 +4311,9 @@ async function rekodBayaran() {
   const resitFile=document.getElementById('bayar-resit-file').files[0];
   const settlementPenuh=document.getElementById('bayar-settlement-penuh')?.checked||false;
   if(!id||jum<=0) return toast('Pilih kedai/peribadi dan masukkan jumlah','err');
+  const tarikhDiterima=document.getElementById('bayar-tarikh').value;
+  if(!tarikhDiterima) return toast('Sila isi tarikh duit diterima','err');
+  if(tarikhDiterima>tarikhTempatan()) return toast('Tarikh duit diterima tidak boleh akan datang','err');
   if(kaedah==='transfer' && !resitFile) return toast('Sila lampir gambar resit/bukti transfer','err');
   const isPeribadi = id.startsWith('PERIBADI:');
   const kedaiId = isPeribadi ? null : id;
@@ -4319,7 +4329,7 @@ async function rekodBayaran() {
     const { error } = await sb.rpc('mohon_bayaran_hutang', {
       p_id: permohonanId, p_kedai_id: kedaiId, p_jumlah: jum, p_kaedah_bayaran: kaedah,
       p_resit_bukti_url: resitPath, p_nota: nota||null, p_settlement_penuh: settlementPenuh,
-      p_nama_pembeli: namaPembeli,
+      p_nama_pembeli: namaPembeli, p_tarikh_diterima: tarikhDiterima,
     });
     if (error) return toast('Gagal: '+error.message,'err');
     await loadData();
@@ -4341,6 +4351,7 @@ async function rekodBayaran() {
   }
   document.getElementById('bayar-jum').value='';
   document.getElementById('bayar-nota').value='';
+  document.getElementById('bayar-tarikh').value=tarikhTempatan();
   document.getElementById('bayar-resit-file').value='';
   renderKedai();
   toast(currentRole==='pemilik' ? `Bayaran ${fmt(jum)} diterima${settlementPenuh?' — hutang clear penuh':''}` : `📤 Permohonan bayaran ${fmt(jum)} dihantar — menunggu sahkan pemilik`);
@@ -4366,7 +4377,7 @@ async function renderMenungguBayaranHutang() {
     const badgePenuh = r.settlement_penuh ? (r.kedai_id ? ' <span class="badge badge-gold" style="font-size:9px">💯 PENUH (diskaun)</span>' : ' <span class="badge badge-gold" style="font-size:9px">💯 PENUH</span>') : '';
     return `<div class="list-item" style="display:block;border-left:3px solid var(--gold);padding-left:8px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div><div class="list-item-title">${esc(namaSasaran)}${badgePenuh}</div><div class="list-item-sub">${esc(namaPekerja(r.pekerja_id))} · ${LABEL_KAEDAH[r.kaedah_bayaran]} · ${fmtDT(r.created_at)}${r.nota?' · '+esc(r.nota):''}</div></div>
+        <div><div class="list-item-title">${esc(namaSasaran)}${badgePenuh}</div><div class="list-item-sub">${esc(namaPekerja(r.pekerja_id))} · ${LABEL_KAEDAH[r.kaedah_bayaran]} · ${fmtDT(r.created_at)}${r.tarikh_diterima?' · 📅 Duit diterima '+fmtD(r.tarikh_diterima):''}${r.nota?' · '+esc(r.nota):''}</div></div>
         <div class="list-item-val">${fmt(r.jumlah)}</div>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
