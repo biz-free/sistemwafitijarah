@@ -3156,7 +3156,7 @@ async function saveStok() {
     for (let i=0; i<stokGambarFilesPilihan.length; i++) {
       const blob = await prosesGambarProduk(stokGambarFilesPilihan[i]);
       const path = `${stokId}-${Date.now()}-${i}.jpg`;
-      const { error: upErr } = await sb.storage.from('produk-gambar').upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+      const { error: upErr } = await sb.storage.from('produk-gambar').upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '31536000' });
       if (upErr) return toast('Gagal muat naik gambar: '+upErr.message,'err');
       gambarUrls.push(sb.storage.from('produk-gambar').getPublicUrl(path).data.publicUrl);
     }
@@ -4203,7 +4203,7 @@ async function saveKedai() {
       try { blob = await prosesGambarKedai(kedaiGambarFilesPilihan[i]); }
       catch (e) { return toast(`Gambar "${kedaiGambarFilesPilihan[i].name || (i+1)}" tak boleh diproses (format tak disokong, cth HEIC). Tukar kepada JPG/PNG dan cuba lagi.`,'err'); }
       const path = `${kedaiId}-${Date.now()}-${i}.jpg`;
-      const { error: upErr } = await sb.storage.from('kedai-gambar').upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+      const { error: upErr } = await sb.storage.from('kedai-gambar').upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '31536000' });
       if (upErr) return toast('Gagal muat naik gambar kedai: '+upErr.message,'err');
       gambarUrls = [...gambarUrls, sb.storage.from('kedai-gambar').getPublicUrl(path).data.publicUrl];
     }
