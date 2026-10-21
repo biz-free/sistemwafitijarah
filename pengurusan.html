@@ -641,6 +641,11 @@
           <input type="number" class="form-input" id="bayar-jum" placeholder="0.00" min="0" step="0.50" />
         </div>
         <div class="form-group">
+          <label class="form-label">Tarikh Duit Diterima (wajib)</label>
+          <input type="date" class="form-input" id="bayar-tarikh" />
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Tarikh duit SEBENAR masuk (cth: kedai transfer semalam tapi baru inform hari ini). Penting untuk elak kedai kena bayar lebih sebab terlepas tarikh akhir.</div>
+        </div>
+        <div class="form-group">
           <label class="form-label">Kaedah Bayaran</label>
           <select class="form-input" id="bayar-kaedah" onchange="document.getElementById('bayar-resit-wrap').style.display=this.value==='transfer'?'':'none'">
             <option value="tunai">Tunai</option>
@@ -2914,7 +2919,7 @@ function renderGambarPreviewWrap(items) {
   const wrap = document.getElementById('f-stok-gambar-preview-wrap');
   wrap.innerHTML = items.map(it=>`
     <div style="position:relative;width:64px;height:64px">
-      <img src="${it.url}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)" />
+      <img loading="lazy" src="${it.url}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)" />
       <button type="button" onclick="hapusGambarProduk('${it.src}',${it.idx})" title="Buang gambar ini" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;border:2px solid #fff;font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
     </div>`).join('');
 }
@@ -3690,6 +3695,8 @@ var BAYAR_PERIBADI_CACHE = [];
 function renderBayarKedaiSelect(carian='') {
   const bSel = document.getElementById('bayar-kedai-sel');
   if (!bSel) return;
+  const bTarikh = document.getElementById('bayar-tarikh');
+  if (bTarikh) { bTarikh.max = tarikhTempatan(); if (!bTarikh.value) bTarikh.value = tarikhTempatan(); }
   const selamatSebelum = bSel.value;
   const q = carian.trim().toLowerCase();
   const kedaiTertapis = q ? BAYAR_KEDAI_CACHE.filter(k=>k.nama.toLowerCase().includes(q)) : BAYAR_KEDAI_CACHE;
@@ -3834,7 +3841,7 @@ function renderKedai(q='') {
         ${k.last_visit?`<span class="badge badge-muted">Terakhir: ${fmtD(k.last_visit)}</span>`:''}
       </div>
       ${currentRole==='pemilik'&&k.didaftarkan_oleh?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">🧑‍💼 Didaftarkan oleh: ${esc(PROFIL_NAMA_CACHE[k.didaftarkan_oleh]||'?')}</div>`:''}
-      ${k.gambar_urls&&k.gambar_urls.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${k.gambar_urls.map(u=>`<img src="${esc(u)}" loading="lazy" decoding="async" onclick="window.open('${esc(u)}','_blank')" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" />`).join('')}</div>`:''}
+      ${k.gambar_urls&&k.gambar_urls.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${k.gambar_urls.map(u=>`<img loading="lazy" src="${esc(u)}" onclick="window.open('${esc(u)}','_blank')" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" />`).join('')}</div>`:''}
       <div style="display:flex;gap:6px">
         ${k.lat&&k.lng?`<a class="btn btn-secondary btn-sm" style="text-decoration:none" href="https://www.google.com/maps/search/?api=1&query=${k.lat},${k.lng}" target="_blank" rel="noopener">🗺️ Lihat di Google Maps</a>`:''}
         ${currentRole==='pemilik'?`<button class="btn btn-secondary btn-sm" onclick="editKedai('${k.id}')">✏️ Edit</button>`:''}
@@ -4106,7 +4113,7 @@ function renderKedaiGambarPreview() {
   const sedia = kedaiGambarUrlsSedia.map((u,i)=>({ url:u, src:'sedia', idx:i }));
   wrap.innerHTML = [...sedia, ...asas].map(it=>`
     <div style="position:relative;width:64px;height:64px">
-      <img src="${it.url}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)" />
+      <img loading="lazy" src="${it.url}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)" />
       <button type="button" onclick="hapusGambarKedai('${it.src}',${it.idx})" title="Buang gambar ini" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;border:2px solid #fff;font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
     </div>`).join('');
 }
@@ -4133,28 +4140,26 @@ function kemaskiniGaleriKedaiWrap() {
   if (el) el.value = '';
 }
 
-// Kecilkan gambar resit/bukti sebelum muat naik (kurangkan egress & storan Supabase — fail asal telefon
-// purata 2.6 MB, sehingga 14 MB). Maks 1200px sisi terpanjang, JPEG kualiti 0.8. Jika bukan imej,
-// gagal dinyahkod (cth HEIC) atau hasilnya TIDAK lebih kecil, fail asal dikembalikan tanpa ubah.
-async function kecilkanGambarUpload(file, maxDim = 1200, kualiti = 0.8) {
-  try {
-    if (!file || !/^image\//.test(file.type || '')) return { blob: file, dikecilkan: false };
-    const img = await new Promise((res, rej) => {
-      const u = URL.createObjectURL(file);
-      const im = new Image();
-      im.onload = () => { URL.revokeObjectURL(u); res(im); };
-      im.onerror = () => { URL.revokeObjectURL(u); rej(new Error('nyahkod gagal')); };
-      im.src = u;
-    });
-    const skala = Math.min(1, maxDim / Math.max(img.width, img.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(img.width * skala);
-    canvas.height = Math.round(img.height * skala);
-    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', kualiti));
-    if (!blob || blob.size >= file.size) return { blob: file, dikecilkan: false };
-    return { blob, dikecilkan: true };
-  } catch { return { blob: file, dikecilkan: false }; }
+// Mampat resit/bukti sebelum muat naik (jimat egress Supabase): maks 1600px, JPEG 0.8.
+// Jika gagal dibaca (cth HEIC) atau hasil lebih besar, guna fail asal.
+function mampatkanResit(file) {
+  return new Promise(resolve => {
+    if (!file || !file.type || !file.type.startsWith('image/')) return resolve(file);
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 1600;
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => resolve(blob && blob.size < file.size ? blob : file), 'image/jpeg', 0.8);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
 }
 
 // Resize sahaja (tiada watermark/sharpen — gambar keadaan kedai, bukan gambar produk pemasaran)
@@ -4328,6 +4333,9 @@ async function rekodBayaran() {
   const resitFile=document.getElementById('bayar-resit-file').files[0];
   const settlementPenuh=document.getElementById('bayar-settlement-penuh')?.checked||false;
   if(!id||jum<=0) return toast('Pilih kedai/peribadi dan masukkan jumlah','err');
+  const tarikhDiterima=document.getElementById('bayar-tarikh').value;
+  if(!tarikhDiterima) return toast('Sila isi tarikh duit diterima','err');
+  if(tarikhDiterima>tarikhTempatan()) return toast('Tarikh duit diterima tidak boleh akan datang','err');
   if(kaedah==='transfer' && !resitFile) return toast('Sila lampir gambar resit/bukti transfer','err');
   const isPeribadi = id.startsWith('PERIBADI:');
   const kedaiId = isPeribadi ? null : id;
@@ -4337,14 +4345,13 @@ async function rekodBayaran() {
     let resitPath = null;
     if (resitFile) {
       resitPath = `${permohonanId}-${Date.now()}.jpg`;
-      const kcResit = await kecilkanGambarUpload(resitFile);
-      const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(resitPath, kcResit.blob, { contentType: kcResit.blob.type || 'image/jpeg' });
+      const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(resitPath, await mampatkanResit(resitFile), { contentType: 'image/jpeg' });
       if (upErr) return toast('Gagal muat naik resit: '+upErr.message,'err');
     }
     const { error } = await sb.rpc('mohon_bayaran_hutang', {
       p_id: permohonanId, p_kedai_id: kedaiId, p_jumlah: jum, p_kaedah_bayaran: kaedah,
       p_resit_bukti_url: resitPath, p_nota: nota||null, p_settlement_penuh: settlementPenuh,
-      p_nama_pembeli: namaPembeli,
+      p_nama_pembeli: namaPembeli, p_tarikh_diterima: tarikhDiterima,
     });
     if (error) return toast('Gagal: '+error.message,'err');
     await loadData();
@@ -4366,6 +4373,7 @@ async function rekodBayaran() {
   }
   document.getElementById('bayar-jum').value='';
   document.getElementById('bayar-nota').value='';
+  document.getElementById('bayar-tarikh').value=tarikhTempatan();
   document.getElementById('bayar-resit-file').value='';
   renderKedai();
   toast(currentRole==='pemilik' ? `Bayaran ${fmt(jum)} diterima${settlementPenuh?' — hutang clear penuh':''}` : `📤 Permohonan bayaran ${fmt(jum)} dihantar — menunggu sahkan pemilik`);
@@ -4391,7 +4399,7 @@ async function renderMenungguBayaranHutang() {
     const badgePenuh = r.settlement_penuh ? (r.kedai_id ? ' <span class="badge badge-gold" style="font-size:9px">💯 PENUH (diskaun)</span>' : ' <span class="badge badge-gold" style="font-size:9px">💯 PENUH</span>') : '';
     return `<div class="list-item" style="display:block;border-left:3px solid var(--gold);padding-left:8px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div><div class="list-item-title">${esc(namaSasaran)}${badgePenuh}</div><div class="list-item-sub">${esc(namaPekerja(r.pekerja_id))} · ${LABEL_KAEDAH[r.kaedah_bayaran]} · ${fmtDT(r.created_at)}${r.nota?' · '+esc(r.nota):''}</div></div>
+        <div><div class="list-item-title">${esc(namaSasaran)}${badgePenuh}</div><div class="list-item-sub">${esc(namaPekerja(r.pekerja_id))} · ${LABEL_KAEDAH[r.kaedah_bayaran]} · ${fmtDT(r.created_at)}${r.tarikh_diterima?' · 📅 Duit diterima '+fmtD(r.tarikh_diterima):''}${r.nota?' · '+esc(r.nota):''}</div></div>
         <div class="list-item-val">${fmt(r.jumlah)}</div>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
@@ -5005,8 +5013,7 @@ async function hantarSerahanReject() {
   let gambarPath = null;
   if (file) {
     gambarPath = `${id}-${Date.now()}.jpg`;
-    const kcGambar = await kecilkanGambarUpload(file);
-    const { error: upErr } = await sb.storage.from('serahan-produk-gambar').upload(gambarPath, kcGambar.blob, { contentType: kcGambar.blob.type || 'image/jpeg' });
+    const { error: upErr } = await sb.storage.from('serahan-produk-gambar').upload(gambarPath, await mampatkanResit(file), { contentType: 'image/jpeg' });
     if (upErr) return toast('Gagal muat naik gambar: '+upErr.message,'err');
   }
   const { error } = await sb.rpc('serah_produk_reject', { p_id:id, p_stok_id:stokId, p_qty:qty, p_sebab:sebab, p_gambar_url:gambarPath });
@@ -5524,10 +5531,8 @@ async function submitHantarSebenar() {
   };
   let resitBuktiPath = null;
   if (useCloud && resitBuktiFilePilihan) {
-    const kcBukti = await kecilkanGambarUpload(resitBuktiFilePilihan);
-    const ext = kcBukti.dikecilkan ? 'jpg' : resitBuktiFilePilihan.name.split('.').pop();
-    resitBuktiPath = `hantar-${trx.id}-${Date.now()}.${ext}`;
-    const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(resitBuktiPath, kcBukti.blob, { contentType: kcBukti.blob.type || undefined });
+    resitBuktiPath = `hantar-${trx.id}-${Date.now()}.jpg`;
+    const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(resitBuktiPath, await mampatkanResit(resitBuktiFilePilihan), { contentType: 'image/jpeg' });
     if (upErr) return toast('Gagal muat naik gambar resit: '+upErr.message,'err');
   }
   if (useCloud) {
@@ -7724,8 +7729,7 @@ async function padamBaucarBayaran(id, noSiri) {
 async function muatNaikResitBaucar(id, file) {
   if (!file) return;
   const path = `${id}-${Date.now()}.jpg`;
-  const kcBaucar = await kecilkanGambarUpload(file);
-  const { error: upErr } = await sb.storage.from('baucar-resit').upload(path, kcBaucar.blob, { contentType: kcBaucar.blob.type || 'image/jpeg' });
+  const { error: upErr } = await sb.storage.from('baucar-resit').upload(path, await mampatkanResit(file), { contentType: 'image/jpeg' });
   if (upErr) return toast('Gagal muat naik resit: '+upErr.message,'err');
   const { error } = await sb.from('baucar_bayaran').update({ resit_url: path }).eq('id', id);
   if (error) return toast('Gagal simpan resit: '+error.message,'err');
@@ -9684,7 +9688,7 @@ async function renderSenaraiPemohon() {
       ${p.jenis==='marketing'?`
         <div style="font-size:11px;margin-top:4px;font-weight:700">📦 ${esc(p.nama_produk||'?')}</div>
         <div style="font-size:11px;color:var(--muted)">${p.harga?`💰 ${fmt(p.harga)}`:''}${p.margin_peratus?` · 📊 Margin ${p.margin_peratus}%`:''}</div>
-        ${p.gambar_url?`<div style="margin-top:6px"><img src="${esc(p.gambar_url)}" onclick="window.open('${esc(p.gambar_url)}','_blank')" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" /></div>`:''}
+        ${p.gambar_url?`<div style="margin-top:6px"><img loading="lazy" src="${esc(p.gambar_url)}" onclick="window.open('${esc(p.gambar_url)}','_blank')" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" /></div>`:''}
       `:''}
       ${p.nota?`<div style="font-size:11px;color:var(--muted);margin-top:4px">📝 ${esc(p.nota)}</div>`:''}
       <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px;margin-top:8px" onchange="kemaskiniPemohon('${p.id}',this.value)">
@@ -9967,8 +9971,7 @@ async function hantarSerahanCash() {
   let resitPath = null;
   if (file) {
     resitPath = `${id}-${Date.now()}.jpg`;
-    const kcCash = await kecilkanGambarUpload(file);
-    const { error: upErr } = await sb.storage.from('serahan-cash-resit').upload(resitPath, kcCash.blob, { contentType: kcCash.blob.type || 'image/jpeg' });
+    const { error: upErr } = await sb.storage.from('serahan-cash-resit').upload(resitPath, await mampatkanResit(file), { contentType: 'image/jpeg' });
     if (upErr) return toast('Gagal muat naik resit: '+upErr.message,'err');
   }
   const { error } = await sb.from('serahan_cash').insert({ id, pekerja_id: DATA.currentUser.id, jumlah, resit_url: resitPath, nota: nota||null });
