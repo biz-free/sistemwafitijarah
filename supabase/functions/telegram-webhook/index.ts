@@ -236,41 +236,50 @@ async function cmdCash(chatId: number) {
 // pecahanHutangKedai() di pengurusan.html). Byk kekeliruan sebenar berlaku bila kedua-
 // dua jenis hutang dicampur jadi satu angka tanpa label jelas mana satu drpd mana. ──
 async function cmdHutang(chatId: number) {
-  const [{ data: kedaiList }, { data: consignRows }] = await Promise.all([
-    sb.from("kedai").select("id,nama,hutang").gt("hutang", 0).order("hutang", { ascending: false }).limit(25),
+  const [{ data: kedaiRows }, { data: consignRows }, { data: hutangRows }] = await Promise.all([
+    sb.from("kedai").select("id,nama,hutang").gt("hutang", 0),
     sb.from("transaksi").select("kedai_id,jumlah").eq("kaedah_bayaran", "consignment").eq("status", "hutang").not("kedai_id", "is", null),
+    sb.from("transaksi").select("kedai_id,jumlah,tarikh_akhir_bayaran").eq("kaedah_bayaran", "hutang").eq("status", "hutang").not("kedai_id", "is", null),
   ]);
 
   const consignByKedai: Record<string, { jumlah: number; bil: number }> = {};
   (consignRows || []).forEach((r: any) => {
-    if (!r.kedai_id) return;
     if (!consignByKedai[r.kedai_id]) consignByKedai[r.kedai_id] = { jumlah: 0, bil: 0 };
     consignByKedai[r.kedai_id].jumlah += Number(r.jumlah) || 0;
     consignByKedai[r.kedai_id].bil++;
   });
   const consignKedaiIds = Object.keys(consignByKedai);
 
-  if (!kedaiList?.length && !consignKedaiIds.length) {
+  // kedai.hutang mencampur hutang jualan terus + consignment dah terjual. Jumlah jualan terus
+  // = min(jumlah transaksi kaedah 'hutang', kedai.hutang − consignment), sama seperti
+  // laporan_hutang_kedai (laporan WhatsApp), supaya consignment tidak dikira dua kali.
+  const trxHutang: Record<string, number> = {};
+  const terawalMap: Record<string, string> = {};
+  (hutangRows || []).forEach((tx: any) => {
+    trxHutang[tx.kedai_id] = (trxHutang[tx.kedai_id] || 0) + (Number(tx.jumlah) || 0);
+    if (tx.tarikh_akhir_bayaran && (!terawalMap[tx.kedai_id] || tx.tarikh_akhir_bayaran < terawalMap[tx.kedai_id])) terawalMap[tx.kedai_id] = tx.tarikh_akhir_bayaran;
+  });
+  const kedaiList = (kedaiRows || [])
+    .map((k: any) => ({
+      ...k,
+      hutang: Math.max(0, Math.min(trxHutang[k.id] || 0, (Number(k.hutang) || 0) - (consignByKedai[k.id]?.jumlah || 0))),
+    }))
+    .filter((k: any) => k.hutang > 0.004)
+    .sort((a: any, b: any) => b.hutang - a.hutang);
+
+  if (!kedaiList.length && !consignKedaiIds.length) {
     await sendMessage(chatId, "✅ Tiada kedai berhutang (jualan terus atau consignment) buat masa ini.", withMenu());
     return;
   }
 
-  const semuaKedaiIds = [...new Set([...(kedaiList || []).map((k: any) => k.id), ...consignKedaiIds])];
-  const { data: namaMap } = semuaKedaiIds.length ? await sb.from("kedai").select("id,nama").in("id", semuaKedaiIds) : { data: [] as any[] };
+  const { data: namaMap } = consignKedaiIds.length ? await sb.from("kedai").select("id,nama").in("id", consignKedaiIds) : { data: [] as any[] };
   const namaKedai = (id: string) => namaMap?.find((k: any) => k.id === id)?.nama || id;
 
   let t = `📋 Hutang Kedai Tertunggak`;
+  const today = tarikhKL();
+  const jumlahBiasa = kedaiList.reduce((a: number, k: any) => a + k.hutang, 0);
 
-  if (kedaiList?.length) {
-    const ids = kedaiList.map((k: any) => k.id);
-    const { data: hutangTx } = await sb.from("transaksi").select("kedai_id,tarikh_akhir_bayaran").eq("status", "hutang").eq("kaedah_bayaran", "hutang").in("kedai_id", ids);
-    const today = tarikhKL();
-    const terawalMap: Record<string, string> = {};
-    (hutangTx || []).forEach((tx: any) => {
-      if (!tx.tarikh_akhir_bayaran) return;
-      if (!terawalMap[tx.kedai_id] || tx.tarikh_akhir_bayaran < terawalMap[tx.kedai_id]) terawalMap[tx.kedai_id] = tx.tarikh_akhir_bayaran;
-    });
-    const jumlahBiasa = kedaiList.reduce((a: number, k: any) => a + (Number(k.hutang) || 0), 0);
+  if (kedaiList.length) {
     t += `\n\n💵 HUTANG JUALAN TERUS (${kedaiList.length} kedai) — ${fmtRM(jumlahBiasa)}`;
     for (const k of kedaiList) {
       const tarikh = terawalMap[k.id];
@@ -281,8 +290,8 @@ async function cmdHutang(chatId: number) {
     t += `\n\n💵 HUTANG JUALAN TERUS: Tiada`;
   }
 
+  const jumlahConsign = Object.values(consignByKedai).reduce((a, v) => a + v.jumlah, 0);
   if (consignKedaiIds.length) {
-    const jumlahConsign = Object.values(consignByKedai).reduce((a, v) => a + v.jumlah, 0);
     t += `\n\n🤝 HUTANG CONSIGNMENT — dah disahkan terjual (${consignKedaiIds.length} kedai) — ${fmtRM(jumlahConsign)}`;
     const disusun = consignKedaiIds.map((id) => ({ id, ...consignByKedai[id] })).sort((a, b) => b.jumlah - a.jumlah);
     for (const c of disusun) t += `\n• ${namaKedai(c.id)}: ${fmtRM(c.jumlah)} (${c.bil} transaksi)`;
@@ -290,9 +299,7 @@ async function cmdHutang(chatId: number) {
     t += `\n\n🤝 HUTANG CONSIGNMENT: Tiada`;
   }
 
-  const jumlahBiasaJumlah = (kedaiList || []).reduce((a: number, k: any) => a + (Number(k.hutang) || 0), 0);
-  const jumlahConsignJumlah = Object.values(consignByKedai).reduce((a, v) => a + v.jumlah, 0);
-  t += `\n\n📊 JUMLAH KESELURUHAN: ${fmtRM(jumlahBiasaJumlah + jumlahConsignJumlah)}`;
+  t += `\n\n📊 JUMLAH KESELURUHAN: ${fmtRM(jumlahBiasa + jumlahConsign)}`;
 
   await sendMessage(chatId, t, withMenu());
 }
