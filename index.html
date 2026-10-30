@@ -693,6 +693,25 @@ const NEGERI_POSKOD_MAP = {
   'Terengganu':'Terengganu','Wp Kuala Lumpur':'W.P. Kuala Lumpur','Wp Labuan':'W.P. Labuan','Wp Putrajaya':'W.P. Putrajaya',
 };
 let POSKOD_MAP = null; // { '05000': {bandar:'Alor Setar', negeri:'Kedah'} } — dimuatkan lazy, sedia lambat jika gagal
+function mampatkanBukti(file) {
+  return new Promise(resolve => {
+    if (!file || !file.type || !file.type.startsWith('image/')) return resolve(file);
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => resolve(blob && blob.size < file.size ? blob : file), 'image/jpeg', 0.8);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 async function muatDataPoskod() {
   try {
     const res = await fetch('https://raw.githubusercontent.com/heiswayi/malaysia-postcodes/main/data/json/postcodes.json');
@@ -1569,9 +1588,10 @@ async function hantarPesanan() {
     bayarMasa = document.getElementById('c-bayar-masa').value;
     const fail = document.getElementById('c-bukti-bayaran').files[0];
     if (!bayarTarikh || !bayarMasa || !fail) return toast('Sila isi tarikh, masa & muat naik bukti pindahan','err');
-    const ext = fail.name.split('.').pop();
+    const failMampat = await mampatkanBukti(fail);
+    const ext = failMampat === fail ? fail.name.split('.').pop() : 'jpg';
     buktiPath = `${id}-${Date.now()}.${ext}`;
-    const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(buktiPath, fail);
+    const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(buktiPath, failMampat, { contentType: failMampat.type || undefined });
     if (upErr) return toast('Gagal muat naik bukti bayaran: '+upErr.message,'err');
   }
 

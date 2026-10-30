@@ -273,6 +273,25 @@ function muatkanGoogleMaps() {
 }
 let poMap = null, poMarker = null;
 const PO_PUSAT_DEFAULT = { lat:5.15, lng:100.85 };
+function mampatkanBukti(file) {
+  return new Promise(resolve => {
+    if (!file || !file.type || !file.type.startsWith('image/')) return resolve(file);
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => resolve(blob && blob.size < file.size ? blob : file), 'image/jpeg', 0.8);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 async function initPoMap() {
   if (poMap) return;
   const el = document.getElementById('po-map');
@@ -625,9 +644,10 @@ async function hantarPesanan() {
     bayarMasa = document.getElementById('p-bayar-masa').value;
     const fail = document.getElementById('p-bukti-bayaran').files[0];
     if (!bayarTarikh || !bayarMasa || !fail) return toast('Sila isi tarikh, masa & muat naik bukti pindahan','err');
-    const ext = fail.name.split('.').pop();
+    const failMampat = await mampatkanBukti(fail);
+    const ext = failMampat === fail ? fail.name.split('.').pop() : 'jpg';
     const path = `${'PO'+Date.now().toString().slice(-8)}-${Date.now()}.${ext}`;
-    const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(path, fail);
+    const { error: upErr } = await sb.storage.from('bukti-bayaran').upload(path, failMampat, { contentType: failMampat.type || undefined });
     if (upErr) return toast('Gagal muat naik bukti bayaran: '+upErr.message,'err');
     buktiUrl = path;
   }
