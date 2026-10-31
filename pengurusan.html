@@ -6065,6 +6065,13 @@ async function hantarRequestStokMobile() {
   const gagal = hasilItem.filter(h=>!h.ok);
   const bilangan = berjaya.length, ralat = gagal.length;
 
+  // Item gagal tiada rekod -> tiada kad Telegram sendiri. Hantar amaran supaya pemilik
+  // nampak juga di Telegram (SQL_TAMBAHAN_173). Gagal senyap — jangan ganggu aliran WhatsApp.
+  if (ralat) {
+    const dataGagal = gagal.map(h => { const s = DATA.stok.find(s=>s.id===h.it.stokId); return { nama: s?.nama||h.it.stokId, qty: h.it.qty, unit: s?.unit||'', ralat: h.ralat||'' }; });
+    sb.rpc('lapor_gagal_stok_mobile', { p_gagal: dataGagal, p_nota: nota }).then(({ error }) => { if (error) console.warn('lapor_gagal_stok_mobile', error.message); });
+  }
+
   // Permohonan berjaya masuk (medan sebab diisi) — trigger DB sengaja LANGKAU emel utk
   // laluan ni (lihat SQL_TAMBAHAN_74), jadi maklumkan pemilik via WhatsApp di sini.
   if (bilangan && tel) {
