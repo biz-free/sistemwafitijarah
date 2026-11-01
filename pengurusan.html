@@ -696,6 +696,22 @@
           <button class="btn btn-secondary btn-sm" id="btn-urus-route" style="flex-shrink:0;display:none" onclick="bukaModalRoute()">🗺️ Urus Route</button>
         </div>
         <div id="servis-map" style="height:220px;border-radius:12px;border:1.5px solid var(--border);margin-bottom:10px"></div>
+        <div id="servis-ringkasan" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+          <select class="form-input" id="servis-filter-jenis" style="font-size:12px;padding:8px 6px" onchange="renderServisKedai()">
+            <option value="">Semua Jenis</option>
+            <option value="hutang">Consignment/Hutang</option>
+            <option value="tunai">Tunai / Settle</option>
+          </select>
+          <select class="form-input" id="servis-kumpul" style="font-size:12px;padding:8px 6px" onchange="renderServisKedai()">
+            <option value="route">Ikut Route</option>
+            <option value="daerah">Ikut Daerah</option>
+          </select>
+          <select class="form-input" id="servis-susun" style="font-size:12px;padding:8px 6px" onchange="tukarSusunServis()">
+            <option value="lama">Paling Lama</option>
+            <option value="dekat">Terdekat Dgn Saya</option>
+          </select>
+        </div>
         <select class="form-input" id="servis-filter-status" style="margin-bottom:10px" onchange="renderServisKedai()">
           <option value="">☑️ Semua Status</option>
           <option value="belum">⬜ Belum Ditandakan</option>
@@ -3261,6 +3277,52 @@ function susunRouteIkutJarak(kedaiList) {
 }
 
 const ambangServisKedai = k => (+k.hutang||0) > 0 ? 7 : 30;
+let servisPosGps = null;
+
+// Kedai yang ada hutang lewat (tarikh akhir bayaran sudah lepas, masih belum settle).
+function kedaiHutangLewatSet() {
+  const hariIni = tarikhTempatan();
+  const set = new Set();
+  (DATA.transaksi||[]).forEach(t => {
+    if (t.status==='hutang' && t.kedai_id && t.tarikh_akhir_bayaran && t.tarikh_akhir_bayaran<=hariIni) set.add(t.kedai_id);
+  });
+  return set;
+}
+
+async function tukarSusunServis() {
+  if (document.getElementById('servis-susun').value === 'dekat') {
+    toast('📍 Mengesan lokasi anda…');
+    servisPosGps = await getGpsPosition();
+    if (!servisPosGps) {
+      document.getElementById('servis-susun').value = 'lama';
+      toast('GPS tidak dapat dikesan — guna susunan Paling Lama','err');
+    }
+  }
+  renderServisKedai();
+}
+
+// Hutang lewat sentiasa di atas; selepas itu susunan keutamaan sedia ada
+// (belum ditanda → sudah ditanda → tak pernah dilawati). Mod "Terdekat" susun
+// ikut jarak GPS pekerja (kedai tanpa koordinat di bawah).
+function susunServis(list, lewatSet) {
+  let hasil = susunPerluServisIkutKeutamaan(list);
+  if (document.getElementById('servis-susun')?.value === 'dekat' && servisPosGps) {
+    const jarak = k => (k.lat&&k.lng) ? haversineKm(servisPosGps,{lat:k.lat,lng:k.lng}) : Infinity;
+    hasil = [...hasil].sort((a,b)=>jarak(a)-jarak(b));
+  }
+  return [...hasil.filter(k=>lewatSet.has(k.id)), ...hasil.filter(k=>!lewatSet.has(k.id))];
+}
+
+async function tandaDahLawat(kedaiId, ev) {
+  if (ev) ev.stopPropagation();
+  if (!useCloud) return toast('Ciri ini perlu Supabase disambungkan','err');
+  const { error } = await sb.rpc('tandakan_dah_lawat', { p_kedai_id: kedaiId });
+  if (error) return toast('Gagal: '+error.message,'err');
+  const k = DATA.kedai.find(k=>k.id===kedaiId);
+  if (k) k.last_visit = tarikhTempatan();
+  toast('✅ Kedai ditandakan sudah dilawat');
+  renderServisKedai();
+}
 
 async function renderServisKedai() {
   document.getElementById('btn-urus-route').style.display = '';
@@ -3287,6 +3349,11 @@ async function renderServisKedai() {
   // kedai tunai atau hutang sudah settle (hutang 0) → selepas 30 hari (permintaan Nadia).
   let perluServis = kedaiSkop.filter(k=>daysSince(k.last_visit)>=ambangServisKedai(k));
 
+  const filterJenis = document.getElementById('servis-filter-jenis')?.value || '';
+  if (filterJenis === 'hutang') perluServis = perluServis.filter(k=>(+k.hutang||0)>0);
+  else if (filterJenis === 'tunai') perluServis = perluServis.filter(k=>!((+k.hutang||0)>0));
+  const lewatSet = kedaiHutangLewatSet();
+
   // Filter ikut status senarai semak (di bawah peta) — "" = semua, "belum" = kedai
   // belum ditanda lagi, atau salah satu status follow-up spesifik.
   const filterStatus = document.getElementById('servis-filter-status')?.value || '';
@@ -3302,13 +3369,14 @@ async function renderServisKedai() {
         <div style="font-weight:800;font-size:14px">${esc(k.nama)}</div>
         <span class="badge badge-gold">${daysSince(k.last_visit)} hari</span>
       </div>
-      <div style="margin-bottom:4px"><span class="badge ${(+k.hutang||0)>0?'badge-purple':'badge-muted'}">${(+k.hutang||0)>0?'Consignment/Hutang':'Tunai / Settle'}</span></div>
+      <div style="margin-bottom:4px"><span class="badge ${(+k.hutang||0)>0?'badge-purple':'badge-muted'}">${(+k.hutang||0)>0?'Consignment/Hutang':'Tunai / Settle'}</span>${lewatSet.has(k.id)?' <span class="badge badge-red">🔴 Hutang Lewat</span>':''}</div>
       <div style="font-size:12px;color:var(--muted)">📍 ${esc(k.alamat)}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px">
         ${k.telefon?`<div style="font-size:12px;color:var(--muted)">📞 ${esc(k.telefon)}</div>`:'<div></div>'}
         ${k.telefon?`<button class="btn btn-whatsapp btn-sm" style="width:auto;flex-shrink:0" onclick="whatsappFollowUpServis('${k.id}', event)">📱 Follow-up</button>`:''}
       </div>
       ${statusInfo?`<div style="font-size:11px;color:${statusInfo.warna};margin-top:6px">${statusInfo.label} · ${fmtDT(k.followup_status_pada)}</div>`:''}
+      <button class="btn btn-secondary btn-sm" style="margin-top:6px;width:100%" onclick="tandaDahLawat('${k.id}', event)">✅ Dah Lawat</button>
       <select class="input" style="margin-top:6px;font-size:12px;padding:6px 8px" onclick="event.stopPropagation()" onchange="tandaFollowUpServis('${k.id}', this.value, event)">
         <option value="" ${!status?'selected':''}>☑️ Tandakan status follow-up…</option>
         ${Object.entries(FOLLOWUP_STATUS_LABEL).map(([val,info])=>`<option value="${val}" ${status===val?'selected':''}>${info.label}</option>`).join('')}
@@ -3316,17 +3384,35 @@ async function renderServisKedai() {
     </div>`;
   };
 
+  // Ringkasan
+  const nLewat = perluServis.filter(k=>lewatSet.has(k.id)).length;
+  const nHutang = perluServis.filter(k=>(+k.hutang||0)>0).length;
+  const nTunai = perluServis.length - nHutang;
+  const nBelum = perluServis.filter(k=>!followupStatusAktif(k)).length;
+  document.getElementById('servis-ringkasan').innerHTML =
+    `<span class="badge badge-red">🔴 ${nLewat} hutang lewat</span><span class="badge badge-purple">${nHutang} hutang/consignment</span><span class="badge badge-muted">${nTunai} tunai/settle</span><span class="badge badge-gold">⬜ ${nBelum} belum ditanda</span>`;
+
   let html = '';
-  (routes||[]).forEach(r => {
-    const kedaiRoute = susunPerluServisIkutKeutamaan(perluServis.filter(k=>k.route_id===r.id));
-    if (!kedaiRoute.length) return;
-    html += `<div style="font-weight:800;font-size:13px;color:var(--teal);margin:14px 0 8px">🗺️ ${esc(r.nama)} (${kedaiRoute.length} kedai)</div>`;
-    html += kedaiRoute.map(kedaiCardHtml).join('');
-  });
-  const takBerRoute = susunPerluServisIkutKeutamaan(perluServis.filter(k=>!k.route_id));
-  if (takBerRoute.length) {
-    if (html) html += `<div style="font-weight:800;font-size:13px;color:var(--muted);margin:14px 0 8px">📍 Belum Ada Route</div>`;
-    html += takBerRoute.map(kedaiCardHtml).join('');
+  if (document.getElementById('servis-kumpul')?.value === 'daerah') {
+    const peta = {};
+    perluServis.forEach(k => { (peta[k.daerah||'Tiada Daerah'] ||= []).push(k); });
+    Object.keys(peta).sort((a,b)=>a==='Tiada Daerah'?1:b==='Tiada Daerah'?-1:a.localeCompare(b)).forEach(d => {
+      const list = susunServis(peta[d], lewatSet);
+      html += `<div style="font-weight:800;font-size:13px;color:var(--teal);margin:14px 0 8px">📌 ${esc(d)} (${list.length} kedai)</div>`;
+      html += list.map(kedaiCardHtml).join('');
+    });
+  } else {
+    (routes||[]).forEach(r => {
+      const kedaiRoute = susunServis(perluServis.filter(k=>k.route_id===r.id), lewatSet);
+      if (!kedaiRoute.length) return;
+      html += `<div style="font-weight:800;font-size:13px;color:var(--teal);margin:14px 0 8px">🗺️ ${esc(r.nama)} (${kedaiRoute.length} kedai)</div>`;
+      html += kedaiRoute.map(kedaiCardHtml).join('');
+    });
+    const takBerRoute = susunServis(perluServis.filter(k=>!k.route_id), lewatSet);
+    if (takBerRoute.length) {
+      if (html) html += `<div style="font-weight:800;font-size:13px;color:var(--muted);margin:14px 0 8px">📍 Belum Ada Route</div>`;
+      html += takBerRoute.map(kedaiCardHtml).join('');
+    }
   }
   el.innerHTML = html || '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Semua kedai baru sahaja dilawati!</div></div>';
 
