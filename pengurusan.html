@@ -692,7 +692,7 @@
     <div id="kedai-servis" style="display:none">
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px">
-          <div style="font-size:12px;color:var(--muted)">Kedai yang lama tidak dihantar stok (≥7 hari) atau tak pernah dilawati langsung, dikumpulkan ikut route jika ada.</div>
+          <div style="font-size:12px;color:var(--muted)">Kedai consignment/hutang belum settle yang lama tidak dihantar stok (≥7 hari), kedai tunai atau hutang sudah settle (≥30 hari), atau tak pernah dilawati langsung, dikumpulkan ikut route jika ada.</div>
           <button class="btn btn-secondary btn-sm" id="btn-urus-route" style="flex-shrink:0;display:none" onclick="bukaModalRoute()">🗺️ Urus Route</button>
         </div>
         <div id="servis-map" style="height:220px;border-radius:12px;border:1.5px solid var(--border);margin-bottom:10px"></div>
@@ -3260,6 +3260,8 @@ function susunRouteIkutJarak(kedaiList) {
   return [...hasil, ...takAda];
 }
 
+const ambangServisKedai = k => (+k.hutang||0) > 0 ? 7 : 30;
+
 async function renderServisKedai() {
   document.getElementById('btn-urus-route').style.display = '';
   const el = document.getElementById('servis-list');
@@ -3281,7 +3283,9 @@ async function renderServisKedai() {
       return mod === 'semua' || k.didaftarkan_oleh === DATA.currentUser.id;
     });
   }
-  let perluServis = kedaiSkop.filter(k=>daysSince(k.last_visit)>=7);
+  // Kedai ada hutang/consignment belum settle → perlu servis selepas 7 hari;
+  // kedai tunai atau hutang sudah settle (hutang 0) → selepas 30 hari (permintaan Nadia).
+  let perluServis = kedaiSkop.filter(k=>daysSince(k.last_visit)>=ambangServisKedai(k));
 
   // Filter ikut status senarai semak (di bawah peta) — "" = semua, "belum" = kedai
   // belum ditanda lagi, atau salah satu status follow-up spesifik.
@@ -3298,6 +3302,7 @@ async function renderServisKedai() {
         <div style="font-weight:800;font-size:14px">${esc(k.nama)}</div>
         <span class="badge badge-gold">${daysSince(k.last_visit)} hari</span>
       </div>
+      <div style="margin-bottom:4px"><span class="badge ${(+k.hutang||0)>0?'badge-purple':'badge-muted'}">${(+k.hutang||0)>0?'Consignment/Hutang':'Tunai / Settle'}</span></div>
       <div style="font-size:12px;color:var(--muted)">📍 ${esc(k.alamat)}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px">
         ${k.telefon?`<div style="font-size:12px;color:var(--muted)">📞 ${esc(k.telefon)}</div>`:'<div></div>'}
