@@ -537,6 +537,10 @@
         <button class="btn btn-gold btn-sm" onclick="showModal('modal-restock')" style="padding:11px 14px">⚡ Restock</button>
         <button class="btn btn-secondary btn-sm" onclick="bukaModalPindahPekerja()" style="padding:11px 14px">🔀 Pindah ke Pekerja</button>
       </div>
+      <div id="restock-auto-bar" style="display:none;align-items:center;justify-content:space-between;gap:10px;background:var(--card,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:12px"><div style="font-weight:800">🔄 Restock Auto</div><div style="color:var(--muted);font-size:11px" id="restock-auto-info">—</div></div>
+        <button id="restock-auto-btn" class="btn btn-sm" onclick="togolRestockAuto()" style="padding:8px 14px;margin-top:0;font-weight:800">—</button>
+      </div>
       <input class="search-bar" id="stok-search" placeholder="Cari produk..." oninput="renderStok(this.value)" />
       <label id="stok-papar-tidak-aktif-wrap" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:8px 0 4px;cursor:pointer">
         <input type="checkbox" id="stok-papar-tidak-aktif" onchange="renderStok(document.getElementById('stok-search').value)" />
@@ -2877,6 +2881,7 @@ function jumlahTerjualStok(stokId) {
 }
 
 function renderStok(q='') {
+  muatRestockAuto();
   document.getElementById('stok-admin-actions').style.display=currentRole==='pemilik'?'flex':'none';
   const isPemilik = currentRole==='pemilik';
   const paparTidakAktifWrap = document.getElementById('stok-papar-tidak-aktif-wrap');
@@ -3192,6 +3197,45 @@ async function saveStok() {
   document.getElementById('stok-modal-title').textContent='Tambah Produk Baru';
   document.getElementById('edit-stok-id').value='';
   toast(id?'Produk dikemaskini':'Produk baru ditambah');
+}
+
+let restockAuto = { aktif:false, ambang:50, sasaran:100 };
+async function muatRestockAuto() {
+  const bar = document.getElementById('restock-auto-bar');
+  if (!bar) return;
+  if (currentRole!=='pemilik' || !useCloud) { bar.style.display='none'; return; }
+  bar.style.display='flex';
+  const { data } = await sb.from('tetapan').select('restock_auto_aktif,restock_auto_ambang,restock_auto_sasaran').eq('id',1).single();
+  if (data) restockAuto = { aktif:!!data.restock_auto_aktif, ambang:data.restock_auto_ambang, sasaran:data.restock_auto_sasaran };
+  paparRestockAuto();
+}
+function paparRestockAuto() {
+  const btn = document.getElementById('restock-auto-btn');
+  btn.textContent = restockAuto.aktif ? 'AUTO: ON' : 'AUTO: OFF';
+  btn.style.background = restockAuto.aktif ? 'var(--green)' : 'var(--muted)';
+  btn.style.color = '#fff';
+  document.getElementById('restock-auto-info').textContent = restockAuto.aktif
+    ? `Stok bawah ${restockAuto.ambang} → ditambah ke ${restockAuto.sasaran} secara automatik`
+    : `Tutup. Bila ON: stok bawah ${restockAuto.ambang} → ditambah ke ${restockAuto.sasaran}`;
+}
+async function togolRestockAuto() {
+  const baru = !restockAuto.aktif;
+  if (baru) {
+    const rendah = DATA.stok.filter(s=>s.aktif!==false && s.stok<restockAuto.ambang);
+    const mesej = `Hidupkan Restock Auto?\n\nStok bawah ${restockAuto.ambang} akan ditambah ke ${restockAuto.sasaran} secara automatik (tanpa rekod pembelian).`
+      + (rendah.length ? `\n\n${rendah.length} produk SEDIA rendah akan direstock sekarang:\n`+rendah.map(s=>`• ${s.nama} (${s.stok})`).join('\n') : '');
+    if (!confirm(mesej)) return;
+  }
+  const { error } = await sb.from('tetapan').update({ restock_auto_aktif: baru }).eq('id',1);
+  if (error) return toast('Gagal: '+error.message,'err');
+  restockAuto.aktif = baru;
+  if (baru) {
+    const { data:n, error:e2 } = await sb.rpc('restock_auto_imbas');
+    if (e2) toast('Auto ON, tetapi imbasan gagal: '+e2.message,'err');
+    else toast(`Restock Auto ON${n?` · ${n} produk direstock`:''}`);
+    await loadData(); renderStok(document.getElementById('stok-search').value);
+  } else toast('Restock Auto OFF');
+  paparRestockAuto();
 }
 
 async function doRestock() {
