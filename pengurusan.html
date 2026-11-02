@@ -573,6 +573,7 @@
 
       <div class="card" style="border-left:4px solid var(--purple)">
         <div class="card-title" style="color:var(--purple)">🎒 Stok Bawaan Saya</div>
+        <div id="pindahan-menunggu-saya"></div>
         <div id="stok-bawaan-ringkasan" style="display:flex;gap:8px;margin-bottom:10px"></div>
         <div id="stok-bawaan-list"></div>
         <div class="btn-row">
@@ -4799,6 +4800,40 @@ async function loadStokBawaan() {
   DATA.stokPekerja = {};
   (data||[]).forEach(r => DATA.stokPekerja[r.stok_id] = r.kuantiti);
   renderStokBawaanList();
+  muatPindahanMenungguSaya();
+}
+
+// Pindahan stok dari pekerja lain yang MENUNGGU penerima sahkan (SQL_TAMBAHAN_176).
+// Stok belum masuk bawaan sehingga tekan Terima.
+async function muatPindahanMenungguSaya() {
+  const el = document.getElementById('pindahan-menunggu-saya');
+  if (!el || !useCloud) return;
+  const { data, error } = await sb.from('serahan_produk').select('*')
+    .eq('pekerja_id', DATA.currentUser.id).eq('jenis','pindah_masuk').eq('status','menunggu')
+    .order('created_at',{ascending:false});
+  if (error || !(data||[]).length) { el.innerHTML = ''; return; }
+  if (!Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
+  el.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">⏳ PINDAHAN MENUNGGU SAHKAN ANDA</div>` +
+    data.map(r=>`
+    <div class="list-item" style="display:block;border-left:3px solid var(--gold);padding-left:8px;margin-bottom:8px">
+      <div class="list-item-title">${esc(r.stok_nama)} ×${r.kuantiti}</div>
+      <div class="list-item-sub">Daripada ${esc(PROFIL_NAMA_CACHE[r.rujuk_pekerja_id]||'pekerja lain')} · ${fmtDT(r.created_at)}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px">Stok belum masuk bawaan anda sehingga anda tekan Terima. Dibatalkan sendiri selepas 3 hari.</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-primary btn-sm" style="width:auto" onclick="putuskanPindahanMasuk('${r.id}','terima')">✅ Terima</button>
+        <button class="btn btn-secondary btn-sm" style="width:auto;color:var(--red)" onclick="putuskanPindahanMasuk('${r.id}','tolak')">✕ Tolak</button>
+      </div>
+    </div>`).join('') + '<div class="divider" style="margin:10px 0"></div>';
+}
+
+async function putuskanPindahanMasuk(id, tindakan) {
+  const terima = tindakan === 'terima';
+  if (!terima && !confirm('Tolak pindahan ini? Stok akan dipulangkan kepada pekerja asal.')) return;
+  const { error } = await sb.rpc(terima ? 'terima_pindahan_stok' : 'tolak_pindahan_stok', { p_id:id });
+  if (error) return toast('Gagal: '+error.message,'err');
+  toast(terima ? '✅ Pindahan diterima — stok masuk bawaan anda' : '✕ Pindahan ditolak — stok dipulangkan kepada pengirim');
+  await loadStokBawaan();
+  await loadSerahanProdukSaya();
 }
 
 function renderStokBawaanList() {
@@ -4998,7 +5033,7 @@ async function pindahStokPekerja() {
   closeModal('modal-pindah-stok-pekerja');
   document.getElementById('pindah-qty').value='';
   await renderStokMobileSemua();
-  toast('Stok berjaya dipindahkan antara pekerja');
+  toast('Pindahan dihantar — stok masuk bawaan penerima selepas dia tekan Terima (auto-batal 3 hari)');
 }
 
 // Pemilik paksa pulangkan stok bawaan SESEORANG pekerja terus ke gudang (↩️ di kad
@@ -5111,7 +5146,8 @@ async function pulangStok() {
 // TAK dikira balik sebagai stok boleh jual, pemilik semak & sahkan/tolak dahulu ──
 const SERAHAN_PRODUK_STATUS_TXT = { menunggu:'⏳ Menunggu Sahkan', disahkan:'✅ Disahkan', ditolak:'✕ Ditolak' };
 const SERAHAN_PRODUK_STATUS_BADGE = { menunggu:'badge-gold', disahkan:'badge-green', ditolak:'badge-red' };
-const SERAHAN_PRODUK_SEBAB_TXT = { rosak:'📦 Rosak/Pecah', luput:'⏳ Luput', ditolak_kedai:'🚫 Ditolak Kedai', lain:'📝 Lain-lain' };
+const SERAHAN_PRODUK_SEBAB_TXT = { rosak:'📦 Rosak/Pecah', luput:'⏳ Luput', ditolak_kedai:'🚫 Ditolak Kedai', lain:'📝 Lain-lain',
+  ditolak_penerima:'Ditolak penerima', dibatal_pemilik:'Dibatal pemilik', dibatal_auto:'Dibatal auto (3 hari tak disahkan)' };
 // Label sejarah bagi SETIAP jenis pergerakan stok (bukan cuma pulangan/reject) —
 // dipapar di kad "Sejarah Serahan Saya" & "Produk Dipulangkan" (Mobile) dan
 // "Sejarah Pindahan Stok" (Gudang).
@@ -5127,6 +5163,8 @@ const SERAHAN_PRODUK_JENIS_TXT = {
 function labelSerahanProduk(r) {
   if (r.jenis === 'reject') return SERAHAN_PRODUK_SEBAB_TXT[r.sebab] || r.sebab || SERAHAN_PRODUK_JENIS_TXT.reject;
   if (r.jenis === 'ambil' && r.sebab) return `${SERAHAN_PRODUK_JENIS_TXT.ambil} — ${r.sebab}`;
+  if ((r.jenis === 'pindah_masuk' || r.jenis === 'pindah_keluar') && r.status === 'ditolak')
+    return `${SERAHAN_PRODUK_JENIS_TXT[r.jenis]} — ${SERAHAN_PRODUK_SEBAB_TXT[r.sebab]||r.sebab||'dibatalkan'}`;
   return SERAHAN_PRODUK_JENIS_TXT[r.jenis] || r.jenis;
 }
 
@@ -5253,6 +5291,7 @@ async function renderSerahanProdukSemua() {
     }).join('') : '<div class="empty"><div class="empty-text">Tiada produk reject dipegang pekerja buat masa ini</div></div>') +
     '<div class="divider" style="margin:12px 0"></div>';
 
+  const menungguPindah = senarai.filter(r=>r.jenis==='pindah_masuk' && r.status==='menunggu');
   const semuaMenunggu = [...menungguAmbil, ...menunggu, ...menungguPulang].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const blokMenunggu = semuaMenunggu.length ? `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">MENUNGGU SAHKAN</div>` +
     semuaMenunggu.map(r=>{
@@ -5281,6 +5320,15 @@ async function renderSerahanProdukSemua() {
       </div>`;
     }).join('') + '<div class="divider" style="margin:12px 0"></div>' : '';
 
+  // Pindahan antara pekerja menunggu PENERIMA sahkan (SQL_TAMBAHAN_176) — pemilik hanya boleh batal.
+  const blokPindahMenunggu = menungguPindah.length ? `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">🔀 PINDAHAN MENUNGGU PENERIMA SAHKAN</div>` +
+    menungguPindah.map(r=>`
+      <div class="list-item" style="display:block;border-left:3px solid var(--gold);padding-left:8px;margin-bottom:8px">
+        <div class="list-item-title">${esc(r.stok_nama)} ×${r.kuantiti}</div>
+        <div class="list-item-sub">${esc(namaPekerja(r.rujuk_pekerja_id))} → ${esc(namaPekerja(r.pekerja_id))} · ${fmtDT(r.created_at)} · stok ditahan, auto-batal selepas 3 hari</div>
+        <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" style="width:auto;color:var(--red)" onclick="batalPindahanStok('${r.id}')">↩️ Batal (pulang ke ${esc(namaPekerja(r.rujuk_pekerja_id))})</button></div>
+      </div>`).join('') + '<div class="divider" style="margin:12px 0"></div>' : '';
+
   const blokSejarah = `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">SEJARAH PERGERAKAN STOK TERKINI</div>` +
     (senarai.slice(0,30).map(r=>{
       const rujuk = r.rujuk_pekerja_id ? ` (${esc(namaPekerja(r.rujuk_pekerja_id))})` : '';
@@ -5294,7 +5342,7 @@ async function renderSerahanProdukSemua() {
       </div>`;
     }).join('') || '<div class="empty"><div class="empty-text">Tiada sejarah lagi</div></div>');
 
-  el.innerHTML = blokRejectIkutPekerja + blokMenunggu + blokSejarah;
+  el.innerHTML = blokRejectIkutPekerja + blokPindahMenunggu + blokMenunggu + blokSejarah;
 }
 
 // Jejak kos (RM, ikut harga beli SEMASA) stok yang diambil pekerja drpd gudang
@@ -5365,6 +5413,15 @@ async function renderKosStokPergerakan() {
       ${belumPulangRaw<0?`<div style="font-size:9px;color:var(--muted);margin-top:4px">ℹ️ Dijual/dilupuskan melebihi rekod "diambil" — sejarah ambil sebelum 28 Jul 2026 tak lengkap (dianggap 0, bukan hutang stok sebenar).</div>`:''}
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-text">Tiada pergerakan stok direkod lagi</div></div>';
+}
+
+async function batalPindahanStok(id) {
+  if (!confirm('Batalkan pindahan ini? Stok akan dipulangkan kepada pekerja asal.')) return;
+  const { error } = await sb.rpc('batal_pindahan_stok', { p_id:id });
+  if (error) return toast('Gagal batal: '+error.message,'err');
+  toast('↩️ Pindahan dibatalkan — stok dipulangkan kepada pekerja asal');
+  await renderSerahanProdukSemua();
+  await renderStokMobileSemua();
 }
 
 async function ubahStatusSerahanProduk(id, status) {
