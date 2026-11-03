@@ -1,3 +1,4 @@
+-- DILAKSANA pada projek Wafi 3 Nov 2026 (kelulusan Amirul).
 -- SQL_TAMBAHAN_177: Tukar Produk Transaksi — benarkan ubah KUANTITI sahaja
 -- (produk sama). Sebelum ni produk gantian mesti berbeza. Kini produk sama
 -- dibenarkan selagi kuantiti berubah; stok lama dipulangkan penuh kemudian
