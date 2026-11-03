@@ -1,3 +1,4 @@
+-- DILAKSANA pada projek Wafi 3 Nov 2026 (kelulusan Amirul).
 -- SQL_TAMBAHAN_178: Pengalaman pembeli selepas tempahan.
 -- (a) Lajur penanda supaya emel pengesahan / penghantaran tak dihantar dua kali.
 -- (b) jejak_pesanan_awam() kini turut jumpa pesanan kedai (pre_order, ID PO...) —
