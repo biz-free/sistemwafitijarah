@@ -6671,7 +6671,7 @@ async function bukaModalTukarProdukTrx(id) {
     const s = DATA.stok.find(s=>s.id===it.stokId);
     return `<option value="${it.stokId}" data-qty="${it.qty}">${esc(s?.nama||it.stokId)} ×${it.qty}</option>`;
   }).join('');
-  document.getElementById('tukar-produk-baru').innerHTML = '<option value="">-- Pilih produk betul --</option>' +
+  document.getElementById('tukar-produk-baru').innerHTML = '<option value="">-- Pilih produk betul (atau sama utk ubah kuantiti) --</option>' +
     DATA.stok.filter(s=>s.aktif!==false).map(s=>`<option value="${s.id}">${esc(s.nama)} (${fmt(s.harga_jual)})</option>`).join('');
   document.getElementById('tukar-produk-qty').value = t.items[0]?.qty || 1;
 
@@ -6702,8 +6702,9 @@ async function simpanTukarProdukTrx() {
   const qty = +document.getElementById('tukar-produk-qty').value;
   const pekerjaId = document.getElementById('tukar-produk-pekerja').value;
   if (!stokBaru) return toast('Sila pilih produk gantian','err');
-  if (stokLama === stokBaru) return toast('Produk gantian mesti berbeza drpd produk asal','err');
   if (!Number.isFinite(qty) || qty < 1) return toast('Kuantiti tidak sah','err');
+  const qtyAsal = +(document.getElementById('tukar-produk-lama').selectedOptions[0]?.dataset.qty);
+  if (stokLama === stokBaru && qty === qtyAsal) return toast('Tiada perubahan: produk & kuantiti sama','err');
   const namaLama = DATA.stok.find(s=>s.id===stokLama)?.nama || stokLama;
   const namaBaru = DATA.stok.find(s=>s.id===stokBaru)?.nama || stokBaru;
   const namaPekerja = PROFIL_NAMA_CACHE[pekerjaId] || document.getElementById('tukar-produk-pekerja').selectedOptions[0]?.textContent || pekerjaId;
@@ -6711,7 +6712,7 @@ async function simpanTukarProdukTrx() {
   const notaConsignment = t?.kaedah_bayaran==='consignment'
     ? '\n\n🤝 Transaksi ini Consignment — status pengesahan (terjual/pulang) akan DIRESET, perlu sahkan semula guna Follow-up selepas tukar.'
     : '';
-  if (!confirm(`Tukar "${namaLama}" kepada "${namaBaru}" (${qty} unit) dalam transaksi ini?\n\nStok gantian ditolak drpd bawaan ${namaPekerja}. Jumlah transaksi & hutang kedai (jika berkenaan) akan dikira semula automatik.${notaConsignment}`)) return;
+  if (!confirm(`${stokLama===stokBaru ? `Ubah kuantiti "${namaLama}" kepada ${qty} unit` : `Tukar "${namaLama}" kepada "${namaBaru}" (${qty} unit)`} dalam transaksi ini?\n\nStok gantian ditolak drpd bawaan ${namaPekerja}. Jumlah transaksi & hutang kedai (jika berkenaan) akan dikira semula automatik.${notaConsignment}`)) return;
   const { data: hasil, error } = await sb.rpc('tukar_produk_transaksi', {
     p_transaksi_id: id, p_stok_id_lama: stokLama, p_stok_id_baru: stokBaru,
     p_qty_baru: qty, p_pekerja_id_baru: pekerjaId||null,
