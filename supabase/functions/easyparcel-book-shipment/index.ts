@@ -72,14 +72,19 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const callerClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: { user }, error: userErr } = await callerClient.auth.getUser();
-    if (userErr || !user) {
-      return new Response(JSON.stringify({ error: "Token tidak sah" }), { status: 401, headers: corsHeaders });
-    }
-    const { data: callerProfile } = await callerClient.from("profiles").select("id").eq("id", user.id).single();
-    if (!callerProfile) {
-      return new Response(JSON.stringify({ error: "Hanya staff dibenarkan jana label penghantaran" }), { status: 403, headers: corsHeaders });
+    // Panggilan dalaman (billplz-webhook selepas bayaran disahkan) guna service key;
+    // selainnya mesti staff log masuk.
+    const dalaman = authHeader === `Bearer ${serviceKey}`;
+    if (!dalaman) {
+      const callerClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data: { user }, error: userErr } = await callerClient.auth.getUser();
+      if (userErr || !user) {
+        return new Response(JSON.stringify({ error: "Token tidak sah" }), { status: 401, headers: corsHeaders });
+      }
+      const { data: callerProfile } = await callerClient.from("profiles").select("id").eq("id", user.id).single();
+      if (!callerProfile) {
+        return new Response(JSON.stringify({ error: "Hanya staff dibenarkan jana label penghantaran" }), { status: 403, headers: corsHeaders });
+      }
     }
 
     const { orderId } = await req.json();
@@ -196,6 +201,15 @@ Deno.serve(async (req) => {
     if (updErr) {
       return new Response(JSON.stringify({ error: "Label dijana tapi gagal simpan ke pesanan: " + updErr.message }), { status: 500, headers: corsHeaders });
     }
+
+    // Maklumkan pembeli (emel + no. tracking). Kegagalan emel tak batalkan label.
+    try {
+      await fetch(`${supabaseUrl}/functions/v1/notifikasi-pembeli`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, jenis: "penghantaran" }),
+      });
+    } catch (e) { console.error("notifikasi-pembeli gagal:", e); }
 
     return new Response(JSON.stringify({ success: true, awb }), {
       status: 200,

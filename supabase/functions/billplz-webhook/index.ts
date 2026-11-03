@@ -90,6 +90,29 @@ Deno.serve(async (req) => {
       return new Response("Database error", { status: 500 }); // Billplz akan retry
     }
 
+    // Bayaran e-dagang disahkan -> jana label EasyParcel (no. tracking) automatik & maklumkan
+    // pembeli (easyparcel-book-shipment hantar emel). Gagal tempah label TIDAK gagalkan
+    // webhook (Billplz akan retry & status bayaran sudah disimpan) — staff masih boleh
+    // tekan "Buat Label" manual. Selamat diulang: book-shipment tolak jika sudah ada tracking.
+    if (dibayar && orderTable === "pesanan_edagang") {
+      try {
+        const r = await fetch(`${supabaseUrl}/functions/v1/easyparcel-book-shipment`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: order.id }),
+        });
+        console.log("Auto-label selepas bayaran:", order.id, r.status, await r.text());
+      } catch (e) { console.error("Auto-label gagal:", e); }
+      // Pastikan emel pengesahan sampai walau pembeli tutup tab sebelum skrin kejayaan
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/notifikasi-pembeli`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: order.id, jenis: "pengesahan" }),
+        });
+      } catch (e) { console.error("Emel pengesahan gagal:", e); }
+    }
+
     return new Response("OK", { status: 200 });
   } catch (e) {
     console.error("billplz-webhook error:", e);

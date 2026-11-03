@@ -441,6 +441,7 @@
     <div class="icon">✅</div>
     <h2>Pesanan Diterima!</h2>
     <p>Terima kasih atas pembelian anda. Pihak kami akan sahkan pesanan & mula proses penghantaran tidak lama lagi.</p>
+    <div id="success-detail"></div>
   </div>
 
 </div>
@@ -985,6 +986,41 @@ function keBayaran() {
 
 function bukaModalJejak() { document.getElementById('jejak-modal').classList.add('show'); }
 function tutupModalJejak() { document.getElementById('jejak-modal').classList.remove('show'); }
+
+
+// Skrin kejayaan: nombor pesanan (boleh salin), langkah seterusnya ikut kaedah bayar,
+// pautan semak status & WhatsApp berisi nombor pesanan.
+function langkahSeterusnyaTxt(kaedah, dibayar) {
+  if (kaedah === 'billplz') return dibayar
+    ? 'Bayaran disahkan. No. tracking akan dijana automatik & dihantar kepada anda melalui emel (jika diberi) sebaik parcel ditempah dengan kurier.'
+    : 'Sila selesaikan bayaran dalam talian. Sebaik disahkan, no. tracking dijana automatik & dimaklumkan kepada anda.';
+  if (kaedah === 'transfer') return 'Kami akan semak bukti pindahan anda (waktu bekerja, biasanya dalam 1 jam). Selepas disahkan, parcel diproses & no. tracking dimaklumkan.';
+  return 'Pihak kami akan hubungi anda untuk sahkan penghantaran. No. tracking dimaklumkan sebaik parcel diserahkan kepada kurier.';
+}
+function salinNoPesanan(id) {
+  if (navigator.clipboard) navigator.clipboard.writeText(id).then(()=>toast('No. pesanan disalin: '+id), ()=>toast(id));
+  else toast(id);
+}
+function kadKejayaanHtml(id, kaedah, dibayar, emel) {
+  const mesejWa = encodeURIComponent(`Assalamualaikum, saya baru buat pesanan ${id} di Wafi Tijarah Trading. Mohon sahkan. Terima kasih.`);
+  return `
+    <div style="margin:16px auto 0;max-width:420px;text-align:left">
+      <div style="background:var(--bg);border:1.5px dashed var(--border);border-radius:12px;padding:12px;text-align:center;margin-bottom:12px">
+        <div style="font-size:11px;color:var(--muted)">NO. PESANAN ANDA</div>
+        <div style="font-size:20px;font-weight:800;color:var(--navy);letter-spacing:1px">${esc(id)}</div>
+        <button class="btn btn-outline btn-sm" style="width:auto;margin-top:6px" onclick="salinNoPesanan('${esc(id)}')">📋 Salin</button>
+      </div>
+      <div style="font-size:12px;color:var(--text);margin-bottom:12px"><strong>Langkah seterusnya:</strong> ${langkahSeterusnyaTxt(kaedah, dibayar)}</div>
+      ${emel ? `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">📧 Pengesahan dihantar ke <strong>${esc(emel)}</strong>.</div>` : `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">💡 Simpan no. pesanan di atas — guna untuk semak status bila-bila masa.</div>`}
+      <button class="btn btn-primary" onclick="semakStatusPesananSaya('${esc(id)}')">🔍 Semak Status Pesanan</button>
+      <a class="btn btn-outline" style="display:block;text-align:center;text-decoration:none;margin-top:8px" href="https://wa.me/60146363831?text=${mesejWa}" target="_blank" rel="noopener">💬 Hantar No. Pesanan di WhatsApp</a>
+    </div>`;
+}
+function semakStatusPesananSaya(id) {
+  document.getElementById('jejak-id').value = id;
+  bukaModalJejak();
+  jejakPesanan();
+}
 
 const JEJAK_STATUS_TXT = { baru:'🆕 Baru', diproses:'⏳ Diproses', dihantar:'🚚 Dihantar', selesai:'✅ Selesai', dibatalkan:'✕ Dibatalkan' };
 const JEJAK_BAYAR_TXT = { menunggu:'⏳ Menunggu Pembayaran', disahkan:'✅ Dibayar', gagal:'❌ Bayaran Gagal' };
@@ -1665,7 +1701,10 @@ async function hantarPesanan() {
   voucherAktif = null;
   document.getElementById('form-card').style.display='none';
   document.getElementById('cart-bar').className='';
+  document.getElementById('success-detail').innerHTML = kadKejayaanHtml(id, kaedahBayaranDipilih, false, emel);
   document.getElementById('success-box').style.display='block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (emel) sb.functions.invoke('notifikasi-pembeli', { body: { orderId: id, jenis: 'pengesahan' } }).catch(()=>{});
 }
 
 async function semakBalikanBillplz() {
@@ -1681,15 +1720,21 @@ async function semakBalikanBillplz() {
   if (error || !s) {
     box.innerHTML = `<div class="section-title">⚠️ Tidak dapat sahkan status pesanan</div><p style="font-size:13px;color:var(--muted)">Sila hubungi kami dengan nombor pesanan <strong>${esc(id)}</strong> untuk semakan.</p>`;
   } else if (s.status_bayaran === 'disahkan') {
-    box.innerHTML = `<div class="section-title">✅ Bayaran Berjaya!</div><p style="font-size:13px;color:var(--muted)">Terima kasih! Pesanan <strong>${esc(id)}</strong> (${fmt(s.jumlah)}) telah disahkan. Pihak kami akan mula proses penghantaran tidak lama lagi.</p>`;
+    box.innerHTML = `<div class="section-title">✅ Bayaran Berjaya!</div><p style="font-size:13px;color:var(--muted)">Terima kasih! Pesanan <strong>${esc(id)}</strong> (${fmt(s.jumlah)}) telah disahkan.</p>${kadKejayaanHtml(id, 'billplz', true, null)}`;
   } else if (s.status_bayaran === 'gagal') {
     box.innerHTML = `<div class="section-title">❌ Bayaran Gagal</div><p style="font-size:13px;color:var(--muted)">Bayaran untuk pesanan <strong>${esc(id)}</strong> tidak berjaya. Sila hubungi kami untuk cuba semula.</p>`;
   } else {
-    box.innerHTML = `<div class="section-title">⏳ Menunggu Pengesahan</div><p style="font-size:13px;color:var(--muted)">Pesanan <strong>${esc(id)}</strong> masih menunggu pengesahan bayaran. Jika anda sudah selesai bayar, sila tunggu seketika & muat semula halaman ini.</p>`;
+    box.innerHTML = `<div class="section-title">⏳ Menunggu Pengesahan</div><p style="font-size:13px;color:var(--muted)">Pesanan <strong>${esc(id)}</strong> masih menunggu pengesahan bayaran. Jika anda sudah selesai bayar, sila tunggu seketika & muat semula halaman ini.</p>${kadKejayaanHtml(id, 'billplz', false, null)}`;
   }
 }
 
-initHalaman().then(semakBalikanBillplz);
+function semakDariPautan() {
+  const id = new URLSearchParams(location.search).get('semak');
+  if (!id) return;
+  history.replaceState({}, '', location.pathname);
+  semakStatusPesananSaya(id.trim().toUpperCase());
+}
+initHalaman().then(semakBalikanBillplz).then(semakDariPautan);
 </script>
 </body>
 </html>

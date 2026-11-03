@@ -227,6 +227,7 @@
     <div class="icon">✅</div>
     <h2>Pesanan Diterima!</h2>
     <p>Terima kasih. Pihak kami akan hubungi anda tidak lama lagi untuk sahkan penghantaran.</p>
+    <div id="success-detail"></div>
   </div>
 </div>
 
@@ -625,6 +626,28 @@ function setBayarMetod(m) {
   kemaskiniTotal();
 }
 
+
+// Skrin kejayaan: nombor pesanan, langkah seterusnya, pautan semak status & WhatsApp.
+function kadKejayaanHtml(id, kaedah, dibayar) {
+  const langkah = kaedah === 'billplz'
+    ? (dibayar ? 'Bayaran disahkan. Pesanan anda akan diproses & kami hubungi anda untuk sahkan penghantaran.' : 'Sila selesaikan bayaran dalam talian. Sebaik disahkan, kami proses pesanan anda.')
+    : kaedah === 'transfer' ? 'Kami akan semak bukti pindahan anda (waktu bekerja, biasanya dalam 1 jam), kemudian hubungi anda untuk sahkan penghantaran.'
+    : kaedah === 'consignment' ? 'Pihak kami akan hubungi anda untuk sahkan penghantaran. Bayaran dibuat selepas barang terjual (consignment).'
+    : 'Pihak kami akan hubungi anda untuk sahkan penghantaran. Bayaran semasa terima barang (COD).';
+  const mesejWa = encodeURIComponent(`Assalamualaikum, saya baru buat pesanan ${id} di Wafi Tijarah Trading. Mohon sahkan. Terima kasih.`);
+  return `
+    <div style="margin:16px auto 0;max-width:420px;text-align:left">
+      <div style="background:var(--bg);border:1.5px dashed var(--border);border-radius:12px;padding:12px;text-align:center;margin-bottom:12px">
+        <div style="font-size:11px;color:var(--muted)">NO. PESANAN ANDA</div>
+        <div style="font-size:20px;font-weight:800;color:var(--navy);letter-spacing:1px">${esc(id)}</div>
+        <button class="btn btn-outline btn-sm" style="width:auto;margin-top:6px" onclick="navigator.clipboard&&navigator.clipboard.writeText('${esc(id)}');toast('No. pesanan disalin')">📋 Salin</button>
+      </div>
+      <div style="font-size:12px;color:var(--text);margin-bottom:12px"><strong>Langkah seterusnya:</strong> ${langkah}</div>
+      <a class="btn btn-primary" style="display:block;text-align:center;text-decoration:none" href="/?semak=${encodeURIComponent(id)}">🔍 Semak Status Pesanan</a>
+      <a class="btn btn-outline" style="display:block;text-align:center;text-decoration:none;margin-top:8px" href="https://wa.me/60146363831?text=${mesejWa}" target="_blank" rel="noopener">💬 Hantar No. Pesanan di WhatsApp</a>
+    </div>`;
+}
+
 async function hantarPesanan() {
   const nama = document.getElementById('p-nama').value.trim();
   const tel = document.getElementById('p-tel').value.trim();
@@ -691,7 +714,9 @@ async function hantarPesanan() {
 
   document.getElementById('form-card').style.display='none';
   document.getElementById('cart-bar').className='';
+  document.getElementById('success-detail').innerHTML = kadKejayaanHtml(payload.id, bayarMetod, false);
   document.getElementById('success-box').style.display='block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function semakBalikanBillplz() {
@@ -707,7 +732,7 @@ async function semakBalikanBillplz() {
   if (error || !s) {
     box.innerHTML = `<div class="icon">⚠️</div><h2>Tidak Dapat Sahkan Status Pesanan</h2><p>Sila hubungi kami dengan nombor pesanan <strong>${esc(id)}</strong> untuk semakan.</p>`;
   } else if (s.status_bayaran === 'disahkan') {
-    box.innerHTML = `<div class="icon">✅</div><h2>Bayaran Berjaya!</h2><p>Terima kasih! Pesanan <strong>${esc(id)}</strong> telah disahkan. Pihak kami akan hubungi anda tidak lama lagi untuk sahkan penghantaran.</p>`;
+    box.innerHTML = `<div class="icon">✅</div><h2>Bayaran Berjaya!</h2><p>Terima kasih! Pesanan <strong>${esc(id)}</strong> telah disahkan. Pihak kami akan hubungi anda tidak lama lagi untuk sahkan penghantaran.</p>${kadKejayaanHtml(id, 'billplz', true)}`;
   } else if (s.status_bayaran === 'gagal') {
     box.innerHTML = `<div class="icon">❌</div><h2>Bayaran Gagal</h2><p>Bayaran untuk pesanan <strong>${esc(id)}</strong> tidak berjaya. Sila hubungi kami untuk cuba semula.</p>`;
   } else {

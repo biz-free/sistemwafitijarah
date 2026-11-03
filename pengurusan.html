@@ -6880,6 +6880,10 @@ async function renderEdagangList() {
         <input type="text" class="form-input" style="font-size:11px" placeholder="No. Tracking" value="${esc(o.no_tracking||'')}" onchange="kemaskiniEdagang('${o.id}','no_tracking',this.value)" />
       </div>
       ${o.kurier_service_id && !o.no_tracking ? `<button class="btn btn-primary btn-sm" style="margin-top:8px;width:100%" onclick="buatLabelEasyParcel('${o.id}', this)">📦 Buat Label EasyParcel</button>` : ''}
+      ${o.no_tracking ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        <a class="btn btn-outline btn-sm" style="width:auto;text-decoration:none" target="_blank" rel="noopener" href="${waPembeliTracking(o)}">💬 WhatsApp Pembeli (No. Tracking)</a>
+        ${o.pelanggan_email ? (o.emel_penghantaran_dihantar ? `<span style="font-size:11px;color:var(--green);align-self:center">📧 Emel tracking dihantar</span>` : `<button class="btn btn-outline btn-sm" style="width:auto" onclick="hantarEmelTrackingPembeli('${o.id}')">📧 Hantar Emel Tracking</button>`) : ''}
+      </div>` : ''}
       ${o.easyparcel_status==='gagal' && !o.no_tracking ? `<div style="font-size:11px;color:var(--red);margin-top:4px">⚠️ Percubaan jana label sebelum ini gagal — cuba lagi.</div>` : ''}
       ${o.no_tracking && o.easyparcel_status==='ditempah' ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px">
         <span style="font-size:11px;color:var(--green)">✅ Label EasyParcel dijana</span>
@@ -6925,6 +6929,21 @@ async function bebaskanVoucher(orderId, kod, telefon) {
   if (bc) await sb.from('baucar').update({ bilangan_guna: Math.max(0, (bc.bilangan_guna||0)-1) }).eq('kod', kod);
   await sb.from('pesanan_edagang').update({ kod_baucar: null }).eq('id', orderId);
   toast(`Voucher "${kod}" dibebaskan — ${telefon} boleh guna semula`);
+  renderEdagangList();
+}
+
+
+// WhatsApp pembeli (klik-untuk-hantar, staff tekan Hantar sendiri) — mesej no. tracking.
+function waPembeliTracking(o) {
+  let t = String(o.pelanggan_telefon||'').replace(/\D/g,'');
+  if (t.startsWith('0')) t = '60'+t.slice(1);
+  const mesej = `Assalamualaikum ${o.pelanggan_nama||''}, pesanan anda ${o.id} telah dihantar${o.nama_kurier?' melalui '+o.nama_kurier:''}.\nNo. Tracking: ${o.no_tracking}\nSemak status: https://www.wafitijarahtrading.com/?semak=${o.id}\nTerima kasih - Wafi Tijarah Trading`;
+  return `https://wa.me/${t}?text=${encodeURIComponent(mesej)}`;
+}
+async function hantarEmelTrackingPembeli(id) {
+  const { data, error } = await sb.functions.invoke('notifikasi-pembeli', { body: { orderId: id, jenis: 'penghantaran' } });
+  if (error || data?.error) return toast('Gagal hantar emel: '+(data?.error||error.message),'err');
+  toast(data?.ok ? 'Emel tracking dihantar kepada pembeli' : 'Tidak dihantar: '+(data?.skipped||'sebab tidak diketahui'));
   renderEdagangList();
 }
 
