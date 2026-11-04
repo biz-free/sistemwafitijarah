@@ -1,0 +1,4 @@
+-- DILAKSANA pada projek Wafi 4 Nov 2026 (kelulusan Amirul: bonus pasukan ikut KUTIPAN gabungan, bukan jualan).
+-- SQL_TAMBAHAN_184: insentif_bulanan() — jumlah gabungan untuk tangga pasukan kini SUM(jumlah) transaksi status 'selesai'
+-- (consignment yang baru dihantar & hutang belum dibayar TIDAK dikira). Pulangan tambah 'kutipan_gabungan'
+-- (nilai sama dengan 'jualan' dalam fungsi ini). Dilaksana dengan pg_get_functiondef + replace; tiada perubahan lain.

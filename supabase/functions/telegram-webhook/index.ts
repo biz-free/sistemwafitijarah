@@ -330,12 +330,12 @@ async function cmdInsentif(chatId: number) {
   const namaPemilik = new Set((semua || []).filter((p: any) => p.role === "pemilik").map((p: any) => p.nama));
   const pek = (semua || []).filter((p: any) => p.role === "pekerja" && p.status === "aktif" && !namaPemilik.has(p.nama));
   const bulanIni = (tx || []).filter((r: any) => tarikhKL(r.tarikh_masa).slice(0, 7) === bulan);
-  const jualan = bulanIni.reduce((a: number, r: any) => a + (Number(r.jumlah) || 0), 0);
+  const jualan = bulanIni.filter((r: any) => r.status === "selesai").reduce((a: number, r: any) => a + (Number(r.jumlah) || 0), 0); // kutipan gabungan (status selesai)
   const susun = (x: any[]): { min: number; bonus: number }[] => (x || []).slice().sort((a: any, b: any) => a.min - b.min);
   const tp = susun(t.insentif_tingkat_pasukan);
   const dapatP = tp.filter((x) => jualan >= x.min).pop();
   const depanP = tp.find((x) => jualan < x.min);
-  let teks = `🎯 Insentif Jualan ${bulan}\n\n🤝 Bonus Pasukan (jualan gabungan, setiap pekerja)\n${tp.map((x) => `${fmtRM(x.min)}→${fmtRM(x.bonus)}`).join(", ")}\nJualan: ${fmtRM(jualan)}\n`;
+  let teks = `🎯 Insentif Jualan ${bulan}\n\n🤝 Bonus Pasukan (kutipan gabungan, setiap pekerja)\n${tp.map((x) => `${fmtRM(x.min)}→${fmtRM(x.bonus)}`).join(", ")}\nKutipan: ${fmtRM(jualan)}\n`;
   teks += dapatP ? `🎉 Bonus semasa ${fmtRM(dapatP.bonus)} setiap pekerja. ` : "";
   teks += depanP ? `Baki ${fmtRM(depanP.min - jualan)} untuk ${fmtRM(depanP.bonus)} setiap pekerja.` : "Peringkat tertinggi dicapai 🏆";
   const ti = susun(t.insentif_tingkat);
