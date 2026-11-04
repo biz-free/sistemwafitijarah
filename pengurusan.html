@@ -411,6 +411,12 @@
       <div style="font-size:10px;color:var(--muted)">Tekan untuk lihat penuh & arkib fail lama</div>
     </div>
 
+    <!-- Insentif Sasaran Jualan bulanan (SQL 179) — jualan gabungan semua pekerja vs sasaran; dimuat oleh renderInsentif() -->
+    <div class="card" id="insentif-card" style="display:none;border-left:4px solid var(--green)">
+      <div class="card-title">🎯 Insentif Jualan Bulan Ini</div>
+      <div id="insentif-isi" style="font-size:13px">—</div>
+    </div>
+
     <div class="card" id="kehadiran-card" style="border-left:4px solid var(--purple)">
       <div class="card-title" style="color:var(--purple)">👍 Kehadiran</div>
       <div id="kehadiran-status" style="font-size:13px;color:var(--muted);margin-bottom:10px">—</div>
@@ -1308,7 +1314,13 @@
       <div class="form-group"><label class="form-label">Duit Makan (RM sehari seorang pekerja)</label><input type="number" class="form-input" id="set-makan" step="0.50" min="0" onchange="saveSettings()" /></div>
       <div class="form-group"><label class="form-label">Bonus Kedai Baru — Beli & Bayar (RM)</label><input type="number" class="form-input" id="set-upah-kedai-baru-bayar" step="1" min="0" onchange="saveSettings()" /></div>
       <div class="form-group"><label class="form-label">Bonus Kedai Baru — Consignment/Hutang (RM)</label><input type="number" class="form-input" id="set-upah-kedai-baru-consignment" step="1" min="0" onchange="saveSettings()" /></div>
-      <div style="font-size:11px;color:var(--muted);margin-top:-8px">Bonus hanya masuk Kiraan Upah selepas kedai buat penghantaran/transaksi PERTAMA — Tunai/Transfer terus dapat kadar penuh; Consignment/Hutang dapat kadar rendah dahulu, kemudian dapat top-up automatik (sehingga cecah kadar penuh, tak lebih) bila kedai buat belian tunai/transfer buat kali pertama. Kedai berdaftar tanpa transaksi langsung tidak dapat bonus.</div>
+      <div style="font-weight:700;margin:14px 0 6px">🎯 Insentif Sasaran Jualan Bulanan</div>
+      <div class="form-group"><label class="form-label"><input type="checkbox" id="set-insentif-aktif" onchange="simpanInsentif()" /> Aktif</label></div>
+      <div class="form-group"><label class="form-label">Sasaran Jualan Gabungan Sebulan (RM)</label><input type="number" class="form-input" id="set-insentif-sasaran" step="500" min="0" onchange="simpanInsentif()" /></div>
+      <div class="form-group"><label class="form-label">Bonus Jika Sasaran Tercapai (RM, dibahagi sama rata antara pekerja aktif)</label><input type="number" class="form-input" id="set-insentif-bonus" step="50" min="0" onchange="simpanInsentif()" /></div>
+      <div class="form-group"><label class="form-label">Berkuat Kuasa Bermula</label><input type="date" class="form-input" id="set-insentif-mula" onchange="simpanInsentif()" /></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:-8px">Jualan = jumlah semua transaksi bulan itu (tidak termasuk yang dibatalkan), gabungan semua pekerja. Pemilik bayar bonus secara manual pada awal bulan berikutnya.</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:14px">Bonus hanya masuk Kiraan Upah selepas kedai buat penghantaran/transaksi PERTAMA — Tunai/Transfer terus dapat kadar penuh; Consignment/Hutang dapat kadar rendah dahulu, kemudian dapat top-up automatik (sehingga cecah kadar penuh, tak lebih) bila kedai buat belian tunai/transfer buat kali pertama. Kedai berdaftar tanpa transaksi langsung tidak dapat bonus.</div>
     </div>
 
     <!-- Tetapan Telegram (pemilik sahaja) -->
@@ -2680,7 +2692,52 @@ function initAll() {
 // ════════════════════════════════════════════════════
 //  DASHBOARD
 // ════════════════════════════════════════════════════
+// Insentif sasaran jualan bulanan (SQL 179): kad progres di Dashboard + tetapan pemilik.
+async function renderInsentif() {
+  const kad = document.getElementById('insentif-card'), isi = document.getElementById('insentif-isi');
+  if (!kad || !useCloud) return;
+  const { data, error } = await sb.rpc('insentif_bulanan');
+  if (error || !data || !data.berkuatkuasa || !(data.sasaran > 0)) { kad.style.display = 'none'; return; }
+  const pct = Math.min(100, Math.round(data.jualan / data.sasaran * 100));
+  const warna = data.tercapai ? 'var(--green)' : 'var(--purple)';
+  const rm = n => 'RM ' + Number(n).toLocaleString('en-MY', { maximumFractionDigits: 0 });
+  const ikutPekerja = (data.pekerja || []).map(p => `${esc(p.nama)} ${rm(p.jualan)}`).join(' · ');
+  kad.style.display = '';
+  kad.style.borderLeftColor = warna;
+  isi.innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-weight:700"><span>${rm(data.jualan)} / ${rm(data.sasaran)}</span><span>${pct}%</span></div>
+    <div style="background:var(--border,#e5e7eb);border-radius:6px;height:10px;margin:6px 0;overflow:hidden"><div style="width:${pct}%;height:100%;background:${warna}"></div></div>
+    <div style="color:var(--muted);font-size:12px">${data.tercapai
+      ? `🎉 Sasaran tercapai! Bonus ${rm(data.bonus)} (${rm(data.bonus_seorang)} seorang).`
+      : `Baki ${rm(data.baki)} lagi untuk bonus ${rm(data.bonus)} (${rm(data.bonus_seorang)} seorang).`}</div>
+    ${ikutPekerja ? `<div style="color:var(--muted);font-size:11px;margin-top:4px">${ikutPekerja}</div>` : ''}`;
+}
+
+async function muatInsentifTetapan() {
+  if (!useCloud || !document.getElementById('set-insentif-sasaran')) return;
+  const { data } = await sb.from('tetapan').select('insentif_aktif,insentif_sasaran,insentif_bonus,insentif_mula').eq('id',1).single();
+  if (!data) return;
+  document.getElementById('set-insentif-aktif').checked = !!data.insentif_aktif;
+  document.getElementById('set-insentif-sasaran').value = data.insentif_sasaran ?? 0;
+  document.getElementById('set-insentif-bonus').value = data.insentif_bonus ?? 0;
+  document.getElementById('set-insentif-mula').value = data.insentif_mula || '';
+}
+
+async function simpanInsentif() {
+  if (!useCloud) return;
+  const { error } = await sb.from('tetapan').update({
+    insentif_aktif: document.getElementById('set-insentif-aktif').checked,
+    insentif_sasaran: +document.getElementById('set-insentif-sasaran').value || 0,
+    insentif_bonus: +document.getElementById('set-insentif-bonus').value || 0,
+    insentif_mula: document.getElementById('set-insentif-mula').value || null,
+  }).eq('id', 1);
+  if (error) return toast('Gagal simpan tetapan insentif: '+error.message,'err');
+  renderInsentif();
+  toast('Tetapan insentif dikemaskini');
+}
+
 function renderDashboard() {
+  renderInsentif();
   if (currentRole==='pemilik') { renderStoranSistem(); semakArkibBuktiBayaran(); } // shortcut storan atas dashboard — lihat #dash-storan-badge; semak arkib supaya notis "menunggu pengesahan" auto nampak
   renderKehadiranStatus();
   renderTugasanBaru();
@@ -8611,6 +8668,7 @@ async function loadSettings() {
   document.getElementById('set-makan').value = SETTINGS.makan;
   document.getElementById('set-upah-kedai-baru-bayar').value = SETTINGS.upahKedaiBaruBayar;
   document.getElementById('set-upah-kedai-baru-consignment').value = SETTINGS.upahKedaiBaruConsignment;
+  muatInsentifTetapan();
 }
 
 async function saveSettings() {

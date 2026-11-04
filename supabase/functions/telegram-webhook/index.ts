@@ -164,7 +164,7 @@ function cmdMenu(chatId: number) {
       [{ text: "📋 Hutang", callback_data: "mnu:hutang" }, { text: "📦 Stok", callback_data: "mnu:stok" }],
       [{ text: "🛒 Jualan", callback_data: "mnu:jualan" }, { text: "👥 Pekerja", callback_data: "mnu:pekerja" }],
       [{ text: "💳 Transfer", callback_data: "mnu:transfer" }, { text: "🗑️ Padam", callback_data: "mnu:padam" }],
-      [{ text: "📰 Laporan Harian", callback_data: "mnu:laporan" }],
+      [{ text: "📰 Laporan Harian", callback_data: "mnu:laporan" }, { text: "🎯 Insentif", callback_data: "mnu:insentif" }],
       [{ text: "❓ Bantuan", callback_data: "mnu:help" }],
     ],
   };
@@ -314,6 +314,35 @@ async function cmdStok(chatId: number) {
   await sendMessage(chatId, t, withMenu());
 }
 
+// Insentif sasaran jualan bulanan (SQL 179). Dikira terus di sini (bukan RPC insentif_bulanan,
+// kerana RPC itu perlukan auth.uid() sedangkan bot guna kunci servis). Logik SAMA: jualan
+// gabungan bulan semasa (waktu KL), status bukan 'batal'.
+async function cmdInsentif(chatId: number) {
+  const { data: t } = await sb.from("tetapan").select("insentif_aktif,insentif_sasaran,insentif_bonus,insentif_mula").eq("id", 1).single();
+  const bulan = tarikhKL().slice(0, 7);
+  if (!t?.insentif_aktif || !(Number(t.insentif_sasaran) > 0) || bulan + "-01" < (t.insentif_mula || "")) {
+    await sendMessage(chatId, "ℹ️ Insentif jualan tidak aktif bulan ini.", withMenu()); return;
+  }
+  const [{ data: tx }, { data: pek }] = await Promise.all([
+    sb.from("transaksi").select("jumlah,created_by,tarikh_masa").neq("status", "batal").gte("tarikh_masa", new Date(Date.parse(bulan + "-01T00:00:00+08:00") - 86400000).toISOString()),
+    sb.from("profiles").select("id,nama,singkatan").eq("role", "pekerja").eq("status", "aktif"),
+  ]);
+  const bulanIni = (tx || []).filter((r: any) => tarikhKL(r.tarikh_masa).slice(0, 7) === bulan);
+  const jualan = bulanIni.reduce((a: number, r: any) => a + (Number(r.jumlah) || 0), 0);
+  const sasaran = Number(t.insentif_sasaran), bonus = Number(t.insentif_bonus) || 0;
+  const pct = Math.min(100, Math.round(jualan / sasaran * 100));
+  const seorang = (pek?.length || 0) > 0 ? bonus / pek!.length : bonus;
+  let teks = `🎯 Insentif Jualan ${bulan}\n${fmtRM(jualan)} / ${fmtRM(sasaran)} (${pct}%)\n`;
+  teks += jualan >= sasaran
+    ? `\n🎉 Sasaran tercapai! Bonus ${fmtRM(bonus)} (${fmtRM(seorang)} seorang).`
+    : `\nBaki ${fmtRM(sasaran - jualan)} untuk bonus ${fmtRM(bonus)} (${fmtRM(seorang)} seorang).`;
+  for (const p of pek || []) {
+    const j = bulanIni.filter((r: any) => r.created_by === p.id).reduce((a: number, r: any) => a + (Number(r.jumlah) || 0), 0);
+    teks += `\n• ${p.singkatan || p.nama}: ${fmtRM(j)}`;
+  }
+  await sendMessage(chatId, teks, withMenu());
+}
+
 async function cmdJualan(chatId: number) {
   const today = tarikhKL();
   const { data: tx } = await sb.from("transaksi").select("jumlah,kaedah_bayaran,status,tarikh_masa").order("tarikh_masa", { ascending: false }).limit(500);
@@ -459,6 +488,7 @@ function cmdHelp(chatId: number) {
     "/baucar — Baucar harian (draf) menunggu semakan — boleh Lulus/Batal\n" +
     "/stok — Stok rendah/perlu restock\n" +
     "/jualan — Ringkasan jualan hari ini\n" +
+    "/insentif — Kemajuan sasaran jualan bulan ini (bonus insentif)\n" +
     "/pekerja — Status cash & permohonan setiap pekerja\n" +
     "/transfer — Tempahan online transfer (7 hari) — sahkan bank\n" +
     "/padam — Senarai permohonan padam (baca sahaja)\n" +
@@ -545,6 +575,7 @@ const MENU_CMDS: Record<string, (chatId: number, args: string[]) => Promise<unkn
   baucar: (c) => cmdBaucar(c),
   stok: (c) => cmdStok(c),
   jualan: (c) => cmdJualan(c),
+  insentif: (c) => cmdInsentif(c),
   pekerja: (c) => cmdPekerja(c),
   transfer: (c) => cmdTransfer(c),
   padam: (c) => cmdPadam(c),
@@ -748,6 +779,7 @@ Deno.serve(async (req) => {
         case "/baucar": await cmdBaucar(chatId); break;
         case "/stok": await cmdStok(chatId); break;
         case "/jualan": await cmdJualan(chatId); break;
+        case "/insentif": await cmdInsentif(chatId); break;
         case "/pekerja": await cmdPekerja(chatId); break;
         case "/transfer": await cmdTransfer(chatId); break;
         case "/padam": await cmdPadam(chatId); break;
