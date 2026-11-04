@@ -1,0 +1,2 @@
+-- DILAKSANA pada projek Wafi 4 Nov 2026 (arahan Amirul: sasaran jualan berpasukan RM50,000).
+-- UPDATE tetapan SET insentif_sasaran = 50000 WHERE id = 1;  (1 baris; sebelum ini 25000)
