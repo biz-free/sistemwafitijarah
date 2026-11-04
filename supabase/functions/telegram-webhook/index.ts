@@ -318,27 +318,32 @@ async function cmdStok(chatId: number) {
 // kerana RPC itu perlukan auth.uid() sedangkan bot guna kunci servis). Logik SAMA: jualan
 // gabungan bulan semasa (waktu KL), status bukan 'batal'.
 async function cmdInsentif(chatId: number) {
-  const { data: t } = await sb.from("tetapan").select("insentif_aktif,insentif_sasaran,insentif_bonus,insentif_mula").eq("id", 1).single();
+  const { data: t } = await sb.from("tetapan").select("insentif_aktif,insentif_sasaran,insentif_bonus,insentif_mula,insentif_tingkat").eq("id", 1).single();
   const bulan = tarikhKL().slice(0, 7);
-  if (!t?.insentif_aktif || !(Number(t.insentif_sasaran) > 0) || bulan + "-01" < (t.insentif_mula || "")) {
+  if (!t?.insentif_aktif || bulan + "-01" < (t.insentif_mula || "")) {
     await sendMessage(chatId, "ℹ️ Insentif jualan tidak aktif bulan ini.", withMenu()); return;
   }
-  const [{ data: tx }, { data: pek }] = await Promise.all([
-    sb.from("transaksi").select("jumlah,created_by,tarikh_masa").neq("status", "batal").gte("tarikh_masa", new Date(Date.parse(bulan + "-01T00:00:00+08:00") - 86400000).toISOString()),
-    sb.from("profiles").select("id,nama,singkatan").eq("role", "pekerja").eq("status", "aktif"),
+  const [{ data: tx }, { data: semua }] = await Promise.all([
+    sb.from("transaksi").select("jumlah,status,created_by,tarikh_masa").neq("status", "batal").gte("tarikh_masa", new Date(Date.parse(bulan + "-01T00:00:00+08:00") - 86400000).toISOString()),
+    sb.from("profiles").select("id,nama,singkatan,role,status"),
   ]);
+  const namaPemilik = new Set((semua || []).filter((p: any) => p.role === "pemilik").map((p: any) => p.nama));
+  const pek = (semua || []).filter((p: any) => p.role === "pekerja" && p.status === "aktif" && !namaPemilik.has(p.nama));
   const bulanIni = (tx || []).filter((r: any) => tarikhKL(r.tarikh_masa).slice(0, 7) === bulan);
   const jualan = bulanIni.reduce((a: number, r: any) => a + (Number(r.jumlah) || 0), 0);
-  const sasaran = Number(t.insentif_sasaran), bonus = Number(t.insentif_bonus) || 0;
-  const pct = Math.min(100, Math.round(jualan / sasaran * 100));
-  const seorang = (pek?.length || 0) > 0 ? bonus / pek!.length : bonus;
-  let teks = `🎯 Insentif Jualan ${bulan}\n${fmtRM(jualan)} / ${fmtRM(sasaran)} (${pct}%)\n`;
-  teks += jualan >= sasaran
-    ? `\n🎉 Sasaran tercapai! Bonus ${fmtRM(bonus)} (${fmtRM(seorang)} seorang).`
-    : `\nBaki ${fmtRM(sasaran - jualan)} untuk bonus ${fmtRM(bonus)} (${fmtRM(seorang)} seorang).`;
-  for (const p of pek || []) {
-    const j = bulanIni.filter((r: any) => r.created_by === p.id).reduce((a: number, r: any) => a + (Number(r.jumlah) || 0), 0);
-    teks += `\n• ${p.singkatan || p.nama}: ${fmtRM(j)}`;
+  const sasaran = Number(t.insentif_sasaran) || 0, bonus = Number(t.insentif_bonus) || 0;
+  const seorang = pek.length > 0 ? bonus / pek.length : bonus;
+  const tingkat: { min: number; bonus: number }[] = (t.insentif_tingkat || []).slice().sort((a: any, b: any) => a.min - b.min);
+  let teks = `🎯 Insentif Jualan ${bulan}\n\n🤝 Bonus Pasukan (jualan gabungan)\n${fmtRM(jualan)} / ${fmtRM(sasaran)} (${sasaran > 0 ? Math.min(100, Math.round(jualan / sasaran * 100)) : 0}%)\n`;
+  teks += sasaran > 0 && jualan >= sasaran
+    ? `🎉 Tercapai! Bonus ${fmtRM(bonus)} (${fmtRM(seorang)} seorang).`
+    : `Baki ${fmtRM(Math.max(sasaran - jualan, 0))} untuk bonus ${fmtRM(bonus)} (${fmtRM(seorang)} seorang).`;
+  teks += `\n\n👤 Bonus Individu (kutipan sebulan: ${tingkat.map((x) => `${fmtRM(x.min)}→${fmtRM(x.bonus)}`).join(", ")})`;
+  for (const p of pek) {
+    const kutipan = bulanIni.filter((r: any) => r.created_by === p.id && r.status === "selesai").reduce((a: number, r: any) => a + (Number(r.jumlah) || 0), 0);
+    const dapat = tingkat.filter((x) => kutipan >= x.min).pop();
+    const seterusnya = tingkat.find((x) => kutipan < x.min);
+    teks += `\n• ${p.singkatan || p.nama}: ${fmtRM(kutipan)} — ${dapat ? `bonus ${fmtRM(dapat.bonus)}` : "belum capai"}${seterusnya ? ` (baki ${fmtRM(seterusnya.min - kutipan)} ke ${fmtRM(seterusnya.min)})` : " 🏆"}`;
   }
   await sendMessage(chatId, teks, withMenu());
 }
