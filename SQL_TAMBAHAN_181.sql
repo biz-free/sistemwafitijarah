@@ -1,0 +1,3 @@
+-- DILAKSANA pada projek Wafi 4 Nov 2026 (kelulusan Amirul: bonus pasukan RM500 untuk SETIAP pekerja, bukan dikongsi).
+-- SQL_TAMBAHAN_181: insentif_bulanan() -> 'bonus_seorang' kini = insentif_bonus (tidak dibahagi bil. pekerja).
+-- Dilaksana dengan menukar teks dalam definisi fungsi (pg_get_functiondef + replace); tiada perubahan lain.

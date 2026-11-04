@@ -1317,7 +1317,7 @@
       <div style="font-weight:700;margin:14px 0 6px">🎯 Insentif Sasaran Jualan Bulanan</div>
       <div class="form-group"><label class="form-label"><input type="checkbox" id="set-insentif-aktif" onchange="simpanInsentif()" /> Aktif</label></div>
       <div class="form-group"><label class="form-label">Bonus Pasukan — Sasaran Jualan Gabungan Sebulan (RM)</label><input type="number" class="form-input" id="set-insentif-sasaran" step="500" min="0" onchange="simpanInsentif()" /></div>
-      <div class="form-group"><label class="form-label">Bonus Pasukan (RM, dibahagi sama rata antara pekerja)</label><input type="number" class="form-input" id="set-insentif-bonus" step="50" min="0" onchange="simpanInsentif()" /></div>
+      <div class="form-group"><label class="form-label">Bonus Pasukan (RM, untuk SETIAP pekerja)</label><input type="number" class="form-input" id="set-insentif-bonus" step="50" min="0" onchange="simpanInsentif()" /></div>
       <div class="form-group" style="display:flex;gap:8px"><div style="flex:1"><label class="form-label">Individu peringkat 1: kutipan min (RM)</label><input type="number" class="form-input" id="set-insentif-t1-min" step="500" min="0" onchange="simpanInsentif()" /></div><div style="flex:1"><label class="form-label">Bonus (RM)</label><input type="number" class="form-input" id="set-insentif-t1-bonus" step="10" min="0" onchange="simpanInsentif()" /></div></div>
       <div class="form-group" style="display:flex;gap:8px"><div style="flex:1"><label class="form-label">Individu peringkat 2: kutipan min (RM)</label><input type="number" class="form-input" id="set-insentif-t2-min" step="500" min="0" onchange="simpanInsentif()" /></div><div style="flex:1"><label class="form-label">Bonus (RM)</label><input type="number" class="form-input" id="set-insentif-t2-bonus" step="10" min="0" onchange="simpanInsentif()" /></div></div>
       <div class="form-group" style="display:flex;gap:8px"><div style="flex:1"><label class="form-label">Individu peringkat 3: kutipan min (RM)</label><input type="number" class="form-input" id="set-insentif-t3-min" step="500" min="0" onchange="simpanInsentif()" /></div><div style="flex:1"><label class="form-label">Bonus (RM)</label><input type="number" class="form-input" id="set-insentif-t3-bonus" step="10" min="0" onchange="simpanInsentif()" /></div></div>
@@ -2717,8 +2717,8 @@ async function renderInsentif() {
     <div style="display:flex;justify-content:space-between;font-weight:700"><span>${rm(data.jualan)} / ${rm(data.sasaran)}</span><span>${pct}%</span></div>
     <div style="background:var(--border,#e5e7eb);border-radius:6px;height:10px;margin:6px 0;overflow:hidden"><div style="width:${pct}%;height:100%;background:${warna}"></div></div>
     <div style="color:var(--muted);font-size:12px;margin-bottom:10px">${data.tercapai
-      ? `🎉 Sasaran tercapai! Bonus ${rm(data.bonus)} (${rm(data.bonus_seorang)} seorang).`
-      : `Baki ${rm(data.baki)} lagi untuk bonus ${rm(data.bonus)} (${rm(data.bonus_seorang)} seorang).`}</div>
+      ? `🎉 Sasaran tercapai! Bonus ${rm(data.bonus)} untuk setiap pekerja.`
+      : `Baki ${rm(data.baki)} lagi untuk bonus ${rm(data.bonus)} setiap pekerja.`}</div>
     <div style="font-weight:700;margin-bottom:2px">Bonus Individu — kutipan sebulan</div>
     <div style="color:var(--muted);font-size:11px">${senaraiTingkat}</div>
     ${barisPekerja}`;

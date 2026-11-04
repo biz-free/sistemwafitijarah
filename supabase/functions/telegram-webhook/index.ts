@@ -332,12 +332,11 @@ async function cmdInsentif(chatId: number) {
   const bulanIni = (tx || []).filter((r: any) => tarikhKL(r.tarikh_masa).slice(0, 7) === bulan);
   const jualan = bulanIni.reduce((a: number, r: any) => a + (Number(r.jumlah) || 0), 0);
   const sasaran = Number(t.insentif_sasaran) || 0, bonus = Number(t.insentif_bonus) || 0;
-  const seorang = pek.length > 0 ? bonus / pek.length : bonus;
   const tingkat: { min: number; bonus: number }[] = (t.insentif_tingkat || []).slice().sort((a: any, b: any) => a.min - b.min);
   let teks = `🎯 Insentif Jualan ${bulan}\n\n🤝 Bonus Pasukan (jualan gabungan)\n${fmtRM(jualan)} / ${fmtRM(sasaran)} (${sasaran > 0 ? Math.min(100, Math.round(jualan / sasaran * 100)) : 0}%)\n`;
   teks += sasaran > 0 && jualan >= sasaran
-    ? `🎉 Tercapai! Bonus ${fmtRM(bonus)} (${fmtRM(seorang)} seorang).`
-    : `Baki ${fmtRM(Math.max(sasaran - jualan, 0))} untuk bonus ${fmtRM(bonus)} (${fmtRM(seorang)} seorang).`;
+    ? `🎉 Tercapai! Bonus ${fmtRM(bonus)} setiap pekerja.`
+    : `Baki ${fmtRM(Math.max(sasaran - jualan, 0))} untuk bonus ${fmtRM(bonus)} setiap pekerja.`;
   teks += `\n\n👤 Bonus Individu (kutipan sebulan: ${tingkat.map((x) => `${fmtRM(x.min)}→${fmtRM(x.bonus)}`).join(", ")})`;
   for (const p of pek) {
     const kutipan = bulanIni.filter((r: any) => r.created_by === p.id && r.status === "selesai").reduce((a: number, r: any) => a + (Number(r.jumlah) || 0), 0);
