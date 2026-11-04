@@ -1316,13 +1316,14 @@
       <div class="form-group"><label class="form-label">Bonus Kedai Baru — Consignment/Hutang (RM)</label><input type="number" class="form-input" id="set-upah-kedai-baru-consignment" step="1" min="0" onchange="saveSettings()" /></div>
       <div style="font-weight:700;margin:14px 0 6px">🎯 Insentif Sasaran Jualan Bulanan</div>
       <div class="form-group"><label class="form-label"><input type="checkbox" id="set-insentif-aktif" onchange="simpanInsentif()" /> Aktif</label></div>
-      <div class="form-group"><label class="form-label">Bonus Pasukan — Sasaran Jualan Gabungan Sebulan (RM)</label><input type="number" class="form-input" id="set-insentif-sasaran" step="500" min="0" onchange="simpanInsentif()" /></div>
-      <div class="form-group"><label class="form-label">Bonus Pasukan (RM, untuk SETIAP pekerja)</label><input type="number" class="form-input" id="set-insentif-bonus" step="50" min="0" onchange="simpanInsentif()" /></div>
+      <div class="form-group" style="display:flex;gap:8px"><div style="flex:1"><label class="form-label">Pasukan peringkat 1: jualan gabungan min (RM)</label><input type="number" class="form-input" id="set-insentif-p1-min" step="1000" min="0" onchange="simpanInsentif()" /></div><div style="flex:1"><label class="form-label">Bonus setiap pekerja (RM)</label><input type="number" class="form-input" id="set-insentif-p1-bonus" step="10" min="0" onchange="simpanInsentif()" /></div></div>
+      <div class="form-group" style="display:flex;gap:8px"><div style="flex:1"><label class="form-label">Pasukan peringkat 2: jualan gabungan min (RM)</label><input type="number" class="form-input" id="set-insentif-p2-min" step="1000" min="0" onchange="simpanInsentif()" /></div><div style="flex:1"><label class="form-label">Bonus setiap pekerja (RM)</label><input type="number" class="form-input" id="set-insentif-p2-bonus" step="10" min="0" onchange="simpanInsentif()" /></div></div>
+      <div class="form-group" style="display:flex;gap:8px"><div style="flex:1"><label class="form-label">Pasukan peringkat 3: jualan gabungan min (RM)</label><input type="number" class="form-input" id="set-insentif-p3-min" step="1000" min="0" onchange="simpanInsentif()" /></div><div style="flex:1"><label class="form-label">Bonus setiap pekerja (RM)</label><input type="number" class="form-input" id="set-insentif-p3-bonus" step="10" min="0" onchange="simpanInsentif()" /></div></div>
       <div class="form-group" style="display:flex;gap:8px"><div style="flex:1"><label class="form-label">Individu peringkat 1: kutipan min (RM)</label><input type="number" class="form-input" id="set-insentif-t1-min" step="500" min="0" onchange="simpanInsentif()" /></div><div style="flex:1"><label class="form-label">Bonus (RM)</label><input type="number" class="form-input" id="set-insentif-t1-bonus" step="10" min="0" onchange="simpanInsentif()" /></div></div>
       <div class="form-group" style="display:flex;gap:8px"><div style="flex:1"><label class="form-label">Individu peringkat 2: kutipan min (RM)</label><input type="number" class="form-input" id="set-insentif-t2-min" step="500" min="0" onchange="simpanInsentif()" /></div><div style="flex:1"><label class="form-label">Bonus (RM)</label><input type="number" class="form-input" id="set-insentif-t2-bonus" step="10" min="0" onchange="simpanInsentif()" /></div></div>
       <div class="form-group" style="display:flex;gap:8px"><div style="flex:1"><label class="form-label">Individu peringkat 3: kutipan min (RM)</label><input type="number" class="form-input" id="set-insentif-t3-min" step="500" min="0" onchange="simpanInsentif()" /></div><div style="flex:1"><label class="form-label">Bonus (RM)</label><input type="number" class="form-input" id="set-insentif-t3-bonus" step="10" min="0" onchange="simpanInsentif()" /></div></div>
       <div class="form-group"><label class="form-label">Berkuat Kuasa Bermula</label><input type="date" class="form-input" id="set-insentif-mula" onchange="simpanInsentif()" /></div>
-      <div style="font-size:11px;color:var(--muted);margin-top:-8px">Bonus pasukan: jualan = jumlah semua transaksi bulan itu (tidak termasuk yang dibatalkan), gabungan semua pekerja. Bonus individu: kutipan = transaksi berstatus selesai (sudah dibayar) atas nama pekerja itu. Syarat wajib: bonus ditahan jika hutang tertunggak lebih 30 hari melebihi had, atau rekod jualan/wang/stok lewat — pemilik semak sendiri sebelum bayar. Pemilik bayar bonus secara manual pada awal bulan berikutnya.</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:-8px">Bonus pasukan bertingkat: jualan = jumlah semua transaksi bulan itu (tidak termasuk yang dibatalkan), gabungan semua pekerja. Bonus individu: kutipan = transaksi berstatus selesai (sudah dibayar) atas nama pekerja itu. Syarat wajib: bonus ditahan jika hutang tertunggak lebih 30 hari melebihi had, atau rekod jualan/wang/stok lewat — pemilik semak sendiri sebelum bayar. Pemilik bayar bonus secara manual pada awal bulan berikutnya.</div>
       <div style="font-size:11px;color:var(--muted);margin-top:14px">Bonus hanya masuk Kiraan Upah selepas kedai buat penghantaran/transaksi PERTAMA — Tunai/Transfer terus dapat kadar penuh; Consignment/Hutang dapat kadar rendah dahulu, kemudian dapat top-up automatik (sehingga cecah kadar penuh, tak lebih) bila kedai buat belian tunai/transfer buat kali pertama. Kedai berdaftar tanpa transaksi langsung tidak dapat bonus.</div>
     </div>
 
@@ -2702,36 +2703,42 @@ async function renderInsentif() {
   const { data, error } = await sb.rpc('insentif_bulanan');
   if (error || !data || !data.berkuatkuasa || !(data.sasaran > 0)) { kad.style.display = 'none'; return; }
   const rm = n => 'RM ' + Number(n).toLocaleString('en-MY', { maximumFractionDigits: 0 });
-  const pct = Math.min(100, Math.round(data.jualan / data.sasaran * 100));
-  const warna = data.tercapai ? 'var(--green)' : 'var(--purple)';
+  const sasaranDepan = data.seterusnya_pasukan || data.sasaran;
+  const pct = Math.min(100, Math.round(data.jualan / sasaranDepan * 100));
+  const tercapaiPenuh = !data.seterusnya_pasukan;
+  const warna = tercapaiPenuh ? 'var(--green)' : 'var(--purple)';
   const barisPekerja = (data.pekerja || []).map(p => `
     <div style="padding:6px 0;border-top:1px solid var(--border,#e5e7eb)">
       <div style="display:flex;justify-content:space-between"><b>${esc(p.nama)}${p.saya ? ' (anda)' : ''}</b><span>Kutipan ${rm(p.kutipan)}</span></div>
       <div style="color:var(--muted);font-size:11px">${p.bonus > 0 ? `🎉 Bonus individu ${rm(p.bonus)}` : 'Belum capai peringkat pertama'}${p.seterusnya ? ` · baki ${rm(p.seterusnya - p.kutipan)} untuk peringkat seterusnya (${rm(p.seterusnya)})` : ' · peringkat tertinggi dicapai 🏆'}</div>
     </div>`).join('');
+  const senaraiPasukan = (data.tingkat_pasukan || []).map(t => `${rm(t.min)} → ${rm(t.bonus)}`).join(' · ');
   const senaraiTingkat = (data.tingkat || []).map(t => `${rm(t.min)} → ${rm(t.bonus)}`).join(' · ');
   kad.style.display = '';
   kad.style.borderLeftColor = warna;
   isi.innerHTML = `
-    <div style="font-weight:700;margin-bottom:2px">Bonus Pasukan — jualan gabungan</div>
-    <div style="display:flex;justify-content:space-between;font-weight:700"><span>${rm(data.jualan)} / ${rm(data.sasaran)}</span><span>${pct}%</span></div>
+    <div style="font-weight:700;margin-bottom:2px">Bonus Pasukan — jualan gabungan (setiap pekerja)</div>
+    <div style="color:var(--muted);font-size:11px">${senaraiPasukan}</div>
+    <div style="display:flex;justify-content:space-between;font-weight:700;margin-top:4px"><span>${rm(data.jualan)} / ${rm(sasaranDepan)}</span><span>${pct}%</span></div>
     <div style="background:var(--border,#e5e7eb);border-radius:6px;height:10px;margin:6px 0;overflow:hidden"><div style="width:${pct}%;height:100%;background:${warna}"></div></div>
-    <div style="color:var(--muted);font-size:12px;margin-bottom:10px">${data.tercapai
-      ? `🎉 Sasaran tercapai! Bonus ${rm(data.bonus)} untuk setiap pekerja.`
-      : `Baki ${rm(data.baki)} lagi untuk bonus ${rm(data.bonus)} setiap pekerja.`}</div>
+    <div style="color:var(--muted);font-size:12px;margin-bottom:10px">${data.bonus_pasukan > 0 ? `🎉 Bonus pasukan semasa ${rm(data.bonus_pasukan)} setiap pekerja. ` : ''}${tercapaiPenuh
+      ? 'Peringkat tertinggi dicapai 🏆'
+      : `Baki ${rm(data.seterusnya_pasukan - data.jualan)} untuk peringkat seterusnya (${rm(data.bonus_seterusnya)} setiap pekerja).`}</div>
     <div style="font-weight:700;margin-bottom:2px">Bonus Individu — kutipan sebulan</div>
     <div style="color:var(--muted);font-size:11px">${senaraiTingkat}</div>
     ${barisPekerja}`;
 }
 
 async function muatInsentifTetapan() {
-  if (!useCloud || !document.getElementById('set-insentif-sasaran')) return;
-  const { data } = await sb.from('tetapan').select('insentif_aktif,insentif_sasaran,insentif_bonus,insentif_mula,insentif_tingkat').eq('id',1).single();
+  if (!useCloud || !document.getElementById('set-insentif-p1-min')) return;
+  const { data } = await sb.from('tetapan').select('insentif_aktif,insentif_sasaran,insentif_bonus,insentif_mula,insentif_tingkat,insentif_tingkat_pasukan').eq('id',1).single();
   if (!data) return;
   document.getElementById('set-insentif-aktif').checked = !!data.insentif_aktif;
-  document.getElementById('set-insentif-sasaran').value = data.insentif_sasaran ?? 0;
-  document.getElementById('set-insentif-bonus').value = data.insentif_bonus ?? 0;
   document.getElementById('set-insentif-mula').value = data.insentif_mula || '';
+  (data.insentif_tingkat_pasukan || []).slice(0,3).forEach((t, i) => {
+    document.getElementById(`set-insentif-p${i+1}-min`).value = t.min;
+    document.getElementById(`set-insentif-p${i+1}-bonus`).value = t.bonus;
+  });
   (data.insentif_tingkat || []).slice(0,3).forEach((t, i) => {
     document.getElementById(`set-insentif-t${i+1}-min`).value = t.min;
     document.getElementById(`set-insentif-t${i+1}-bonus`).value = t.bonus;
@@ -2742,8 +2749,8 @@ async function simpanInsentif() {
   if (!useCloud) return;
   const { error } = await sb.from('tetapan').update({
     insentif_aktif: document.getElementById('set-insentif-aktif').checked,
-    insentif_sasaran: +document.getElementById('set-insentif-sasaran').value || 0,
-    insentif_bonus: +document.getElementById('set-insentif-bonus').value || 0,
+    insentif_tingkat_pasukan: [1,2,3].map(i => ({ min: +document.getElementById(`set-insentif-p${i}-min`).value || 0, bonus: +document.getElementById(`set-insentif-p${i}-bonus`).value || 0 }))
+      .filter(t => t.min > 0).sort((a, b) => a.min - b.min),
     insentif_mula: document.getElementById('set-insentif-mula').value || null,
     insentif_tingkat: [1,2,3].map(i => ({ min: +document.getElementById(`set-insentif-t${i}-min`).value || 0, bonus: +document.getElementById(`set-insentif-t${i}-bonus`).value || 0 }))
       .filter(t => t.min > 0).sort((a, b) => a.min - b.min),

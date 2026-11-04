@@ -318,7 +318,7 @@ async function cmdStok(chatId: number) {
 // kerana RPC itu perlukan auth.uid() sedangkan bot guna kunci servis). Logik SAMA: jualan
 // gabungan bulan semasa (waktu KL), status bukan 'batal'.
 async function cmdInsentif(chatId: number) {
-  const { data: t } = await sb.from("tetapan").select("insentif_aktif,insentif_sasaran,insentif_bonus,insentif_mula,insentif_tingkat").eq("id", 1).single();
+  const { data: t } = await sb.from("tetapan").select("insentif_aktif,insentif_mula,insentif_tingkat,insentif_tingkat_pasukan").eq("id", 1).single();
   const bulan = tarikhKL().slice(0, 7);
   if (!t?.insentif_aktif || bulan + "-01" < (t.insentif_mula || "")) {
     await sendMessage(chatId, "ℹ️ Insentif jualan tidak aktif bulan ini.", withMenu()); return;
@@ -331,17 +331,19 @@ async function cmdInsentif(chatId: number) {
   const pek = (semua || []).filter((p: any) => p.role === "pekerja" && p.status === "aktif" && !namaPemilik.has(p.nama));
   const bulanIni = (tx || []).filter((r: any) => tarikhKL(r.tarikh_masa).slice(0, 7) === bulan);
   const jualan = bulanIni.reduce((a: number, r: any) => a + (Number(r.jumlah) || 0), 0);
-  const sasaran = Number(t.insentif_sasaran) || 0, bonus = Number(t.insentif_bonus) || 0;
-  const tingkat: { min: number; bonus: number }[] = (t.insentif_tingkat || []).slice().sort((a: any, b: any) => a.min - b.min);
-  let teks = `🎯 Insentif Jualan ${bulan}\n\n🤝 Bonus Pasukan (jualan gabungan)\n${fmtRM(jualan)} / ${fmtRM(sasaran)} (${sasaran > 0 ? Math.min(100, Math.round(jualan / sasaran * 100)) : 0}%)\n`;
-  teks += sasaran > 0 && jualan >= sasaran
-    ? `🎉 Tercapai! Bonus ${fmtRM(bonus)} setiap pekerja.`
-    : `Baki ${fmtRM(Math.max(sasaran - jualan, 0))} untuk bonus ${fmtRM(bonus)} setiap pekerja.`;
-  teks += `\n\n👤 Bonus Individu (kutipan sebulan: ${tingkat.map((x) => `${fmtRM(x.min)}→${fmtRM(x.bonus)}`).join(", ")})`;
+  const susun = (x: any[]): { min: number; bonus: number }[] => (x || []).slice().sort((a: any, b: any) => a.min - b.min);
+  const tp = susun(t.insentif_tingkat_pasukan);
+  const dapatP = tp.filter((x) => jualan >= x.min).pop();
+  const depanP = tp.find((x) => jualan < x.min);
+  let teks = `🎯 Insentif Jualan ${bulan}\n\n🤝 Bonus Pasukan (jualan gabungan, setiap pekerja)\n${tp.map((x) => `${fmtRM(x.min)}→${fmtRM(x.bonus)}`).join(", ")}\nJualan: ${fmtRM(jualan)}\n`;
+  teks += dapatP ? `🎉 Bonus semasa ${fmtRM(dapatP.bonus)} setiap pekerja. ` : "";
+  teks += depanP ? `Baki ${fmtRM(depanP.min - jualan)} untuk ${fmtRM(depanP.bonus)} setiap pekerja.` : "Peringkat tertinggi dicapai 🏆";
+  const ti = susun(t.insentif_tingkat);
+  teks += `\n\n👤 Bonus Individu (kutipan sebulan: ${ti.map((x) => `${fmtRM(x.min)}→${fmtRM(x.bonus)}`).join(", ")})`;
   for (const p of pek) {
     const kutipan = bulanIni.filter((r: any) => r.created_by === p.id && r.status === "selesai").reduce((a: number, r: any) => a + (Number(r.jumlah) || 0), 0);
-    const dapat = tingkat.filter((x) => kutipan >= x.min).pop();
-    const seterusnya = tingkat.find((x) => kutipan < x.min);
+    const dapat = ti.filter((x) => kutipan >= x.min).pop();
+    const seterusnya = ti.find((x) => kutipan < x.min);
     teks += `\n• ${p.singkatan || p.nama}: ${fmtRM(kutipan)} — ${dapat ? `bonus ${fmtRM(dapat.bonus)}` : "belum capai"}${seterusnya ? ` (baki ${fmtRM(seterusnya.min - kutipan)} ke ${fmtRM(seterusnya.min)})` : " 🏆"}`;
   }
   await sendMessage(chatId, teks, withMenu());
