@@ -514,7 +514,7 @@
       <div class="stat-box"><div class="stat-icon">📦</div><div class="stat-label">Produk</div><div class="stat-val" id="s-produk" style="color:var(--gold)">—</div></div>
       <div class="stat-box"><div class="stat-icon">💵</div><div class="stat-label" id="s-cash-label">Cash Dipegang</div><div class="stat-val" id="s-cash-pegang" style="color:var(--gold)">—</div></div>
     </div>
-    <button id="btn-betulkan-bayaran" class="btn-link" style="display:none;font-size:11px;margin:-6px 0 10px" onclick="bukaModalBetulkanBayaran()">✏️ Betulkan rekod bayaran tunai (silap pekerja/sudah bank in)</button>
+    <button id="btn-betulkan-bayaran" class="btn-link" style="display:none;font-size:11px;margin:-6px 0 10px" onclick="bukaModalBetulkanBayaran()">✏️ Betulkan rekod bayaran (silap kaedah tunai/transfer atau pekerja)</button>
 
     <div class="card">
       <div class="card-title">🚨 Perlu Tindakan Segera</div>
@@ -2043,8 +2043,8 @@ Cash Dipegang. Utk kes bayaran direkod di bawah akaun salah (cth Pemilik rekod b
 pihak pekerja) atau duit tunai yg kemudian didapati sudah dibank-in terus. -->
 <div class="modal-overlay" id="modal-betulkan-bayaran">
   <div class="modal-box">
-    <div class="modal-title">✏️ Betulkan Rekod Bayaran Tunai<button class="modal-close" onclick="closeModal('modal-betulkan-bayaran')">✕ Tutup</button></div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">30 bayaran TUNAI disahkan terkini. Guna bila rekod tersilap pekerja, atau duit tunai ni didapati sudah dibank-in terus (tandakan "Sudah Bank In" — ia akan keluar dari kiraan Cash Dipegang).</div>
+    <div class="modal-title">✏️ Betulkan Rekod Bayaran<button class="modal-close" onclick="closeModal('modal-betulkan-bayaran')">✕ Tutup</button></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">30 bayaran (tunai/transfer) disahkan terkini. Guna bila tersilap kaedah bayaran (tunai ↔ transfer) atau tersilap pekerja. Tunai → Transfer akan keluar dari kiraan Cash Dipegang; Transfer → Tunai akan masuk semula.</div>
     <div id="betulkan-bayaran-list"><div class="empty"><div class="empty-text">Memuatkan...</div></div></div>
   </div>
 </div>
@@ -2904,7 +2904,7 @@ async function bukaModalBetulkanBayaran() {
     SENARAI_PEKERJA_CACHE = data || [];
   }
   const { data, error } = await sb.from('permohonan_bayaran_hutang').select('*')
-    .eq('kaedah_bayaran', 'tunai').eq('status', 'disahkan')
+    .in('kaedah_bayaran', ['tunai','transfer']).eq('status', 'disahkan')
     .order('created_at', { ascending: false }).limit(30);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   renderSenaraiBetulkanBayaran(data || []);
@@ -2912,7 +2912,7 @@ async function bukaModalBetulkanBayaran() {
 
 function renderSenaraiBetulkanBayaran(senarai) {
   const el = document.getElementById('betulkan-bayaran-list');
-  if (!senarai.length) { el.innerHTML = '<div class="empty"><div class="empty-text">Tiada bayaran tunai disahkan lagi</div></div>'; return; }
+  if (!senarai.length) { el.innerHTML = '<div class="empty"><div class="empty-text">Tiada bayaran disahkan lagi</div></div>'; return; }
   el.innerHTML = senarai.map(r => {
     const namaDestinasi = r.kedai_id ? (DATA.kedai.find(k=>k.id===r.kedai_id)?.nama || '?') : `🙋 ${esc(r.nama_pembeli||'Peribadi')}`;
     const namaPekerja = PROFIL_NAMA_CACHE[r.pekerja_id] || r.pekerja_id;
@@ -2922,7 +2922,8 @@ function renderSenaraiBetulkanBayaran(senarai) {
         <div style="font-weight:800;color:var(--gold);white-space:nowrap">${fmt(r.jumlah)}</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" onclick="tandaBayaranSudahBankIn('${r.id}','${esc(namaDestinasi)}')">🏦 Sudah Bank In</button>
+        <span class="badge ${r.kaedah_bayaran==='tunai'?'badge-gold':''}" style="font-size:10px;align-self:center">${r.kaedah_bayaran==='tunai'?'💵 Tunai':'🏦 Transfer'}</span>
+        <button class="btn btn-secondary btn-sm" onclick="tukarKaedahBayaranDiterima('${r.id}','${esc(namaDestinasi)}','${r.kaedah_bayaran==='tunai'?'transfer':'tunai'}')">${r.kaedah_bayaran==='tunai'?'🏦 Tukar ke Transfer (Sudah Bank In)':'💵 Tukar ke Tunai'}</button>
         <select class="form-input" style="width:auto;padding:4px 8px;font-size:11px" onchange="tukarPekerjaBayaranDiterima('${r.id}', this.value, this)">
           <option value="">↔️ Pindah ke pekerja lain...</option>
           ${SENARAI_PEKERJA_CACHE.filter(p=>p.id!==r.pekerja_id).map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('')}
@@ -2932,11 +2933,15 @@ function renderSenaraiBetulkanBayaran(senarai) {
   }).join('');
 }
 
-async function tandaBayaranSudahBankIn(id, namaDestinasi) {
-  if (!confirm(`Tandakan bayaran ${namaDestinasi} ni sebagai SUDAH BANK IN?\n\nIa akan ditukar drpd "Tunai" kepada "Transfer" — keluar terus drpd kiraan Cash Dipegang sesiapa.`)) return;
-  const { error } = await sb.rpc('betulkan_bayaran_hutang_diterima', { p_id: id, p_kaedah_bayaran_baru: 'transfer' });
+async function tukarKaedahBayaranDiterima(id, namaDestinasi, kaedahBaru) {
+  const labelBaru = kaedahBaru==='transfer' ? 'Transfer (sudah bank in)' : 'Tunai';
+  const kesan = kaedahBaru==='transfer'
+    ? 'Ia keluar terus drpd kiraan Cash Dipegang sesiapa.'
+    : 'Ia masuk semula dlm kiraan Cash Dipegang pekerja yg direkod.';
+  if (!confirm(`Tukar kaedah bayaran ${namaDestinasi} kepada ${labelBaru}?\n\n${kesan}`)) return;
+  const { error } = await sb.rpc('betulkan_bayaran_hutang_diterima', { p_id: id, p_kaedah_bayaran_baru: kaedahBaru });
   if (error) return toast('Gagal: '+error.message, 'err');
-  toast('✅ Ditandakan sudah bank in — keluar drpd Cash Dipegang');
+  toast('✅ Kaedah bayaran ditukar kepada '+labelBaru);
   await bukaModalBetulkanBayaran();
   renderCashDipegangDashboard();
 }
