@@ -316,8 +316,9 @@ function bukaEditKod() {
 }
 
 async function simpanKodBaharu() {
-  const kod = document.getElementById('kod-baharu-input').value.trim();
+  const kod = document.getElementById('kod-baharu-input').value;
   if (!kod) return toast('Sila isi kod baharu', 'err');
+  if (/\s/.test(kod)) return toast('Kod tidak boleh mengandungi ruang kosong (space)', 'err');
   const btn = document.getElementById('btn-simpan-kod');
   btn.disabled = true;
   const { error } = await sb.rpc('kemaskini_kod_affiliate_sendiri', { p_kod_baharu: kod });

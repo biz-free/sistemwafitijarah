@@ -1745,7 +1745,7 @@ mula drpd 0) supaya sentiasa padan realiti walaupun ada jurang sejarah lampau. -
   <div class="modal-box">
     <div class="modal-title">✅ Lulus Permohonan Affiliate<button class="modal-close" onclick="closeModal('modal-lulus-affiliate')">✕ Tutup</button></div>
     <div id="lulus-aff-nama" style="font-size:13px;font-weight:700;margin-bottom:10px"></div>
-    <div class="form-group"><label class="form-label">Kod Affiliate (unik, utk pelanggan guna semasa checkout)</label><input type="text" class="form-input" id="lulus-aff-kod" style="text-transform:uppercase" placeholder="cth: AMIRUL10" /></div>
+    <div class="form-group"><label class="form-label">Kod Affiliate</label><div style="font-size:12px;color:var(--text-muted,#888)">Dijana automatik drpd nama semasa diluluskan. Affiliate boleh tukar sendiri kemudian (tanpa ruang kosong).</div></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Kadar Komisen (%)</label><input type="number" class="form-input" id="lulus-aff-komisen" value="10" min="0" max="100" step="0.5" /></div>
       <div class="form-group"><label class="form-label">Kadar Diskaun Pelanggan (%)</label><input type="number" class="form-input" id="lulus-aff-diskaun" value="5" min="0" max="100" step="0.5" /></div>
@@ -9379,7 +9379,6 @@ function bukaModalLulusAffiliate(id) {
   if (!a) return;
   AFFILIATE_LULUS_ID = id;
   document.getElementById('lulus-aff-nama').textContent = `${a.nama} · ${a.telefon}`;
-  document.getElementById('lulus-aff-kod').value = '';
   document.getElementById('lulus-aff-komisen').value = 10;
   document.getElementById('lulus-aff-diskaun').value = 5;
   document.getElementById('lulus-aff-minima').value = 500;
@@ -9387,15 +9386,13 @@ function bukaModalLulusAffiliate(id) {
 }
 
 async function luluskanAffiliate() {
-  const kod = document.getElementById('lulus-aff-kod').value.trim();
   const komisen = +document.getElementById('lulus-aff-komisen').value;
   const diskaun = +document.getElementById('lulus-aff-diskaun').value;
   const minima = +document.getElementById('lulus-aff-minima').value;
-  if (!kod) return toast('Sila isi kod affiliate', 'err');
-  const { error } = await sb.rpc('lulus_permohonan_affiliate', { p_id: AFFILIATE_LULUS_ID, p_kod_affiliate: kod, p_kadar_komisen: komisen, p_kadar_diskaun: diskaun, p_minima_belian: minima });
+  const { error } = await sb.rpc('lulus_permohonan_affiliate', { p_id: AFFILIATE_LULUS_ID, p_kod_affiliate: null, p_kadar_komisen: komisen, p_kadar_diskaun: diskaun, p_minima_belian: minima });
   if (error) return toast('Gagal: ' + error.message, 'err');
   closeModal('modal-lulus-affiliate');
-  toast(`✅ ${kod.toUpperCase()} diluluskan sebagai affiliate`);
+  toast('✅ Affiliate diluluskan — kod dijana automatik');
   renderAffiliate();
 }
 
