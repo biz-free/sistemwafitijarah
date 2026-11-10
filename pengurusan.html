@@ -5615,6 +5615,7 @@ function calcTotal() {
     skimInfo.style.display = skimAktif ? 'block' : 'none';
     skimInfo.innerHTML = `📅 <b>Skim bayar awal:</b> ${TETAPAN_DISKAUN.skim_hutang_peratus_awal}% jika kedai bayar dalam ${TETAPAN_DISKAUN.skim_hutang_hari_awal} hari, ${TETAPAN_DISKAUN.skim_hutang_peratus_akhir}% dalam ${TETAPAN_DISKAUN.skim_hutang_hari_akhir} hari, selepas itu harga penuh. Tarikh akhir ditetapkan automatik.`;
   }
+  kemaskiniTarikhAkhirWrap();
   if (sub >= minima && minima > 0 && !skimAktif) {
     diskaunWrap.style.display = '';
     document.getElementById('h-diskaun-minima-label').textContent = fmt(minima);
@@ -5643,17 +5644,23 @@ function calcTotal() {
     infoEl.style.display='none';
   }
 }
+// Kotak tarikh akhir hanya untuk hutang di bawah skim (< RM500). Bila skim aktif, server tetapkan
+// tarikh akhir sendiri (invois + hari awal), jadi kotak disembunyikan daripada pekerja.
+function kemaskiniTarikhAkhirWrap() {
+  const wrap = document.getElementById('h-tarikh-akhir-bayaran-wrap');
+  if (!wrap) return;
+  const sub = hItems.reduce((a,it)=>{ const s=DATA.stok.find(s=>s.id===it.stokId); return a+(s?s.harga_jual*(+it.qty||0):0); },0);
+  const papar = hBayar === 'hutang' && !skimHutangAktif(sub);
+  wrap.style.display = papar ? '' : 'none';
+  if (!papar) document.getElementById('h-tarikh-akhir-bayaran').value = '';
+}
 function setBayar(v) {
   hBayar=v;
   document.getElementById('opt-terus').className='bayar-opt'+(v==='terus'?' active-terus':'');
   document.getElementById('opt-transfer').className='bayar-opt'+(v==='transfer'?' active-transfer':'');
   document.getElementById('opt-hutang').className='bayar-opt'+(v==='hutang'?' active-hutang':'');
   document.getElementById('opt-consignment').className='bayar-opt'+(v==='consignment'?' active-consignment':'');
-  const tarikhAkhirWrap = document.getElementById('h-tarikh-akhir-bayaran-wrap');
-  if (tarikhAkhirWrap) {
-    tarikhAkhirWrap.style.display = v === 'hutang' ? '' : 'none';
-    if (v !== 'hutang') document.getElementById('h-tarikh-akhir-bayaran').value = '';
-  }
+  kemaskiniTarikhAkhirWrap();
   const qrWrap = document.getElementById('h-qr-wrap');
   if (v === 'transfer' && (TETAPAN_DISKAUN.qr_bank_url || TETAPAN_DISKAUN.butiran_bank)) {
     qrWrap.style.display = '';
