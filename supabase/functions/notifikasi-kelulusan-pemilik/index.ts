@@ -108,12 +108,12 @@ async function hantarTelegram(admin: any, jenis: string, pekerjaNama: string, bu
 
   const text = `🔔 ${jenis}\n👤 ${pekerjaNama}\n${statusLokasi}${barisJumlah}${butiran || ""}`.trim();
   let replyMarkup: unknown = undefined;
-  // SQL_TAMBAHAN_165: butang padam disokong utk jenis 'transaksi' & 'kedai' sahaja — jenis diambil
+  // SQL_TAMBAHAN_165/186: butang padam disokong utk jenis 'transaksi', 'kedai' & 'pelupusan_stok' sahaja — jenis diambil
   // drpd baris permohonan_padam (butiran hanya label, tak boleh dipercayai utk teka jenis).
   let padamBukanTransaksi = false;
   if (jenisRekod === "permohonan_padam" && recordId) {
     const { data: pp } = await admin.from("permohonan_padam").select("jenis").eq("id", recordId).maybeSingle();
-    padamBukanTransaksi = !(pp?.jenis === "transaksi" || pp?.jenis === "kedai");
+    padamBukanTransaksi = !(pp?.jenis === "transaksi" || pp?.jenis === "kedai" || pp?.jenis === "pelupusan_stok");
   }
   if (recordId && jenisRekod && JADUAL_CODE[jenisRekod] && !padamBukanTransaksi) {
     const code = JADUAL_CODE[jenisRekod];
