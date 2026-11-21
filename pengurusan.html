@@ -8002,6 +8002,7 @@ async function renderBaucarList() {
     // Amaran Sah Lokasi Kedai (pemilik) — kesan SEBELUM diluluskan, sebab kos
     // minyak baucar harian ni dikira drpd jarak kedai yg mungkin pin tersasar.
     const amaranLokasi = v.kategori==='upah_harian' ? kesanKedaiMencurigakanHariIni(v.pekerja_id, v.tarikh) : [];
+    const pinSah = v.kategori==='upah_harian' ? pinDisahkanGpsHariIni(v.pekerja_id, v.tarikh) : [];
     return `
     <div class="list-item" style="display:block">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -8015,6 +8016,7 @@ async function renderBaucarList() {
         </div>
       </div>
       ${amaranLokasi.length?`<div style="font-size:11px;color:var(--red);background:#FFF0F0;border:1px solid #FFD0D0;border-radius:6px;padding:6px 8px;margin-bottom:6px">⚠️ <strong>Semak lokasi kedai sebelum luluskan</strong> (jejaskan kiraan minyak):<br/>${amaranLokasi.map(a=>'• '+esc(a.teks)+(a.lat&&a.lng?` <a href="https://www.google.com/maps/search/?api=1&query=${a.lat},${a.lng}" target="_blank" rel="noopener" style="white-space:nowrap;font-weight:600;color:var(--red)">📍 Lihat pin</a>`:'')).join('<br/>')}</div>`:''}
+      ${pinSah.length?`<div style="font-size:11px;color:var(--green);margin-bottom:6px">📍 Pin disahkan GPS: ${pinSah.map(p=>esc(p.nama)+' ('+fmtJarakPin(p.km)+')').join(', ')}</div>`:''}
       ${v.kategori==='upah_harian'?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;background:var(--bg);border-radius:6px;padding:6px 8px">
         ${v.butiran?`<div style="margin-bottom:4px">Upah ${fmt(v.butiran.upah)} + Minyak ${fmt(v.butiran.minyak)} (${(v.butiran.km||0).toFixed(1)}km) + Makan ${fmt(v.butiran.makan)}${v.butiran.upahEdagang?` + E-dagang ${fmt(v.butiran.upahEdagang)}`:''}</div>
         ${v.butiran.bonus>0?`<div style="margin-bottom:4px;color:var(--gold)">🏪 Bonus Kedai Baru hari ini: ${fmt(v.butiran.bonus)} (dikumpul berasingan, tiada dlm jumlah di atas)</div>`:''}
@@ -11199,13 +11201,28 @@ function kesanKedaiMencurigakanHariIni(pekerjaId, tarikh) {
   titik.forEach(k => {
     if (k.jarak_pin_gps_km>5) {
       amaran.push({ teks: `${k.nama} — pin didaftar ${k.jarak_pin_gps_km.toFixed(1)}km dari GPS pekerja masa tu`, lat: k.lat, lng: k.lng });
-    } else if (titik.length>=2) {
+    } else if (titik.length>=2 && k.jarak_pin_gps_km==null) {
+      // Pin sudah disahkan GPS (jarak_pin_gps_km<=5) -> kedai memang jauh tapi pekerja memang
+      // ada di sana, jadi BUKAN silap pin: tiada amaran "terasing" (kes Nadia 21 Nov 2026).
       const jarakTerdekat = Math.min(...titik.filter(x=>x.id!==k.id).map(x=>haversineKm(k,x)));
       if (jarakTerdekat>15) amaran.push({ teks: `${k.nama} — ~${jarakTerdekat.toFixed(0)}km terasing drpd kedai lain hari sama, sila sahkan bukan silap pin`, lat: k.lat, lng: k.lng });
     }
   });
   return amaran;
 }
+
+// Kedai yg pinnya DISAHKAN GPS pekerja semasa jualan (jarak_pin_gps_km<=5) — dipapar sbg
+// maklumat hijau pada baucar harian (pemilik sahaja; tak masuk teks WhatsApp Team Sales).
+function pinDisahkanGpsHariIni(pekerjaId, tarikh) {
+  if (!pekerjaId || !tarikh) return [];
+  const kedaiIds = [...new Set(DATA.transaksi
+    .filter(t=>t.created_by===pekerjaId && t.tarikh_masa && tarikhTempatan(t.tarikh_masa)===tarikh && t.kedai_id)
+    .map(t=>t.kedai_id))];
+  return kedaiIds.map(id=>DATA.kedai.find(k=>k.id===id))
+    .filter(k=>k && k.jarak_pin_gps_km!=null && k.jarak_pin_gps_km<=5)
+    .map(k=>({ nama:k.nama, km:k.jarak_pin_gps_km }));
+}
+function fmtJarakPin(km) { return km<1 ? Math.round(km*1000)+'m' : km.toFixed(1)+'km'; }
 
 // Jarak 1 sesi kehadiran: titik GPS Thumb In -> GPS kedai-kedai yang dihantar (ikut
 // urutan masa) semasa sesi itu -> titik GPS Thumb Out. Guna titik kedai berdaftar

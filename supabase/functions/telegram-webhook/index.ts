@@ -83,6 +83,7 @@ function sulitkanUntukWa(teks: string): string {
     .split("\n")
     .filter((baris) => !/^\s*Cash tangan\s+RM/i.test(baris))
     .filter((baris) => !/^\s*💰\s*P2P:/.test(baris))
+    .filter((baris) => !/^\s*📍\s*Pin disahkan GPS:/u.test(baris)) // SQL_TAMBAHAN_189
     // NOTA: flag "u" WAJIB di sini -- tanpa "u", character class [🔴🟢] terbelah jadi
     // surrogate pair berasingan (bukan 1 aksara), jadi padanan gagal senyap2 (disahkan
     // bug sebenar 2026-10-14: mesej 🔴 masih tertinggal lepas ke WhatsApp walaupun baris

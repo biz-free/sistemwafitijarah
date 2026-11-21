@@ -71,6 +71,10 @@ async function hantarTelegram(admin: any, jenis: string, pekerjaNama: string, bu
       } else if (row?.status === "hijau") {
         statusLokasi = `🟢 Lokasi kedai OK, tiada isu dikesan\n`;
       }
+      // SQL_TAMBAHAN_189: kedai yg pinnya disahkan GPS pekerja (<=5km). Awalan "📍 Pin disahkan GPS:"
+      // ditapis dari WhatsApp oleh sulitkanUntukWa() (telegram-webhook).
+      const { data: pinSah } = await admin.rpc("pin_disahkan_gps_baucar", { p_baucar_id: recordId });
+      if (typeof pinSah === "string" && pinSah) statusLokasi += `📍 Pin disahkan GPS: ${pinSah}\n`;
     } catch (err) {
       console.warn(`[notifikasi-kelulusan-pemilik] semak lokasi gagal record_id=${recordId}`, err);
     }
