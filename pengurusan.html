@@ -5634,7 +5634,8 @@ function calcTotal() {
   }
 
   const peratus = kiraDiskaunHantarPeratus(sub);
-  const jumlahAkhir = sub - (sub*peratus/100);
+  let jumlahAkhir = sub - (sub*peratus/100);
+  if (hBayar==='terus') jumlahAkhir = Math.round(jumlahAkhir*20+1e-9)/20; // bundar 5 sen (tunai)
   document.getElementById('h-total').textContent=fmt(jumlahAkhir);
   const infoEl = document.getElementById('h-diskaun-info');
   if (peratus>0) {
@@ -5793,7 +5794,8 @@ async function submitHantarSebenar() {
     return toast('Sila pilih diskaun (0% / kadar tunai / kadar transfer) — wajib untuk jumlah ini','err');
   }
   const peratusDiskaun = kiraDiskaunHantarPeratus(jumlahAsal);
-  const jumlah = jumlahAsal - (jumlahAsal*peratusDiskaun/100);
+  let jumlah = jumlahAsal - (jumlahAsal*peratusDiskaun/100);
+  if (hBayar==='terus') jumlah = Math.round(jumlah*20+1e-9)/20; // bundar 5 sen (tunai), sama dgn SQL 188
 
   // Jarak dikira automatik dari lokasi GPS pekerja semasa ke lokasi berdaftar kedai
   // (tak relevan untuk belian peribadi — tiada kedai destinasi berdaftar)
