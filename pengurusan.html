@@ -586,6 +586,7 @@
           <button class="btn btn-secondary btn-sm" onclick="bukaModalAmbilStok()">📥 Ambil Stok</button>
           <button class="btn btn-secondary btn-sm" onclick="showModal('modal-pulang-stok')">📤 Pulangkan Stok</button>
         </div>
+        <button class="btn btn-secondary btn-sm" style="width:100%;margin-top:8px" onclick="bukaModalMintaPindah()">🔀 Pindah Stok ke Pekerja Lain</button>
         <button class="btn btn-secondary btn-sm" style="width:100%;margin-top:8px;color:var(--red);border-color:var(--red)" onclick="bukaModalSerahReject()">🚫 Serah Produk Reject</button>
         <div style="font-size:10px;color:var(--muted);margin-top:8px">Perlu Thumb In dahulu sebelum boleh ambil stok bawaan.</div>
         <div class="divider" style="margin:14px 0"></div>
@@ -1792,6 +1793,17 @@ mula drpd 0) supaya sentiasa padan realiti walaupun ada jurang sejarah lampau. -
       <select class="form-input" id="pindah-kepada-pekerja"></select>
     </div>
     <button class="btn btn-primary" onclick="pindahStokPekerja()">🔀 Pindah Stok</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-minta-pindah">
+  <div class="modal-box">
+    <div class="modal-title">🔀 Pindah Stok ke Pekerja Lain<button class="modal-close" onclick="closeModal('modal-minta-pindah')">✕ Tutup</button></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">⏳ Permohonan perlu diluluskan pemilik (web atau Telegram). Stok hanya berpindah selepas diluluskan.</div>
+    <div class="form-group"><label class="form-label">Produk</label><select class="form-input" id="mp-produk"></select></div>
+    <div class="form-group"><label class="form-label">Kuantiti</label><input type="number" class="form-input" id="mp-qty" placeholder="0" min="1" /></div>
+    <div class="form-group"><label class="form-label">Kepada Pekerja</label><select class="form-input" id="mp-kepada"></select></div>
+    <button class="btn btn-primary" onclick="hantarMintaPindah()">📤 Hantar Permohonan</button>
   </div>
 </div>
 
@@ -5147,6 +5159,32 @@ async function pulangkanStokPekerjaPemilik(pekerjaId, stokId, qtySedia) {
   toast(`✅ ${qty} unit "${nama}" dipulangkan ke gudang`);
 }
 
+async function bukaModalMintaPindah() {
+  const entries = Object.entries(DATA.stokPekerja||{}).filter(([id,qty])=>qty>0);
+  if (!entries.length) return toast('Tiada stok bawaan untuk dipindah','err');
+  const { data: rakan } = await sb.from('profiles').select('id,nama').eq('role','pekerja').eq('status','aktif');
+  const senarai = (rakan||[]).filter(p=>p.id!==DATA.currentUser.id);
+  if (!senarai.length) return toast('Tiada pekerja lain untuk dipindahkan stok','err');
+  document.getElementById('mp-produk').innerHTML = entries.map(([id,qty])=>{ const s=DATA.stok.find(s=>s.id===id); return `<option value="${id}">${esc(s?.nama||id)} (bawaan: ${qty} ${esc(s?.unit||'')})</option>`; }).join('');
+  document.getElementById('mp-kepada').innerHTML = senarai.map(p=>`<option value="${p.id}">${esc(p.nama)}</option>`).join('');
+  showModal('modal-minta-pindah');
+}
+
+async function hantarMintaPindah() {
+  const stokId = document.getElementById('mp-produk').value;
+  const kepada = document.getElementById('mp-kepada').value;
+  const qty = +document.getElementById('mp-qty').value;
+  if (!stokId || !kepada || qty<1) return toast('Pilih produk, kuantiti dan penerima','err');
+  if (qty > (DATA.stokPekerja?.[stokId]||0)) return toast('Kuantiti melebihi stok bawaan anda','err');
+  const { error } = await sb.rpc('minta_pindah_stok', { p_id: genId('PM'), p_kepada:kepada, p_stok_id:stokId, p_qty:qty });
+  if (error) return toast('Gagal hantar permohonan: '+error.message,'err');
+  if (!Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
+  await loadSerahanProdukSaya();
+  closeModal('modal-minta-pindah');
+  document.getElementById('mp-qty').value='';
+  toast('📤 Permohonan pindah stok dihantar — menunggu kelulusan pemilik');
+}
+
 function bukaModalAmbilStok() {
   const hintEl = document.getElementById('ambil-stok-hint');
   const btnEl = document.getElementById('ambil-stok-btn');
@@ -5251,10 +5289,12 @@ const SERAHAN_PRODUK_JENIS_TXT = {
   ambil: '📥 Ambil dari Gudang',
   pindah_keluar: '🔀 Pindah Keluar',
   pindah_masuk: '🔀 Pindah Masuk',
+  pindah_minta: '🔀 Mohon Pindah Stok',
   restock: '⚡ Restock Gudang',
   padam_pulang: '↩️ Pulang (Transaksi Dipadam)',
 };
 function labelSerahanProduk(r) {
+  if (r.jenis === 'pindah_minta') return `${SERAHAN_PRODUK_JENIS_TXT.pindah_minta} → ${esc(PROFIL_NAMA_CACHE[r.rujuk_pekerja_id]||'pekerja lain')}`;
   if (r.jenis === 'reject') return SERAHAN_PRODUK_SEBAB_TXT[r.sebab] || r.sebab || SERAHAN_PRODUK_JENIS_TXT.reject;
   if (r.jenis === 'ambil' && r.sebab) return `${SERAHAN_PRODUK_JENIS_TXT.ambil} — ${r.sebab}`;
   if ((r.jenis === 'pindah_masuk' || r.jenis === 'pindah_keluar') && r.status === 'ditolak')
@@ -5315,6 +5355,7 @@ async function loadSerahanProdukSaya() {
   const { data, error } = await sb.from('serahan_produk').select('*').eq('pekerja_id', DATA.currentUser.id).order('created_at',{ascending:false}).limit(30);
   if (error) { el.innerHTML = `<div class="empty"><div class="empty-text">Gagal muat: ${esc(error.message)}</div></div>`; return; }
   const rows = data || [];
+  if (rows.some(r=>r.jenis==='pindah_minta') && !Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
   el.innerHTML = rows.map(r=>`
     <div class="list-item" style="display:block">
       ${ikonPadam(`padamSerahanProduk('${r.id}')`, 'serahan_produk', r.id, `Serahan ${r.stok_nama} ×${r.kuantiti}`, 'Padam serahan')}
@@ -5386,14 +5427,16 @@ async function renderSerahanProdukSemua() {
     '<div class="divider" style="margin:12px 0"></div>';
 
   const menungguPindah = senarai.filter(r=>r.jenis==='pindah_masuk' && r.status==='menunggu');
-  const semuaMenunggu = [...menungguAmbil, ...menunggu, ...menungguPulang].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const menungguPindahMinta = senarai.filter(r=>r.jenis==='pindah_minta' && r.status==='menunggu');
+  const semuaMenunggu = [...menungguAmbil, ...menunggu, ...menungguPulang, ...menungguPindahMinta].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const blokMenunggu = semuaMenunggu.length ? `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">MENUNGGU SAHKAN</div>` +
     semuaMenunggu.map(r=>{
       const isAmbil = r.jenis === 'ambil';
       const isPulang = r.jenis === 'baik';
-      const fnSahkan = isAmbil ? `ubahStatusAmbilStok('${r.id}','disahkan')` : `ubahStatusSerahanProduk('${r.id}','disahkan')`;
-      const fnTolak = isAmbil ? `ubahStatusAmbilStok('${r.id}','ditolak')` : `ubahStatusSerahanProduk('${r.id}','ditolak')`;
-      const subLabel = isAmbil ? (r.sebab ? '📥 '+r.sebab : '📥 Minta Ambil Stok') : isPulang ? '📤 Pulang Stok (baik, akan masuk semula stok gudang bila disahkan)' : (SERAHAN_PRODUK_SEBAB_TXT[r.sebab]||r.sebab||'');
+      const isPindahMinta = r.jenis === 'pindah_minta';
+      const fnSahkan = isPindahMinta ? `putuskanPindahMinta('${r.id}','disahkan')` : isAmbil ? `ubahStatusAmbilStok('${r.id}','disahkan')` : `ubahStatusSerahanProduk('${r.id}','disahkan')`;
+      const fnTolak = isPindahMinta ? `putuskanPindahMinta('${r.id}','ditolak')` : isAmbil ? `ubahStatusAmbilStok('${r.id}','ditolak')` : `ubahStatusSerahanProduk('${r.id}','ditolak')`;
+      const subLabel = isPindahMinta ? `🔀 Mohon pindah stok kepada ${esc(namaPekerja(r.rujuk_pekerja_id))}` : isAmbil ? (r.sebab ? '📥 '+r.sebab : '📥 Minta Ambil Stok') : isPulang ? '📤 Pulang Stok (baik, akan masuk semula stok gudang bila disahkan)' : (SERAHAN_PRODUK_SEBAB_TXT[r.sebab]||r.sebab||'');
       // Ambil Stok sahaja boleh edit kuantiti sebelum sahkan — kadang perlu ditambah/
       // dikurangkan drpd apa pekerja mohon asal (cth: stok gudang tak cukup).
       const stokGudang = isAmbil ? DATA.stok.find(s=>s.id===r.stok_id) : null;
@@ -5407,9 +5450,9 @@ async function renderSerahanProdukSemua() {
           ${stokGudang?`<span style="font-size:10px;color:var(--muted)">(baki gudang: ${stokGudang.stok} ${esc(stokGudang.unit||'')})</span>`:''}
         </div>`:''}
         <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
-          ${!isAmbil && !isPulang?(r.gambar_url?`<button class="btn btn-secondary btn-sm" style="width:auto" onclick="lihatGambarSerahanProduk('${esc(r.gambar_url)}')">📎 Gambar</button>`:'<span style="font-size:11px;color:var(--red)">⚠️ Tiada gambar</span>'):''}
+          ${!isAmbil && !isPulang && !isPindahMinta?(r.gambar_url?`<button class="btn btn-secondary btn-sm" style="width:auto" onclick="lihatGambarSerahanProduk('${esc(r.gambar_url)}')">📎 Gambar</button>`:'<span style="font-size:11px;color:var(--red)">⚠️ Tiada gambar</span>'):''}
           <button class="btn btn-primary btn-sm" style="width:auto" onclick="${fnSahkan}">✅ Sahkan</button>
-          <button class="btn btn-secondary btn-sm" style="width:auto;color:var(--red)" onclick="${fnTolak}">✕ Tolak${isAmbil?'':' (Pulang Semula)'}</button>
+          <button class="btn btn-secondary btn-sm" style="width:auto;color:var(--red)" onclick="${fnTolak}">✕ Tolak${isAmbil||isPindahMinta?'':' (Pulang Semula)'}</button>
         </div>
       </div>`;
     }).join('') + '<div class="divider" style="margin:12px 0"></div>' : '';
@@ -5523,6 +5566,14 @@ async function ubahStatusSerahanProduk(id, status) {
   if (error) return toast('Gagal kemaskini status: '+error.message,'err');
   toast(status==='disahkan' ? '✅ Serahan reject disahkan' : '✕ Serahan reject ditolak — stok dipulangkan semula ke pekerja');
   await renderSerahanProdukSemua();
+}
+
+async function putuskanPindahMinta(id, status) {
+  const { error } = await sb.rpc('putuskan_pindah_minta', { p_id:id, p_status:status });
+  if (error) return toast('Gagal: '+error.message,'err');
+  toast(status==='disahkan' ? '✅ Pindah stok diluluskan — stok dipindah ke pekerja penerima' : '✕ Permohonan pindah stok ditolak');
+  await renderSerahanProdukSemua();
+  if (typeof renderStokMobileSemua === 'function') await renderStokMobileSemua();
 }
 
 async function ubahStatusAmbilStok(id, status) {
