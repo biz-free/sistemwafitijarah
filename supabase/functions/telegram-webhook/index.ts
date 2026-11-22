@@ -447,9 +447,8 @@ async function cmdMenunggu(chatId: number) {
     await sendMessage(chatId, `💳 Bayaran Hutang\n👤 ${namaOf(r.pekerja_id)}\n🎯 ${sasaran}\n${fmtRM(r.jumlah)} (${r.kaedah_bayaran})${r.settlement_penuh ? " · PENUH" : ""}`, withMenu(kb("bh", r.id)));
   }
   for (const r of (produk || []).slice(0, 8)) {
-    const label = r.jenis === "pindah_minta" ? "Permohonan Pindah Stok" : r.jenis === "ambil" ? "Permohonan Ambil Stok" : r.jenis === "baik" ? "Serahan Produk (Baik)" : "Serahan Produk (Reject)";
-    const kepada = r.jenis === "pindah_minta" ? `\n🔀 Kepada: ${namaOf(r.rujuk_pekerja_id)}` : "";
-    await sendMessage(chatId, `📦 ${label}\n👤 ${namaOf(r.pekerja_id)}\n${r.stok_nama} ×${r.kuantiti}${kepada}${r.sebab ? "\nSebab: " + r.sebab : ""}`, withMenu(kb("sp", r.id)));
+    const label = r.jenis === "ambil" ? "Permohonan Ambil Stok" : r.jenis === "baik" ? "Serahan Produk (Baik)" : "Serahan Produk (Reject)";
+    await sendMessage(chatId, `📦 ${label}\n👤 ${namaOf(r.pekerja_id)}\n${r.stok_nama} ×${r.kuantiti}${r.sebab ? "\nSebab: " + r.sebab : ""}`, withMenu(kb("sp", r.id)));
   }
   for (const r of (baucar || []).slice(0, 8)) {
     await sendMessage(chatId, `🧾 Baucar Harian\n👤 ${namaOf(r.pekerja_id)}\n${fmtD(r.tarikh)} — Upah ${fmtRM(r.jumlah)}\nCash tangan ${fmtRM(r.cash_ditangan)} | Baki serah ${fmtRM(r.baki)}`, withMenu(kbBaucar(r.id)));
