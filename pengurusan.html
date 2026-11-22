@@ -2850,7 +2850,7 @@ function renderDashboard() {
   // Satu baris setiap kedai: umur dikira dari hantaran consignment TERAKHIR (bukan yang
   // paling lama), invois lama yang belum disahkan dirumuskan (bilangan + jumlah).
   const cnKedai = {};
-  DATA.transaksi.filter(t=>t.kaedah_bayaran==='consignment' && !t.jualan_disahkan).forEach(t=>{
+  DATA.transaksi.filter(t=>t.kaedah_bayaran==='consignment' && !t.jualan_disahkan && !(t.status==='selesai' && Number(t.jumlah_dibayar)>=Number(t.jumlah))).forEach(t=>{
     const kunci = t.kedai_id || namaDestinasiTrx(t);
     const g = cnKedai[kunci] || (cnKedai[kunci] = {t, akhir:t.tarikh_masa, bil:0, jumlah:0});
     g.bil++; g.jumlah += Number(t.jumlah)||0;
@@ -2859,7 +2859,8 @@ function renderDashboard() {
   Object.values(cnKedai)
     .sort((a,b)=>new Date(a.akhir)-new Date(b.akhir))
     .forEach(g=>{
-      const d = daysSince(g.akhir);
+      const hantarAkhir = DATA.transaksi.filter(x=>x.kedai_id===g.t.kedai_id).reduce((m,x)=>x.tarikh_masa>m?x.tarikh_masa:m, g.akhir);
+      const d = daysSince(hantarAkhir);
       aHTML+=`<div class="list-item"><div><div class="list-item-title">🤝 ${esc(namaDestinasiTrx(g.t))}</div><div class="list-item-sub">Hantaran terakhir ${d} hari lepas — ${g.bil} invois belum sahkan jualan · ${fmt(g.jumlah)}</div></div><span class="badge ${d>=14?'badge-red':'badge-purple'}">${d}h</span></div>`;
     });
   DATA.kedai.filter(k=>daysSince(k.last_visit)>=14).forEach(k=>{ aHTML+=`<div class="list-item"><div><div class="list-item-title">📅 ${esc(k.nama)}</div><div class="list-item-sub">Belum dilawati ${daysSince(k.last_visit)} hari</div></div><span class="badge badge-purple">${daysSince(k.last_visit)}h</span></div>`; });
