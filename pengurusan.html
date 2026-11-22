@@ -5176,6 +5176,9 @@ async function hantarMintaPindah() {
   const qty = +document.getElementById('mp-qty').value;
   if (!stokId || !kepada || qty<1) return toast('Pilih produk, kuantiti dan penerima','err');
   if (qty > (DATA.stokPekerja?.[stokId]||0)) return toast('Kuantiti melebihi stok bawaan anda','err');
+  const namaProduk = DATA.stok.find(s=>s.id===stokId)?.nama || stokId;
+  const namaPenerima = document.getElementById('mp-kepada').selectedOptions[0]?.textContent || '';
+  if (!confirm(`Sahkan permohonan pindah stok?\n\nProduk: ${namaProduk}\nKuantiti: ${qty}\nKepada: ${namaPenerima}\n\nSemak nama penerima & kuantiti betul sebelum hantar. Stok hanya berpindah selepas pemilik lulus.`)) return;
   const { error } = await sb.rpc('minta_pindah_stok', { p_id: genId('PM'), p_kepada:kepada, p_stok_id:stokId, p_qty:qty });
   if (error) return toast('Gagal hantar permohonan: '+error.message,'err');
   if (!Object.keys(PROFIL_NAMA_CACHE).length) await muatProfilNamaCache();
