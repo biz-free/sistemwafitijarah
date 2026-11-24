@@ -4691,6 +4691,8 @@ function tarikhAkhirSkim(t){
   const lewat2 = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   return { awal:t.tarikh_akhir_bayaran, pAwal:TETAPAN_DISKAUN.skim_hutang_peratus_awal, akhir:lewat2, pAkhir:TETAPAN_DISKAUN.skim_hutang_peratus_akhir };
 }
+// Jumlah perlu dibayar bagi setiap peringkat skim (ikut jumlah_asal sebelum diskaun)
+function jumlahSkim(t,peratus){ const asal=(t.jumlah_asal??t.jumlah); return asal*(1-(+peratus||0)/100); }
 let TETAPAN_DISKAUN = { minima_transfer: 500, diskaun_peratus: 10, diskaun_cod_peratus: 5, qr_bank_url: null, butiran_bank: '', mesej_followup_servis: '', skim_hutang_mula: '2026-10-01', skim_hutang_hari_awal: 5, skim_hutang_peratus_awal: 10, skim_hutang_hari_akhir: 7, skim_hutang_peratus_akhir: 5, diskaun_segera_kecil_peratus: 2 };
 async function muatTetapanDiskaunUntukHantar() {
   if (!useCloud) return;
@@ -7383,7 +7385,9 @@ async function renderResit(id) {
     <div class="resit-row" style="margin-top:6px"><span style="font-weight:700">STATUS</span><span style="font-weight:700;color:${t.status==='selesai'?'var(--green)':'var(--red)'}">⬤ ${t.status==='selesai'?'TELAH DIBAYAR':'BELUM DIBAYAR / HUTANG'}</span></div>
     ${t.status==='hutang' && tarikhAkhirSkim(t)?(()=>{const k=tarikhAkhirSkim(t),h=tarikhTempatan();const w=x=>x<h?'var(--red)':'var(--gold)';return `<div style="margin-top:6px;padding:6px 8px;background:#FFF8E1;border-radius:6px">
       <div class="resit-row"><span style="font-weight:700;color:${w(k.awal)}">📅 TARIKH AKHIR BAYARAN (${k.pAwal}%)</span><span style="font-weight:800;color:${w(k.awal)}">${fmtD(k.awal)}${k.awal<h?' ⚠️ LEWAT':''}</span></div>
-      <div class="resit-row"><span style="font-weight:700;color:${w(k.akhir)}">📅 TARIKH AKHIR BAYARAN (${k.pAkhir}%)</span><span style="font-weight:800;color:${w(k.akhir)}">${fmtD(k.akhir)}${k.akhir<h?' ⚠️ LEWAT':''}</span></div></div>`})():''}
+      <div class="resit-row" style="margin-bottom:6px"><span style="font-weight:700;color:${w(k.awal)}">💵 JUMLAH BAYAR (${k.pAwal}%)</span><span style="font-weight:800;color:${w(k.awal)}">RM ${jumlahSkim(t,k.pAwal).toFixed(2)}</span></div>
+      <div class="resit-row"><span style="font-weight:700;color:${w(k.akhir)}">📅 TARIKH AKHIR BAYARAN (${k.pAkhir}%)</span><span style="font-weight:800;color:${w(k.akhir)}">${fmtD(k.akhir)}${k.akhir<h?' ⚠️ LEWAT':''}</span></div>
+      <div class="resit-row"><span style="font-weight:700;color:${w(k.akhir)}">💵 JUMLAH BAYAR (${k.pAkhir}%)</span><span style="font-weight:800;color:${w(k.akhir)}">RM ${jumlahSkim(t,k.pAkhir).toFixed(2)}</span></div></div>`})():''}
     ${t.status==='hutang' && !tarikhAkhirSkim(t) && t.tarikh_akhir_bayaran?`<div class="resit-row" style="margin-top:6px;padding:6px 8px;background:${t.tarikh_akhir_bayaran<tarikhTempatan()?'#FFEBEE':'#FFF8E1'};border-radius:6px"><span style="font-weight:700;color:${t.tarikh_akhir_bayaran<tarikhTempatan()?'var(--red)':'var(--gold)'}">📅 TARIKH AKHIR BAYARAN</span><span style="font-weight:800;color:${t.tarikh_akhir_bayaran<tarikhTempatan()?'var(--red)':'var(--gold)'}">${fmtD(t.tarikh_akhir_bayaran)}${t.tarikh_akhir_bayaran<tarikhTempatan()?' ⚠️ LEWAT':''}</span></div>`:''}
     ${t.nota?`<div style="margin-top:8px;font-size:15px;color:var(--muted)">Nota: ${esc(t.nota)}</div>`:''}
     ${showBankQR||(t.status!=='selesai'&&TETAPAN_DISKAUN.butiran_bank)?`<div style="margin-top:8px;padding:8px;background:#FFF8E1;border:1px dashed var(--red);border-radius:6px;text-align:center">
@@ -7595,7 +7599,7 @@ async function hantarResitWhatsapp(waTabSedia) {
   }
   const skimWa = t.status==='hutang' ? tarikhAkhirSkim(t) : null;
   const notaDue = skimWa
-    ? `\n📅 Tarikh Akhir Bayaran: ${skimWa.pAwal}% sehingga ${fmtD(skimWa.awal)}, ${skimWa.pAkhir}% sehingga ${fmtD(skimWa.akhir)}${skimWa.akhir<tarikhTempatan()?' ⚠️ SUDAH LEWAT':''}`
+    ? `\n📅 Tarikh Akhir Bayaran:\n   • ${skimWa.pAwal}% sehingga ${fmtD(skimWa.awal)} — bayar ${fmt(jumlahSkim(t,skimWa.pAwal))}\n   • ${skimWa.pAkhir}% sehingga ${fmtD(skimWa.akhir)} — bayar ${fmt(jumlahSkim(t,skimWa.pAkhir))}${skimWa.akhir<tarikhTempatan()?' ⚠️ SUDAH LEWAT':''}`
     : (t.status==='hutang' && t.tarikh_akhir_bayaran)
     ? `\n📅 Tarikh Akhir Bayaran: ${fmtD(t.tarikh_akhir_bayaran)}${t.tarikh_akhir_bayaran<tarikhTempatan()?' ⚠️ SUDAH LEWAT':''}`
     : '';
