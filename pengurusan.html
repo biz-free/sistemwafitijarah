@@ -2064,6 +2064,20 @@ pihak pekerja) atau duit tunai yg kemudian didapati sudah dibank-in terus. -->
 
 <!-- Edit Tarikh Akhir Bayaran Hutang (pemilik SAHAJA) — Tempahan > Transaksi Kedai.
 Lihat edit_tarikh_akhir_bayaran_transaksi() RPC — SQL_TAMBAHAN_144. -->
+<!-- Edit Masa Transaksi (pemilik SAHAJA) — lihat edit_masa_transaksi() RPC, SQL_TAMBAHAN_191 -->
+<div class="modal-overlay" id="modal-edit-masa-trx">
+  <div class="modal-box">
+    <div class="modal-title">🕒 Edit Tarikh & Masa<button class="modal-close" onclick="closeModal('modal-edit-masa-trx')">✕ Tutup</button></div>
+    <input type="hidden" id="emt-trx-id" />
+    <div class="form-group">
+      <label class="form-label">Tarikh & Masa Baharu (waktu Malaysia)</label>
+      <input type="datetime-local" class="form-input" id="emt-masa" />
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Hanya tukar tarikh & masa rekod. Jumlah, hutang dan stok tidak berubah.</div>
+    <button class="btn btn-primary" onclick="simpanMasaTransaksi()">💾 Simpan Masa</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-edit-tarikh-akhir">
   <div class="modal-box">
     <div class="modal-title">📅 Edit Tarikh Akhir Bayaran<button class="modal-close" onclick="closeModal('modal-edit-tarikh-akhir')">✕ Tutup</button></div>
@@ -6757,7 +6771,7 @@ async function renderTransaksiKedaiList() {
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
         <div>
           <div style="font-weight:800;font-size:13px">${esc(namaDestinasiTrx(t))}</div>
-          <div style="font-size:10px;color:var(--muted)">${k?.telefon?'📞 '+esc(k.telefon)+' · ':''}${fmtDT(t.tarikh_masa)} · ${esc(noRujukanTrx(t))}</div>
+          <div style="font-size:10px;color:var(--muted)">${k?.telefon?'📞 '+esc(k.telefon)+' · ':''}${fmtDT(t.tarikh_masa)}${currentRole==='pemilik'?` <button class="btn-link" style="font-size:10px;font-weight:400" onclick="bukaModalEditMasaTrx('${t.id}','${t.tarikh_masa}')">🕒 Edit Masa</button>`:''} · ${esc(noRujukanTrx(t))}</div>
           ${k?.alamat?`<div style="font-size:10px;color:var(--muted)">📍 ${esc(k.alamat)}</div>`:''}
         </div>
         <span class="badge ${statusBadge.kelas}" style="flex-shrink:0">${statusBadge.teks}</span>
@@ -6822,6 +6836,26 @@ async function editJumlahTransaksi(id, jumlahAsalSemasa) {
   await loadData();
   renderTransaksiKedaiList();
   toast(`✅ Jumlah dibetulkan — jumlah asal kini ${fmt(jumlahBaru)}`);
+}
+
+// Pemilik SAHAJA — edit tarikh & masa transaksi. Lihat edit_masa_transaksi() RPC
+// — SQL_TAMBAHAN_191. Input dipaparkan & disimpan dalam waktu Malaysia (+08:00).
+function bukaModalEditMasaTrx(id, masaSemasa) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(masaSemasa)).map(x=>[x.type,x.value]));
+  document.getElementById('emt-trx-id').value = id;
+  document.getElementById('emt-masa').value = `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+  showModal('modal-edit-masa-trx');
+}
+async function simpanMasaTransaksi() {
+  const id = document.getElementById('emt-trx-id').value;
+  const v = document.getElementById('emt-masa').value;
+  if (!v) return toast('Sila pilih tarikh & masa','err');
+  const { error } = await sb.rpc('edit_masa_transaksi', { p_id: id, p_masa_baru: v+':00+08:00' });
+  if (error) return toast('Gagal kemaskini masa: '+error.message,'err');
+  await loadData();
+  closeModal('modal-edit-masa-trx');
+  renderTransaksiKedaiList();
+  toast('✅ Tarikh & masa dikemaskini');
 }
 
 // Pemilik SAHAJA — edit/tetapkan Tarikh Akhir Bayaran utk transaksi hutang (cth
