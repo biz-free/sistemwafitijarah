@@ -2368,6 +2368,11 @@ async function muatProfilNamaCache() {
   const { data } = await sb.from('profiles').select('id,nama');
   PROFIL_NAMA_CACHE = {};
   (data||[]).forEach(p=>PROFIL_NAMA_CACHE[p.id]=p.nama);
+  // Pekerja: RLS hanya benarkan profil sendiri — tambah nama rakan melalui RPC (SQL 192)
+  if (currentRole !== 'pemilik') {
+    const { data: rakan } = await sb.rpc('senarai_rakan_pekerja');
+    (rakan||[]).forEach(p=>PROFIL_NAMA_CACHE[p.id]=p.nama);
+  }
 }
 
 function togglLoginPassLihat() {
