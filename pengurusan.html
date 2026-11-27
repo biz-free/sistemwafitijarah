@@ -888,6 +888,7 @@
     </div>
 
     <div id="hantar-sejarah" style="display:none">
+      <input class="search-bar" id="sejarah-kedai-cari" placeholder="🔍 Cari kedai..." oninput="tapisSejarahKedaiOpsi(this.value)" style="margin-bottom:6px" />
       <select class="form-input" onchange="renderSejarah(this.value)" id="filter-kedai-trx" style="margin-bottom:12px">
         <option value="">Semua Kedai</option>
       </select>
@@ -4101,12 +4102,69 @@ function renderKedai(q='') {
       </div>
       ${currentRole==='pemilik'&&k.didaftarkan_oleh?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">🧑‍💼 Didaftarkan oleh: ${esc(PROFIL_NAMA_CACHE[k.didaftarkan_oleh]||'?')}</div>`:''}
       ${k.gambar_urls&&k.gambar_urls.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${k.gambar_urls.map(u=>`<img loading="lazy" src="${esc(u)}" onclick="window.open('${esc(u)}','_blank')" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" />`).join('')}</div>`:''}
+      <details class="kedai-lipat" ontoggle="if(this.open) isiLipatKedai('${k.id}', this)" style="margin-bottom:10px;border:1px solid var(--border);border-radius:10px;padding:6px 10px">
+        <summary style="font-weight:700;font-size:12px;cursor:pointer">🧾 Resit & Sejarah Penghantaran (${trxK.length})</summary>
+        <div class="kedai-lipat-isi" style="margin-top:8px"></div>
+      </details>
       <div style="display:flex;gap:6px">
         ${k.lat&&k.lng?`<a class="btn btn-secondary btn-sm" style="text-decoration:none" href="https://www.google.com/maps/search/?api=1&query=${k.lat},${k.lng}" target="_blank" rel="noopener">🗺️ Lihat di Google Maps</a>`:''}
         ${currentRole==='pemilik'?`<button class="btn btn-secondary btn-sm" onclick="editKedai('${k.id}')">✏️ Edit</button>`:''}
       </div>
     </div>`;
   }).join('') || '<div class="empty"><div class="empty-icon">🏪</div><div class="empty-text">Tiada kedai didaftarkan</div></div>';
+}
+
+// Carian kedai pada tab Sejarah Penghantaran — tapis opsyen dropdown, kekalkan pilihan sedia ada.
+function tapisSejarahKedaiOpsi(q='') {
+  const sel = document.getElementById('filter-kedai-trx');
+  if (!sel) return;
+  const sediaAda = sel.value;
+  const qq = q.trim().toLowerCase();
+  const tapis = DATA.kedai.filter(k=>!qq || k.nama.toLowerCase().includes(qq) || (k.daerah||'').toLowerCase().includes(qq));
+  sel.innerHTML = '<option value="">Semua Kedai</option>' + tapis.map(k=>`<option value="${k.id}">${esc(k.nama)}</option>`).join('');
+  if ([...sel.options].some(o=>o.value===sediaAda)) sel.value = sediaAda;
+  else if (sediaAda) renderSejarah('');
+  // Satu padanan sahaja → terus pilih supaya pekerja tak perlu buka dropdown
+  if (qq && tapis.length===1 && sel.value!==tapis[0].id) { sel.value = tapis[0].id; renderSejarah(tapis[0].id); }
+}
+
+// Kandungan lipatan "Resit & Sejarah" pada kad kedai — dibina bila dibuka sahaja (ringan).
+function isiLipatKedai(kedaiId, detailsEl) {
+  const isi = detailsEl.querySelector('.kedai-lipat-isi');
+  if (!isi) return;
+  const semua = DATA.transaksi.filter(t=>t.kedai_id===kedaiId).sort((a,b)=>new Date(b.tarikh_masa)-new Date(a.tarikh_masa));
+  if (!semua.length) { isi.innerHTML = '<div style="font-size:12px;color:var(--muted)">Belum ada penghantaran.</div>'; return; }
+  const baris = semua.slice(0,10).map(t=>{
+    const st = labelStatusTrx(t);
+    const dok = t.status==='hutang' ? 'Invois' : 'Resit';
+    const belumSahkan = t.kaedah_bayaran==='consignment' && !t.jualan_disahkan;
+    const bolehSahkan = currentRole==='pemilik' || t.created_by===DATA.currentUser?.id || t.created_by===DATA.currentUser?.email;
+    const itemsStr = (t.items||[]).map(it=>{ const s=DATA.stok.find(s=>s.id===it.stokId)||{nama:'?'}; return `${esc(s.nama)} ×${it.qty}`; }).join(' · ');
+    return `<div style="padding:8px 0;border-top:1px dashed var(--border)">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <div><div style="font-size:12px;font-weight:700">${fmtDT(t.tarikh_masa)}</div><div style="font-size:10px;color:var(--muted)">${esc(noRujukanTrx(t))}</div></div>
+        <div style="text-align:right"><div style="font-weight:800;font-size:13px">${fmt(t.jumlah)}</div><span class="badge ${st.kelas}">${st.teks}</span></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin:3px 0 6px">${itemsStr}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="resitCepatKonsainan('${t.id}','')">🧾 ${dok}</button>
+        <button class="btn btn-secondary btn-sm" onclick="resitCepatKonsainan('${t.id}','pdf-bingkai')">📄 PDF</button>
+        <button class="btn btn-whatsapp btn-sm" onclick="resitCepatKonsainan('${t.id}','wa')">📱 WhatsApp</button>
+      </div>
+      ${belumSahkan && bolehSahkan ? `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">${formKonsainanHTML(t,'kedai')}</div>` : ''}
+    </div>`;
+  }).join('');
+  const lagi = semua.length>10 ? `<button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="lihatSemuaSejarahKedai('${kedaiId}')">Lihat semua ${semua.length} penghantaran →</button>` : '';
+  isi.innerHTML = baris + lagi;
+}
+
+async function lihatSemuaSejarahKedai(kedaiId) {
+  await setPage('hantar');
+  setHantarTab('sejarah');
+  const c = document.getElementById('sejarah-kedai-cari'); if (c) c.value = '';
+  tapisSejarahKedaiOpsi('');
+  const sel = document.getElementById('filter-kedai-trx'); if (sel) sel.value = kedaiId;
+  renderSejarah(kedaiId);
 }
 
 function isiNegeriSelect() {
@@ -6238,6 +6296,7 @@ async function kemaskiniJualanKonsainan(trxId, ctx='x') {
   await loadData();
   renderSejarah();
   if (document.getElementById('transaksi-kedai-list')) renderTransaksiKedaiList();
+  if (ctx==='kedai') { const kq=document.getElementById('kedai-search'); renderKedai(kq?kq.value:''); }
 }
 
 // ════════════════════════════════════════════════════
