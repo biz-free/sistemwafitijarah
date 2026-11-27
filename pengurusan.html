@@ -5248,7 +5248,8 @@ async function pulangkanStokPekerjaPemilik(pekerjaId, stokId, qtySedia) {
 async function bukaModalMintaPindah() {
   const entries = Object.entries(DATA.stokPekerja||{}).filter(([id,qty])=>qty>0);
   if (!entries.length) return toast('Tiada stok bawaan untuk dipindah','err');
-  const { data: rakan } = await sb.from('profiles').select('id,nama').eq('role','pekerja').eq('status','aktif');
+  const { data: rakan, error: errRakan } = await sb.rpc('senarai_rakan_pekerja');
+  if (errRakan) return toast('Gagal muat senarai pekerja: '+errRakan.message,'err');
   const senarai = (rakan||[]).filter(p=>p.id!==DATA.currentUser.id);
   if (!senarai.length) return toast('Tiada pekerja lain untuk dipindahkan stok','err');
   document.getElementById('mp-produk').innerHTML = entries.map(([id,qty])=>{ const s=DATA.stok.find(s=>s.id===id); return `<option value="${id}">${esc(s?.nama||id)} (bawaan: ${qty} ${esc(s?.unit||'')})</option>`; }).join('');
