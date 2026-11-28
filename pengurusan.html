@@ -7808,6 +7808,12 @@ async function renderLaporan() {
   const kosOperasi = kosUpah+kosMinyak+kosMakan+kosKedaiBaru+kosUpahEdagang;
   const untungBersih = untung-kosOperasi;
 
+  // Sandar untung bersih bulan ini ke DB supaya dashboard WAZIR kemas kini sendiri (senyap)
+  if (useCloud) {
+    sb.rpc('simpan_untung_bulanan', { p_bulan: bulan, p_untung: untungBersih })
+      .then(({error}) => { if (error) console.warn('simpan untung bulanan:', error.message); });
+  }
+
   // Pecahan upah ikut pekerja — setiap pekerja beza jumlahnya ikut penghantaran sendiri.
   // Sertakan juga pekerja yang HANYA daftar kedai baru atau HANYA urus e-dagang (tiada
   // penghantaran) supaya upah/bonus dia tak hilang.
